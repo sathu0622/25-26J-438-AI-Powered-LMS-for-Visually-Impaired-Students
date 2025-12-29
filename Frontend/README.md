@@ -1,8 +1,8 @@
 # Document Processor Frontend
 
-React frontend for the Document Processing application.
+Modern React frontend built with **Vite** and **Tailwind CSS** for the AI-Powered Document Processing application.
 
-## Setup Instructions
+## 🚀 Quick Start
 
 ### 1. Install Dependencies
 
@@ -10,12 +10,12 @@ React frontend for the Document Processing application.
 npm install
 ```
 
-### 2. Configure API URL
+### 2. Configure API URL (Optional)
 
 Create a `.env` file in the Frontend directory:
 
 ```
-REACT_APP_API_URL=http://localhost:8000
+VITE_API_URL=http://localhost:8000
 ```
 
 If not set, it defaults to `http://localhost:8000`
@@ -23,16 +23,44 @@ If not set, it defaults to `http://localhost:8000`
 ### 3. Run Development Server
 
 ```bash
-npm start
+npm run dev
 ```
 
-The app will open at `http://localhost:3000`
+The app will automatically open at `http://localhost:3000`
 
 ### 4. Build for Production
 
 ```bash
 npm run build
 ```
+
+The optimized production build will be in the `dist/` directory.
+
+### 5. Preview Production Build
+
+```bash
+npm run preview
+```
+
+## 🛠️ Tech Stack
+
+- **React 18** - UI library
+- **Vite** - Fast build tool and dev server
+- **Tailwind CSS** - Utility-first CSS framework
+- **Axios** - HTTP client for API requests
+
+## ✨ Features
+
+- 🎨 **Modern UI** - Beautiful, responsive design with Tailwind CSS
+- 📤 **Drag & Drop Upload** - Intuitive file upload interface
+- ⚡ **Fast Development** - Lightning-fast HMR with Vite
+- 📊 **Real-time Status** - Live processing updates
+- 📱 **Responsive Design** - Works on all devices
+- 🎯 **Results Display** with:
+  - Resource type detection with confidence score
+  - AI-generated summaries
+  - Extracted text with syntax highlighting
+  - Article splitting for newspapers
 
 ## Features
 
