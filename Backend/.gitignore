@@ -1,43 +1,150 @@
+# ============================================================
+# Python Backend .gitignore
+# ============================================================
+
 # Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
 venv/
 env/
 ENV/
-.venv
+env.bak/
+venv.bak/
+.venv/
+virtualenv/
+.conda/
 
-# Models (if large)
-# *.keras
-# *.h5
-# *.pth
-# *.safetensors
-
-# Environment variables
-.env
-.env.local
-
-# IDE
+# IDE & Editors
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
 
-# OS
+# OS Files
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
 
-# Temporary files
+# Environment Variables & Secrets
+.env
+.env.local
+.env.*.local
+*.env
+secrets/
+.secrets
+config.ini
+config.yaml
+config.yml
+*.key
+*.pem
+*.cert
+
+# Machine Learning Models & Cache
+# Uncomment if you want to ignore large model files
+# *.keras
+# *.h5
+# *.pth
+# *.pt
+# *.ckpt
+# *.safetensors
+# *.bin
+# *.onnx
+# *.pb
+
+.cache/
+models/
+*.cache/
+.huggingface/
+transformers_cache/
+torch_cache/
+tensorflow_cache/
+
+# Temporary Files & Logs
 *.tmp
-temp_*
-/temp/
-
-# Logs
+*.temp
 *.log
+*.out
+temp_*
+tmp/
+temp/
+*.swp
+*.bak
+*.backup
+*.old
+temp_page_*.png
+temp_detect.jpg
+upload_*
 
+# Uploads & User Data
+uploads/
+user_data/
+processed/
+output/
+results/
 
+# Testing & Coverage
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.pytest_cache/
+.hypothesis/
+*.cover
+*.py,cover
+coverage.xml
+test-results/
+junit.xml
 
+# Jupyter Notebooks
+.ipynb_checkpoints
+*.ipynb_checkpoints/
+*.ipynb
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+
+# Miscellaneous
+*.orig
+*.rej
+.history/
 

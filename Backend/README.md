@@ -1,84 +1,77 @@
-# Document Processing Backend
+# Document Processor Backend
 
-FastAPI backend for processing PDFs, books, magazines, and newspapers with OCR, resource type detection, and summarization.
+FastAPI backend for document processing with OCR, grammar correction, resource type detection, and summarization.
 
-## Setup Instructions
+## Features
 
-### 1. Install Python Dependencies
+- **OCR Extraction**: Extract text from PDFs and images using Tesseract
+- **Grammar Correction**: AI-powered grammar and OCR error correction
+- **Resource Type Detection**: Automatically detect if document is a Book, Magazine, or Newspaper
+- **Smart Summarization**: Type-specific summarization using fine-tuned T5 model
 
-```bash
-# Create virtual environment
-python -m venv venv
+## Prerequisites
 
-# Activate virtual environment
-# On Windows:
-venv\Scripts\activate
-# On Linux/Mac:
-source venv/bin/activate
+### Windows Setup
 
-# Install dependencies
-pip install -r requirements.txt
-```
+1. **Install Tesseract OCR**:
+   - Download from: https://github.com/UB-Mannheim/tesseract/wiki
+   - Install to default location: `C:\Program Files\Tesseract-OCR`
+   - Or update the path in `main.py` if installed elsewhere
 
-### 2. Install Tesseract OCR
+2. **Poppler (for PDF processing)**:
+   - Already included in `Release-25.12.0-0/poppler-25.12.0/`
+   - The application will automatically use it
 
-**Windows:**
-1. Download Tesseract from: https://github.com/UB-Mannheim/tesseract/wiki
-2. Install it (default path: `C:\Program Files\Tesseract-OCR\tesseract.exe`)
-3. Add to PATH or set environment variable:
-   ```powershell
-   $env:TESSERACT_CMD="C:\Program Files\Tesseract-OCR\tesseract.exe"
+3. **Python 3.12.12**:
+   - Ensure Python 3.12.12 is installed
+
+### Linux/Mac Setup
+
+1. **Install Tesseract**:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get update
+   sudo apt-get install -y tesseract-ocr
+   
+   # Mac
+   brew install tesseract
    ```
 
-**Linux:**
-```bash
-sudo apt-get update
-sudo apt-get install tesseract-ocr
-```
+2. **Install Poppler**:
+   ```bash
+   # Ubuntu/Debian
+   sudo apt-get install -y poppler-utils
+   
+   # Mac
+   brew install poppler
+   ```
 
-**Mac:**
-```bash
-brew install tesseract
-```
+## Installation
 
-### 3. Install Poppler (for PDF to image conversion)
+1. **Navigate to Backend directory**:
+   ```bash
+   cd Backend
+   ```
 
-**Windows:**
-1. Download from: https://github.com/oschwartz10612/poppler-windows/releases/
-2. Extract and add `bin` folder to PATH
+2. **Create virtual environment** (recommended):
+   ```bash
+   python -m venv venv
+   
+   # Windows
+   venv\Scripts\activate
+   
+   # Linux/Mac
+   source venv/bin/activate
+   ```
 
-**Linux:**
-```bash
-sudo apt-get install poppler-utils
-```
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-**Mac:**
-```bash
-brew install poppler
-```
-
-### 4. Configure Environment Variables
-
-Create a `.env` file in the Backend directory (optional, if Tesseract is not in PATH):
-
-```
-TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe
-```
-
-### 5. Download Models (if not already present)
-
-The models should be in the `Model/` directory:
-- `book_magazine_newspaper_model_super_finetuned2.keras` - Resource type detection
-- `final/` - LoRA adapter for T5 summarization model
-
-The base models will be downloaded automatically on first run:
-- `google/flan-t5-base` - Base T5 model
-- `prithivida/grammar_error_correcter_v1` - Grammar correction model
-
-### 6. Run the Server
+## Running the Server
 
 ```bash
-# Make sure virtual environment is activated
 python main.py
 ```
 
@@ -89,35 +82,71 @@ uvicorn main:app --reload --host 0.0.0.0 --port 8000
 
 The API will be available at `http://localhost:8000`
 
-### 7. API Endpoints
+## API Endpoints
 
-- `GET /` - Health check
-- `GET /health` - Detailed health check with model status
-- `POST /process` - Upload and process a document (PDF or image)
+### Health Check
+```
+GET /
+```
+Returns API status and model loading information.
 
-### API Usage Example
-
-```python
-import requests
-
-files = {'file': open('document.pdf', 'rb')}
-response = requests.post('http://localhost:8000/process', files=files)
-result = response.json()
+### Process Document
+```
+POST /process
+Content-Type: multipart/form-data
+Body: file (PDF or image file)
 ```
 
-## Model Information
+**Response**:
+```json
+{
+  "resource_type": "books",
+  "confidence": 0.95,
+  "extracted_text": "Full extracted and corrected text...",
+  "summaries": ["Summary 1", "Summary 2"],
+  "num_articles": 1
+}
+```
 
-- **Resource Type Detection**: Keras model trained to classify Books, Magazines, and Newspapers
-- **Summarization**: FLAN-T5-base with LoRA adapter fine-tuned for summarization
-- **Grammar Correction**: prithivida/grammar_error_correcter_v1
+## Model Files
+
+The following model files should be present in the `Model/` directory:
+
+- `book_magazine_newspaper_model_super_finetuned2.keras` - Resource type detection model
+- `final/` - T5 summarization model with PEFT adapter
+  - `adapter_config.json`
+  - `adapter_model.safetensors`
+  - `tokenizer_config.json`
+  - `spiece.model`
+  - Other tokenizer files
+
+## Troubleshooting
+
+### Tesseract not found
+- Windows: Ensure Tesseract is installed and update the path in `main.py`
+- Linux/Mac: Install Tesseract using package manager
+
+### Poppler not found
+- Windows: Ensure `Release-25.12.0-0/poppler-25.12.0/Library/bin` exists
+- Linux/Mac: Install poppler-utils
+
+### Model loading errors
+- Ensure all model files are in the correct directories
+- Check that you have sufficient RAM/VRAM
+- For GPU support, ensure CUDA is properly installed
+
+### Memory issues
+- The models are loaded into memory at startup
+- Ensure you have at least 8GB RAM available
+- For large documents, processing may take time
+
+## Development
+
+The frontend expects the API to be running on `http://localhost:8000` by default. You can change this in the frontend's `.env` file or `FileUpload.jsx`.
 
 ## Notes
 
-- First run will download base models (may take several minutes)
-- Processing time depends on document size and complexity
-- GPU recommended for faster processing (CUDA compatible)
-
-
-
-
+- First request may be slower as models are loaded
+- Large PDFs may take several minutes to process
+- GPU is recommended but not required (CPU will work, just slower)
 
