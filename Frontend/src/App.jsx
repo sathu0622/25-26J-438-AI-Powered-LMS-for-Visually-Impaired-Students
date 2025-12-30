@@ -45,7 +45,7 @@ function App() {
               AI Document Processor
             </h1>
             <p className="text-xl sm:text-2xl text-white/90 max-w-2xl mx-auto leading-relaxed">
-              Extract and summarize text from PDFs, Books, Magazines, and Newspapers
+              Extract and summarize text from Books, Magazines, and Newspapers
             </p>
             <p className="text-sm text-white/70 mt-3">
               Powered by AI • OCR • Grammar Correction • Smart Summarization
