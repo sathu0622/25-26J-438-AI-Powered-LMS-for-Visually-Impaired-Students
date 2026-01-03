@@ -1,0 +1,1 @@
+FROM ./Model/HistoryTutor_Llama3_AMD.gguf
