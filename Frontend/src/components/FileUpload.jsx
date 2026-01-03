@@ -41,7 +41,7 @@ function FileUpload({ onProcessComplete, onError, onUploadStart, loading }) {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        timeout: 300000, // 5 minutes timeout for large files
+        timeout: 3000000, 
       });
 
       onProcessComplete(response.data);
