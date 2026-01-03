@@ -48,7 +48,7 @@ function App() {
               Extract and summarize text from Books, Magazines, and Newspapers
             </p>
             <p className="text-sm text-white/70 mt-3">
-              Powered by AI • OCR • Grammar Correction • Smart Summarization
+              {/* Powered by AI • OCR • Smart Summarization */}
             </p>
           </header>
 
