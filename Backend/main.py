@@ -1,6 +1,6 @@
 """
 FastAPI Backend for Document Processing
-Simplified OCR without Multi-Column Detection and Layout Analysis
+Simplified OCR without Grammar Correction
 """
 
 import os
@@ -19,8 +19,6 @@ from typing import Optional, List, Tuple
 
 import torch
 from transformers import (
-    AutoTokenizer, 
-    AutoModelForSeq2SeqLM, 
     T5Tokenizer, 
     T5ForConditionalGeneration
 )
@@ -63,7 +61,6 @@ else:
 # Model paths
 TYPE_MODEL_PATH = MODEL_DIR / "book_magazine_newspaper_model_super_finetuned_FIXED.keras"
 T5_MODEL_DIR = MODEL_DIR / "final"
-GRAMMAR_MODEL_NAME = "prithivida/grammar_error_correcter_v1"
 
 # Configuration
 IMG_SIZE = (224, 224)
@@ -78,11 +75,6 @@ print("Loading models...")
 
 type_model = load_model(str(TYPE_MODEL_PATH), compile=False)
 print(f"✓ Resource type model loaded")
-
-grammar_tokenizer = AutoTokenizer.from_pretrained(GRAMMAR_MODEL_NAME)
-grammar_model = AutoModelForSeq2SeqLM.from_pretrained(GRAMMAR_MODEL_NAME)
-grammar_model.to(DEVICE)
-print(f"✓ Grammar correction model loaded ({DEVICE})")
 
 base_model_name = "google/flan-t5-base"
 summ_tokenizer = T5Tokenizer.from_pretrained(base_model_name)
@@ -105,10 +97,14 @@ def ocr_image_simple(image_path: str) -> str:
     try:
         print(f"Processing image: {image_path}")
         
-        # Load image
+        # Load image using OpenCV
         img = cv2.imread(image_path)
         if img is None:
-            raise ValueError(f"Could not read image: {image_path}")
+            print(f"  Warning: Could not read image with OpenCV, trying PIL fallback...")
+            # Fallback to PIL
+            pil_img = Image.open(image_path)
+            # Convert PIL image to numpy array
+            img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
         
         height, width = img.shape[:2]
         print(f"  Image size: {width}x{height}")
@@ -124,23 +120,26 @@ def ocr_image_simple(image_path: str) -> str:
         
     except Exception as e:
         print(f"OCR Error: {e}")
-        # Try fallback method
+        # Try alternative method
         try:
-            # Try with PIL as fallback
+            # Direct PIL approach
             pil_img = Image.open(image_path)
             text = pytesseract.image_to_string(pil_img, lang="eng")
             return text.strip()
-        except:
+        except Exception as e2:
+            print(f"Fallback OCR also failed: {e2}")
             return ""
 
 def ocr_pdf_simple(pdf_path: str) -> str:
-    """Extract text from PDF using simple OCR."""
+    """Extract text from PDF using simple OCR on all pages."""
     try:
         print(f"Processing PDF: {pdf_path}")
         
         # Convert PDF to images with standard DPI
         print("  Converting PDF to images...")
         pages = convert_from_path(pdf_path, dpi=200)
+        
+        print(f"  Converted {len(pages)} pages")
         
         all_pages_text = []
         
@@ -173,6 +172,22 @@ def ocr_pdf_simple(pdf_path: str) -> str:
         
     except Exception as e:
         print(f"PDF OCR Error: {e}")
+        # Try to get at least some text
+        try:
+            # Try with first page only
+            pages = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=200)
+            if pages:
+                temp_dir = tempfile.gettempdir()
+                temp_img = os.path.join(temp_dir, f"temp_fallback_{os.urandom(4).hex()}.png")
+                pages[0].save(temp_img, "PNG", dpi=(200, 200))
+                text = ocr_image_simple(temp_img)
+                try:
+                    os.remove(temp_img)
+                except:
+                    pass
+                return text
+        except:
+            pass
         return ""
 
 def extract_text(input_path: str) -> str:
@@ -183,74 +198,22 @@ def extract_text(input_path: str) -> str:
         return ocr_image_simple(input_path)
 
 # ============================================================
-# GRAMMAR CORRECTION
-# ============================================================
-
-def correct_text(text: str) -> str:
-    """Correct grammar and OCR errors in text."""
-    try:
-        max_length = 512
-        # Split into sentences for better correction
-        sentences = re.split(r'(?<=[.!?])\s+', text)
-        corrected_sentences = []
-        
-        current_chunk = ""
-        for sentence in sentences:
-            if len(current_chunk) + len(sentence) < max_length:
-                current_chunk += sentence + " "
-            else:
-                if current_chunk:
-                    inputs = grammar_tokenizer(
-                        current_chunk, 
-                        return_tensors="pt", 
-                        max_length=max_length, 
-                        truncation=True
-                    ).to(DEVICE)
-                    outputs = grammar_model.generate(
-                        inputs['input_ids'], 
-                        max_length=max_length,
-                        num_beams=4,
-                        early_stopping=True
-                    )
-                    corrected = grammar_tokenizer.decode(outputs[0], skip_special_tokens=True)
-                    corrected_sentences.append(corrected)
-                current_chunk = sentence + " "
-        
-        # Process remaining chunk
-        if current_chunk:
-            inputs = grammar_tokenizer(
-                current_chunk, 
-                return_tensors="pt", 
-                max_length=max_length, 
-                truncation=True
-            ).to(DEVICE)
-            outputs = grammar_model.generate(
-                inputs['input_ids'], 
-                max_length=max_length,
-                num_beams=4,
-                early_stopping=True
-            )
-            corrected = grammar_tokenizer.decode(outputs[0], skip_special_tokens=True)
-            corrected_sentences.append(corrected)
-        
-        return " ".join(corrected_sentences)
-    except Exception as e:
-        print(f"Grammar correction error: {e}")
-        return text
-
-# ============================================================
 # RESOURCE TYPE DETECTION
 # ============================================================
 
 def predict_resource_type(img_path: str) -> tuple[str, float]:
     """Predict resource type from image."""
-    img = image.load_img(img_path, target_size=IMG_SIZE)
-    arr = image.img_to_array(img) / 255.0
-    arr = np.expand_dims(arr, 0)
-    pred = type_model.predict(arr, verbose=0)
-    cls = CLASS_NAMES[np.argmax(pred)]
-    conf = float(np.max(pred))
-    return cls.lower(), conf
+    try:
+        img = image.load_img(img_path, target_size=IMG_SIZE)
+        arr = image.img_to_array(img) / 255.0
+        arr = np.expand_dims(arr, 0)
+        pred = type_model.predict(arr, verbose=0)
+        cls = CLASS_NAMES[np.argmax(pred)]
+        conf = float(np.max(pred))
+        return cls.lower(), conf
+    except Exception as e:
+        print(f"Resource type detection error: {e}")
+        return "books", 0.5  # Default fallback
 
 # ============================================================
 # SUMMARIZATION
@@ -270,7 +233,9 @@ def summarize_text(text: str, source_type: str) -> str:
     """Summarize text using T5 model."""
     try:
         prefix = get_prefix(source_type)
-        input_text = prefix + text[:1000]
+        
+        # Take first 2000 characters for summarization
+        input_text = prefix + text[:2000]
         
         inputs = summ_tokenizer(
             input_text,
@@ -292,6 +257,7 @@ def summarize_text(text: str, source_type: str) -> str:
         return summ_tokenizer.decode(output_ids[0], skip_special_tokens=True)
     except Exception as e:
         print(f"Summarization error: {e}")
+        # Fallback: return first 500 characters
         return text[:500] + "..." if len(text) > 500 else text
 
 # ============================================================
@@ -300,8 +266,8 @@ def summarize_text(text: str, source_type: str) -> str:
 
 def split_into_articles(text: str) -> list[str]:
     """Split newspaper text into articles."""
-    # Split by column breaks and page breaks first
-    sections = re.split(r'\[(?:COLUMN|PAGE) BREAK\]', text)
+    # Split by page breaks first
+    sections = re.split(r'\[PAGE BREAK\]', text)
     
     articles = []
     for section in sections:
@@ -309,21 +275,36 @@ def split_into_articles(text: str) -> list[str]:
             continue
         
         # Try to detect article boundaries within section
-        # Headlines (all caps, short lines)
-        headline_pattern = r'\n\n([A-Z][A-Z\s\-]{10,})\n'
-        parts = re.split(headline_pattern, section)
+        # Look for headlines (all caps, short lines)
+        lines = section.split('\n')
+        current_article = []
         
-        current_article = ""
-        for i, part in enumerate(parts):
-            if i % 2 == 1:  # It's a headline
-                if current_article and len(current_article.split()) > 30:
-                    articles.append(current_article.strip())
-                current_article = part + "\n"
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if line looks like a headline
+            is_headline = (
+                len(line) < 100 and 
+                line.isupper() and 
+                len(line.split()) > 2
+            )
+            
+            if is_headline and current_article:
+                # Finish current article
+                article_text = '\n'.join(current_article).strip()
+                if article_text and len(article_text.split()) > 30:
+                    articles.append(article_text)
+                current_article = [line]
             else:
-                current_article += part
+                current_article.append(line)
         
-        if current_article and len(current_article.split()) > 30:
-            articles.append(current_article.strip())
+        # Add the last article
+        if current_article:
+            article_text = '\n'.join(current_article).strip()
+            if article_text and len(article_text.split()) > 30:
+                articles.append(article_text)
     
     return articles if articles else [text]
 
@@ -338,8 +319,8 @@ def process_document(input_path: str) -> dict:
         print("STARTING DOCUMENT PROCESSING")
         print("="*60)
         
-        # Step 1: Extract text
-        print("\n[1/5] Extracting text with simple OCR...")
+        # Step 1: Extract text with simplified OCR
+        print("\n[1/4] Extracting text with simple OCR...")
         raw_text = extract_text(input_path)
         
         if not raw_text or len(raw_text.strip()) == 0:
@@ -347,13 +328,8 @@ def process_document(input_path: str) -> dict:
         
         print(f"✓ Extracted {len(raw_text)} characters")
         
-        # Step 2: Grammar correction
-        print("\n[2/5] Correcting grammar and OCR errors...")
-        corrected_text = correct_text(raw_text)
-        print(f"✓ Text corrected")
-        
-        # Step 3: Detect resource type
-        print("\n[3/5] Detecting resource type...")
+        # Step 2: Detect resource type
+        print("\n[2/4] Detecting resource type...")
         if input_path.lower().endswith(".pdf"):
             pages = convert_from_path(input_path, first_page=1, last_page=1)
             if pages:
@@ -372,17 +348,17 @@ def process_document(input_path: str) -> dict:
         
         print(f"✓ Resource type: {resource_type} (confidence: {conf:.2f})")
         
-        # Step 4: Split articles if newspaper
-        print("\n[4/5] Processing articles...")
+        # Step 3: Split articles if newspaper
+        print("\n[3/4] Processing articles...")
         if resource_type == "newspapers":
-            articles = split_into_articles(corrected_text)
+            articles = split_into_articles(raw_text)
             print(f"✓ Split into {len(articles)} articles")
         else:
-            articles = [corrected_text]
+            articles = [raw_text]
             print(f"✓ Single document")
         
-        # Step 5: Generate summaries
-        print("\n[5/5] Generating summaries...")
+        # Step 4: Generate summaries
+        print("\n[4/4] Generating summaries...")
         summaries = []
         for i, art in enumerate(articles[:10]):  # Limit to 10 articles
             print(f"  Summarizing article {i+1}...")
@@ -394,10 +370,16 @@ def process_document(input_path: str) -> dict:
         result = {
             "resource_type": resource_type,
             "confidence": conf,
-            "extracted_text": corrected_text,
+            "extracted_text": raw_text,  # Return raw OCR text without grammar correction
             "summaries": summaries,
             "num_articles": len(articles),
-            "text_length": len(corrected_text)
+            "text_length": len(raw_text),
+            "processing_info": {
+                "ocr_method": "simple_tesseract",
+                "grammar_correction": False,
+                "supports_pdf": True,
+                "supports_images": True
+            }
         }
         
         print("\n" + "="*60)
@@ -433,12 +415,11 @@ async def root():
         "features": {
             "simple_ocr": True,
             "resource_type_detection": True,
-            "grammar_correction": True,
+            "grammar_correction": False,  # Disabled as requested
             "summarization": True
         },
         "models_loaded": {
             "resource_type": type_model is not None,
-            "grammar": grammar_model is not None,
             "summarization": summ_model is not None
         }
     }
