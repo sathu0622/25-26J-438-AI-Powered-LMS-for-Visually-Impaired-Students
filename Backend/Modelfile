@@ -1,1 +1,4 @@
 FROM ./Model/HistoryTutor_Llama3_AMD.gguf
+PARAMETER temperature 0.7
+PARAMETER num_ctx 4096
+PARAMETER num_gpu 999
