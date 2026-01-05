@@ -136,6 +136,7 @@ Response:
   "status": "ok",
   "message": "Simplified Document Processor API v2.0"
 }
+```
 
 📤 Process Document
 POST /process
