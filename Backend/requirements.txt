@@ -16,6 +16,9 @@ textblob==0.19.0
 safetensors==0.4.5
 huggingface-hub>=0.34.0,<1.0.0
 
+azure-ai-formrecognizer 
+pillow
+azure-core
 
 paddleocr>=2.7.0
 paddlepaddle>=2.6.0
