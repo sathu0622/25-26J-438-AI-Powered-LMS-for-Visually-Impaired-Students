@@ -6,11 +6,13 @@ function App() {
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [activeTab, setActiveTab] = useState('summary'); // 'summary' or 'qa'
 
   const handleProcessComplete = (data) => {
     setResults(data);
     setLoading(false);
     setError(null);
+    setActiveTab('summary'); // Default to summary tab
   };
 
   const handleError = (err) => {
@@ -23,6 +25,78 @@ function App() {
     setLoading(true);
     setError(null);
     setResults(null);
+  };
+
+  const handleArticleSelect = async (articleId) => {
+    if (!results?.document_id) return;
+    
+    setLoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/summarize-article`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          document_id: results.document_id,
+          article_id: articleId
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to summarize article');
+      }
+      
+      const summaryData = await response.json();
+      
+      // Update the results with the new summary
+      setResults(prev => ({
+        ...prev,
+        summaries: [summaryData] // Replace summaries with the selected article's summary
+      }));
+      
+      // Switch to summary tab
+      setActiveTab('summary');
+      
+    } catch (err) {
+      setError(err.message || 'Failed to summarize selected article');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAskQuestion = async (question, articleId) => {
+    if (!results?.document_id || !question.trim()) return;
+    
+    setLoading(true);
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:8000'}/ask-question`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          document_id: results.document_id,
+          article_id: articleId,
+          question: question,
+          max_answer_len: 64,
+          score_threshold: 0.15
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to get answer');
+      }
+      
+      const qaData = await response.json();
+      return qaData;
+      
+    } catch (err) {
+      setError(err.message || 'Failed to get answer');
+      return null;
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -45,10 +119,10 @@ function App() {
               AI Document Processor
             </h1>
             <p className="text-xl sm:text-2xl text-white/90 max-w-2xl mx-auto leading-relaxed">
-              Extract and summarize text from Books, Magazines, and Newspapers
+              Extract, summarize, and ask questions about your documents
             </p>
             <p className="text-sm text-white/70 mt-3">
-              {/* Powered by AI • OCR • Smart Summarization */}
+              Supports Books, Magazines, Newspapers • Summarization • Q&A
             </p>
           </header>
 
@@ -82,7 +156,14 @@ function App() {
           {/* Results Display */}
           {results && (
             <div className="mt-8 animate-fade-in">
-              <ResultsDisplay results={results} />
+              <ResultsDisplay 
+                results={results} 
+                onArticleSelect={handleArticleSelect}
+                onAskQuestion={handleAskQuestion}
+                loading={loading}
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+              />
             </div>
           )}
         </div>
@@ -92,4 +173,3 @@ function App() {
 }
 
 export default App;
-
