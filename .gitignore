@@ -39,3 +39,4 @@ Thumbs.db
 # *.bin
 # *.safetensors
 
+backend/config.py
