@@ -4,15 +4,18 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 import os
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+
 import models_loader
 from schemas import EvaluationRequest, EvaluationResponse
 from evaluation import evaluate_student_answer
 from logger_config import logger
+
 import torch
-import numpy as np
-import cv2
 import tempfile
-from braille_decoder import braille_image_to_text  # Correct function name
+
+# ✅ Import Braille PDF Decoder
+from braille_decoder import decode_braille_pdf
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -22,6 +25,7 @@ async def lifespan(app: FastAPI):
     logger.info("Application shutdown: Clearing cache...")
     if models_loader.model and torch.cuda.is_available():
         torch.cuda.empty_cache()
+
 
 app = FastAPI(
     title="AI-Powered LMS for Visually Impaired Students",
@@ -37,16 +41,17 @@ app.add_middleware(
 )
 
 # ========================
-# Existing Endpoints
+# Root Endpoints
 # ========================
 
 @app.get("/")
 async def root():
     return {
         "message": "AI-Powered LMS Backend",
-        "services": ["Answer Evaluation", "Braille OCR"],
+        "services": ["Answer Evaluation", "Braille PDF OCR"],
         "status": "running"
     }
+
 
 @app.get("/health")
 async def health_check():
@@ -55,8 +60,14 @@ async def health_check():
         "models_loaded": models_loader.model is not None
     }
 
+
+# ========================
+# Answer Evaluation Endpoint
+# ========================
+
 @app.post("/evaluate", response_model=EvaluationResponse)
 async def evaluate_answer(request: EvaluationRequest):
+
     if not request.question or not request.student_answer:
         raise HTTPException(status_code=400, detail="Question and student_answer cannot be empty")
 
@@ -70,36 +81,47 @@ async def evaluate_answer(request: EvaluationRequest):
         models_loader.model,
         models_loader.sbert
     )
+
     return EvaluationResponse(**result)
 
+
 # ========================
-# Braille OCR Endpoint
+# ✅ Braille Unicode PDF Endpoint
 # ========================
 
-@app.post("/braille/convert")
-async def convert_braille(image: UploadFile = File(...)):
-    tmp_path = None  # initialize
+@app.post("/braille/convert-pdf")
+async def convert_braille_pdf(file: UploadFile = File(...)):
+
+    if not file.filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported")
 
     try:
-        # Save uploaded file to a temporary file
-        suffix = ".png"
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(await image.read())
-            tmp_path = tmp.name
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_pdf:
+            temp_pdf.write(await file.read())
+            temp_path = temp_pdf.name
 
-        # Convert Braille image → English text
-        text = braille_image_to_text(tmp_path, debug=False)
-    finally:
-        # Remove temp file safely
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+        # Decode Braille PDF
+        result = decode_braille_pdf(temp_path)
 
-    return {"text": text}
+        # Remove temp file
+        os.remove(temp_path)
+
+        return {
+            "status": "success",
+            "question": result["question"],
+            "answer": result["answer"],
+            "full_text": result["full_text"]
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Braille PDF decoding failed: {str(e)}")
 
 
 # ========================
-# Run Server (PORT 8080)
+# Run Server
 # ========================
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8080, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
