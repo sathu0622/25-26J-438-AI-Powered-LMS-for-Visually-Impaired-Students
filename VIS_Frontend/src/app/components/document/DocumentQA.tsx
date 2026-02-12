@@ -7,6 +7,7 @@ import { VoiceButton } from '../VoiceButton';
 import { AudioPlayer } from '../AudioPlayer';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { documentService } from '../../services/documentService';
 
 interface QAItem {
   question: string;
@@ -24,9 +25,6 @@ interface DocumentQAProps {
   articleId: string | null;
   articleHeading?: string;
 }
-
-const API_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const DocumentQA = ({
   mode,
@@ -138,34 +136,13 @@ export const DocumentQA = ({
     setQaError(null);
 
     try {
-      const response = await fetch(`${API_URL}/ask-question`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          document_id: documentId,
-          article_id: articleId,
-          question: question,
-          max_answer_len: 64,
-          score_threshold: 0.15,
-        }),
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to get answer. Please try again.';
-        try {
-          const errorData = await response.json();
-          if (errorData?.detail) {
-            errorMessage = errorData.detail;
-          }
-        } catch {
-          // ignore JSON parse errors
-        }
-        throw new Error(errorMessage);
-      }
-
-      const qaData = await response.json();
+      const qaData = await documentService.askQuestion(
+        documentId,
+        articleId,
+        question,
+        64,
+        0.15
+      );
 
       const timestamp = new Date().toLocaleTimeString();
       const newItem: QAItem = {
