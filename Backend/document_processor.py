@@ -30,50 +30,76 @@ def predict_resource_type(img_path: str, type_model) -> tuple[str, float]:
         return "books", 0.5  # Default fallback
 
 def extract_text_with_strategy(input_path: str, resource_type: str) -> Dict[str, Any]:
-    """
-    Extract text using appropriate strategy based on resource type.
-    """
     print(f"\nExtracting text for resource type: {resource_type}")
-    
+
+    # ===========================
+    # 📰 NEWSPAPER / MAGAZINE
+    # ===========================
     if resource_type in ["newspapers", "magazine"]:
-        # Use Azure Document Intelligence for newspapers and magazines
+
         azure_result = extract_with_azure(input_path)
-        
+
         if azure_result and azure_result.get("articles"):
-            print(f"✓ Azure extraction successful: {len(azure_result['articles'])} articles found")
-            
-            # Extract article texts
-            article_texts = []
-            for article in azure_result["articles"]:
-                article_texts.append(article.get("full_text", ""))
-            
+            print(f"✓ Azure extraction successful")
+
+            article_texts = [
+                article.get("full_text", "")
+                for article in azure_result["articles"]
+            ]
+
             return {
                 "full_text": azure_result["full_text"],
                 "article_texts": article_texts,
                 "method": "azure",
                 "structured_articles": azure_result["articles"]
             }
+
         else:
-            print("⚠ Azure extraction failed or no articles found. Falling back to simple OCR...")
-            # Fallback to simple OCR
+            print("⚠ Azure failed. Falling back to OCR")
+
             full_text = extract_text_book(input_path)
+
             return {
                 "full_text": full_text,
                 "article_texts": [full_text],
                 "method": "simple_ocr_fallback",
                 "structured_articles": []
             }
-    
-    else:  # For books
-        # Use simple OCR for books
-        print("Using simple OCR for book content...")
+
+    # ===========================
+    # 📚 BOOKS (NEW STRUCTURED LOGIC)
+    # ===========================
+    else:
+
+        print("Using structured OCR for book")
+
         full_text = extract_text_book(input_path)
-        return {
-            "full_text": full_text,
-            "article_texts": [full_text],
-            "method": "simple_ocr",
-            "structured_articles": []
-        }
+
+        from ocr_processor import structure_book_text
+
+        structured_book = structure_book_text(full_text)
+
+        chapters = structured_book.get("chapters", [])
+
+        if chapters:
+            print(f"✓ Structured {len(chapters)} chapters detected")
+
+            return {
+                "full_text": full_text,
+                "article_texts": [c["full_text"] for c in chapters],
+                "method": "structured_book_ocr",
+                "structured_articles": chapters
+            }
+
+        else:
+            print("⚠ No chapters detected. Returning full book as single unit")
+
+            return {
+                "full_text": full_text,
+                "article_texts": [full_text],
+                "method": "simple_ocr",
+                "structured_articles": []
+            }
 
 def process_document(
     input_path: str, 

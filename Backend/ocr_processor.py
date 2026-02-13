@@ -3,113 +3,154 @@ import os
 import tempfile
 import cv2
 import pytesseract
-import pdf2image
+import re
 from pdf2image import convert_from_path
 from PIL import Image
 import numpy as np
 
+
+# ==========================================
+# 🔹 SIMPLE IMAGE OCR
+# ==========================================
 def ocr_image_simple(image_path: str) -> str:
-    """
-    Simple OCR function using basic Tesseract.
-    """
     try:
         print(f"Processing image: {image_path}")
-        
-        # Load image using OpenCV
+
         img = cv2.imread(image_path)
         if img is None:
-            print(f"  Warning: Could not read image with OpenCV, trying PIL fallback...")
-            # Fallback to PIL
+            print("OpenCV failed. Trying PIL fallback...")
             pil_img = Image.open(image_path)
-            # Convert PIL image to numpy array
             img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
-        
-        height, width = img.shape[:2]
-        print(f"  Image size: {width}x{height}")
-        
-        # Convert to RGB (Tesseract needs RGB)
+
         img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        
-        # Run OCR with standard configuration
+
         text = pytesseract.image_to_string(img_rgb, lang="eng")
-        
-        print(f"  Extracted {len(text)} characters")
+
+        print(f"Extracted {len(text)} characters")
         return text.strip()
-        
+
     except Exception as e:
         print(f"OCR Error: {e}")
-        # Try alternative method
-        try:
-            # Direct PIL approach
-            pil_img = Image.open(image_path)
-            text = pytesseract.image_to_string(pil_img, lang="eng")
-            return text.strip()
-        except Exception as e2:
-            print(f"Fallback OCR also failed: {e2}")
-            return ""
-
-def ocr_pdf_simple(pdf_path: str) -> str:
-    """Extract text from PDF using simple OCR on all pages."""
-    try:
-        print(f"Processing PDF: {pdf_path}")
-        
-        # Convert PDF to images with standard DPI
-        print("  Converting PDF to images...")
-        pages = convert_from_path(pdf_path, dpi=200)
-        
-        print(f"  Converted {len(pages)} pages")
-        
-        all_pages_text = []
-        
-        for page_num, page in enumerate(pages):
-            print(f"  Processing page {page_num + 1}/{len(pages)}...")
-            
-            # Save page as temporary image
-            temp_dir = tempfile.gettempdir()
-            temp_img = os.path.join(temp_dir, f"temp_page_{page_num}_{os.urandom(4).hex()}.png")
-            
-            page.save(temp_img, "PNG", dpi=(200, 200))
-            
-            # Process with simple OCR
-            page_text = ocr_image_simple(temp_img)
-            
-            if page_text.strip():
-                all_pages_text.append(page_text)
-            
-            # Clean up
-            try:
-                os.remove(temp_img)
-            except:
-                pass
-        
-        # Combine all pages with page break markers
-        combined = "\n\n[PAGE BREAK]\n\n".join(all_pages_text)
-        print(f"  Total extracted characters: {len(combined)}")
-        
-        return combined
-        
-    except Exception as e:
-        print(f"PDF OCR Error: {e}")
-        # Try to get at least some text
-        try:
-            # Try with first page only
-            pages = convert_from_path(pdf_path, first_page=1, last_page=1, dpi=200)
-            if pages:
-                temp_dir = tempfile.gettempdir()
-                temp_img = os.path.join(temp_dir, f"temp_fallback_{os.urandom(4).hex()}.png")
-                pages[0].save(temp_img, "PNG", dpi=(200, 200))
-                text = ocr_image_simple(temp_img)
-                try:
-                    os.remove(temp_img)
-                except:
-                    pass
-                return text
-        except:
-            pass
         return ""
 
+
+# ==========================================
+# 🔹 SIMPLE PDF OCR
+# ==========================================
+def ocr_pdf_simple(pdf_path: str) -> str:
+    try:
+        print(f"Processing PDF: {pdf_path}")
+
+        pages = convert_from_path(pdf_path, dpi=250)
+
+        all_text = []
+
+        for i, page in enumerate(pages):
+            print(f"Processing page {i+1}/{len(pages)}")
+
+            temp_path = os.path.join(
+                tempfile.gettempdir(),
+                f"temp_{os.urandom(4).hex()}.png"
+            )
+
+            page.save(temp_path, "PNG")
+
+            page_text = ocr_image_simple(temp_path)
+
+            if page_text.strip():
+                all_text.append(page_text)
+
+            try:
+                os.remove(temp_path)
+            except:
+                pass
+
+        combined = "\n\n".join(all_text)
+        print(f"Total extracted characters: {len(combined)}")
+
+        return combined
+
+    except Exception as e:
+        print(f"PDF OCR Error: {e}")
+        return ""
+
+
+# ==========================================
+# 🔹 BOOK STRUCTURE DETECTION
+# ==========================================
+def structure_book_text(full_text: str) -> dict:
+    if not full_text.strip():
+        return {"book_title": "Unknown Title", "chapters": []}
+
+    # Merge broken OCR lines
+    raw_lines = full_text.split("\n")
+    merged_lines = []
+    buffer = ""
+    for line in raw_lines:
+        line = line.strip()
+        if not line:
+            if buffer:
+                merged_lines.append(buffer.strip())
+                buffer = ""
+            continue
+        if buffer and not buffer.endswith((".", "!", "?", ":", ";")):
+            buffer += " " + line
+        else:
+            if buffer:
+                merged_lines.append(buffer.strip())
+            buffer = line
+    if buffer:
+        merged_lines.append(buffer.strip())
+
+    book_title = merged_lines[0] if merged_lines else "Unknown Title"
+
+    # Detect chapters
+    chapters = []
+    current_chapter = None
+    for line in merged_lines:
+        words = line.split()
+        heading_score = 0
+        if 2 <= len(words) <= 8:
+            heading_score += 1
+        upper_ratio = sum(c.isupper() for c in line) / max(len(line), 1)
+        if upper_ratio > 0.6:
+            heading_score += 2
+        if line.istitle():
+            heading_score += 1
+        if re.search(r'\bchapter\b', line, re.IGNORECASE):
+            heading_score += 3
+
+        if heading_score >= 3:
+            # Always append current chapter if exists, no length check
+            if current_chapter:
+                chapters.append(current_chapter)
+            current_chapter = {"heading": line, "content": []}
+        else:
+            if current_chapter:
+                current_chapter["content"].append(line)
+
+    if current_chapter:
+        chapters.append(current_chapter)  # always append last chapter
+
+    # Format structured chapters
+    structured_chapters = []
+    for idx, ch in enumerate(chapters):
+        structured_chapters.append({
+            "article_id": f"chapter_{idx+1}",
+            "heading": ch["heading"],
+            "subheading": "",
+            "body": ch["content"],
+            "full_text": "\n".join(ch["content"]).strip()
+        })
+
+    print(f"Detected {len(structured_chapters)} structured chapters")
+    return {"book_title": book_title, "chapters": structured_chapters}
+
+
+# ==========================================
+# 🔹 MAIN BOOK TEXT EXTRACTOR
+# ==========================================
 def extract_text_book(input_path: str) -> str:
-    """Extract text for books using simple OCR."""
     if input_path.lower().endswith(".pdf"):
         return ocr_pdf_simple(input_path)
     else:
