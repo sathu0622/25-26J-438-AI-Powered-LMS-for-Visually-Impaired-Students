@@ -36,6 +36,11 @@ export default function App() {
 
   // Braille module state
   const [brailleScreen, setBrailleScreen] = useState<BrailleScreen>('upload');
+  const [brailleConvertedData, setBrailleConvertedData] = useState<{
+    question: string;
+    answer: string;
+    fullText: string;
+  } | null>(null);
 
   // Quiz module state
   const [quizScreen, setQuizScreen] = useState<QuizScreen>('start');
@@ -56,6 +61,7 @@ export default function App() {
     // Reset module states when navigating
     if (target === 'braille') {
       setBrailleScreen('upload');
+      setBrailleConvertedData(null);
     } else if (target === 'quiz') {
       setQuizScreen('start');
     } else if (target === 'history') {
@@ -86,13 +92,15 @@ export default function App() {
   };
 
   // Braille Module Handlers
-  const handleBrailleUpload = (file: File) => {
-    // File is received, now proceed to evaluation
+  const handleBrailleUpload = (data: { question: string; answer: string; fullText: string }) => {
+    // Converted data is received, now proceed to evaluation
+    setBrailleConvertedData(data);
     setBrailleScreen('evaluation');
   };
 
   const handleBrailleBack = () => {
     setBrailleScreen('upload');
+    setBrailleConvertedData(null);
   };
 
   // Quiz Module Handlers
@@ -166,7 +174,10 @@ export default function App() {
               <BrailleUpload onUpload={handleBrailleUpload} />
             )}
             {brailleScreen === 'evaluation' && (
-              <BrailleEvaluation onBack={handleBrailleBack} />
+              <BrailleEvaluation 
+                onBack={handleBrailleBack} 
+                convertedData={brailleConvertedData || undefined}
+              />
             )}
           </>
         )}

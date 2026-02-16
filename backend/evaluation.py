@@ -33,8 +33,8 @@ Answer:
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
     return response.split("Answer:")[-1].strip()
 
-def calculate_final_score(correct, student):
-    semantic = semantic_similarity(correct, student, sbert_model=model_sbert)
+def calculate_final_score(correct, student, sbert_model):
+    semantic = semantic_similarity(correct, student, sbert_model)
     keyword = keyword_overlap_score(correct, student)
     jaccard = jaccard_similarity(correct, student)
 
@@ -54,7 +54,7 @@ def generate_feedback(score):
 
 def evaluate_student_answer(question, student_answer, tokenizer, model, sbert):
     correct_answer = generate_correct_answer(question, tokenizer, model)
-    final, semantic, keyword, jaccard, error_factor = calculate_final_score(correct_answer, student_answer)
+    final, semantic, keyword, jaccard, error_factor = calculate_final_score(correct_answer, student_answer, sbert)
 
     status = "PASS" if final >= 75 else "NEEDS IMPROVEMENT" if final >= 45 else "FAIL"
     return {
