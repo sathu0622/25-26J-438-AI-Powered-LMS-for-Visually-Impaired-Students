@@ -3,22 +3,13 @@ import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
 import { VoiceCommandSystem } from './components/VoiceCommandSystem';
 
-// Document Module
-import { DocumentUpload } from './components/document/DocumentUpload';
-import { DocumentProcessing } from './components/document/DocumentProcessing';
-import { DocumentSummary } from './components/document/DocumentSummary';
-import { DocumentQA } from './components/document/DocumentQA';
-
-// Braille Module
+// Module Components
+import { DocumentModule } from './components/document/DocumentModule';
 import { BrailleUpload } from './components/braille/BrailleUpload';
 import { BrailleEvaluation } from './components/braille/BrailleEvaluation';
-
-// Quiz Module
 import { QuizStart } from './components/quiz/QuizStart';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
-
-// History Module
 import { HistoryHome } from './components/history/HistoryHome';
 import { LessonList } from './components/history/LessonList';
 import { LessonPlayer } from './components/history/LessonPlayer';
@@ -28,7 +19,6 @@ import { getQuestionsByTopic } from './data/quizData';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 
-type DocumentScreen = 'upload' | 'processing' | 'summary' | 'qa';
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback';
 type HistoryScreen = 'home' | 'lessons' | 'player';
@@ -43,16 +33,6 @@ interface Question {
 
 export default function App() {
   const [currentModule, setCurrentModule] = useState<Module>('home');
-
-  // Document module state
-  const [documentScreen, setDocumentScreen] = useState<DocumentScreen>('upload');
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [documentSummary, setDocumentSummary] = useState('');
-  const [qaMode, setQaMode] = useState<'voice' | 'text'>('voice');
-  const [documentResult, setDocumentResult] = useState<any | null>(null);
-  const [documentError, setDocumentError] = useState<string | null>(null);
-  const [selectedArticleId, setSelectedArticleId] = useState<string | null>(null);
-  const [isDocumentLoading, setIsDocumentLoading] = useState(false);
 
   // Braille module state
   const [brailleScreen, setBrailleScreen] = useState<BrailleScreen>('upload');
@@ -74,9 +54,7 @@ export default function App() {
     setCurrentModule(target);
 
     // Reset module states when navigating
-    if (target === 'document') {
-      setDocumentScreen('upload');
-    } else if (target === 'braille') {
+    if (target === 'braille') {
       setBrailleScreen('upload');
     } else if (target === 'quiz') {
       setQuizScreen('start');
@@ -105,131 +83,6 @@ export default function App() {
   const getCurrentPage = (): string => {
     if (currentModule === 'document') return 'document-upload';
     return currentModule;
-  };
-
-  // Document Module Handlers
-  const handleDocumentUpload = async (file: File) => {
-    setUploadedFile(file);
-    setDocumentResult(null);
-    setDocumentError(null);
-    setSelectedArticleId(null);
-    setDocumentScreen('processing');
-    setIsDocumentLoading(true);
-
-    const apiUrl =
-      (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
-
-    const formData = new FormData();
-    formData.append('file', file);
-
-    try {
-      const response = await fetch(`${apiUrl}/process`, {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Processing failed. Please try again.';
-        try {
-          const errorData = await response.json();
-          if (errorData?.detail) {
-            errorMessage = errorData.detail;
-          }
-        } catch {
-          // ignore JSON parse errors
-        }
-        throw new Error(errorMessage);
-      }
-
-      const data = await response.json();
-      setDocumentResult(data);
-
-      // Set initial summary from backend response if available
-      let initialSummary = '';
-      if (Array.isArray(data.summaries) && data.summaries.length > 0) {
-        initialSummary = data.summaries[0]?.summary || '';
-      }
-      setDocumentSummary(initialSummary);
-
-      // Default selected article (first article or full document)
-      const defaultArticleId =
-        data.article_list?.[0]?.article_id || 'full_document';
-      setSelectedArticleId(defaultArticleId);
-
-      setDocumentScreen('summary');
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Unable to process document. Please try again.';
-      setDocumentError(message);
-      setDocumentScreen('upload');
-    } finally {
-      setIsDocumentLoading(false);
-    }
-  };
-
-  const handleArticleSelect = async (articleId: string) => {
-    if (!documentResult?.document_id) return;
-
-    setSelectedArticleId(articleId);
-
-    const apiUrl =
-      (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
-
-    try {
-      const response = await fetch(`${apiUrl}/summarize-article`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          document_id: documentResult.document_id,
-          article_id: articleId,
-        }),
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to summarize selected article.';
-        try {
-          const errorData = await response.json();
-          if (errorData?.detail) {
-            errorMessage = errorData.detail;
-          }
-        } catch {
-          // ignore JSON parse errors
-        }
-        throw new Error(errorMessage);
-      }
-
-      const summaryData = await response.json();
-      setDocumentSummary(summaryData.summary || '');
-
-      // Optionally keep last summary metadata with the result
-      setDocumentResult((prev: any) =>
-        prev
-          ? {
-              ...prev,
-              summaries: [summaryData],
-            }
-          : prev
-      );
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Failed to summarize selected article.';
-      setDocumentError(message);
-    }
-  };
-
-  const handleAskQuestion = (mode: 'voice' | 'text') => {
-    setQaMode(mode);
-    setDocumentScreen('qa');
-  };
-
-  const handleBackToSummary = () => {
-    setDocumentScreen('summary');
   };
 
   // Braille Module Handlers
@@ -304,49 +157,7 @@ export default function App() {
         {currentModule === 'home' && <HomePage onNavigate={handleNavigate} />}
 
         {/* Document Module */}
-        {currentModule === 'document' && (
-          <>
-            {documentError && (
-              <div className="mx-auto max-w-2xl p-4">
-                <div
-                  className="rounded-lg border border-destructive bg-destructive/10 p-4"
-                  role="alert"
-                  aria-live="assertive"
-                >
-                  <p className="font-medium">Document processing error</p>
-                  <p className="text-sm">{documentError}</p>
-                </div>
-              </div>
-            )}
-
-            {documentScreen === 'upload' && (
-              <DocumentUpload onUpload={handleDocumentUpload} />
-            )}
-            {documentScreen === 'processing' && uploadedFile && (
-              <DocumentProcessing fileName={uploadedFile.name} />
-            )}
-            {documentScreen === 'summary' && (
-              <DocumentSummary
-                summary={documentSummary}
-                onAskQuestion={handleAskQuestion}
-                articles={documentResult?.article_list}
-                selectedArticleId={selectedArticleId}
-                onSelectArticle={handleArticleSelect}
-              />
-            )}
-            {documentScreen === 'qa' && (
-              <DocumentQA
-                mode={qaMode}
-                onBack={handleBackToSummary}
-                documentId={documentResult?.document_id ?? ''}
-                articleId={selectedArticleId ?? null}
-                articleHeading={documentResult?.article_list?.find(
-                  (article: any) => article.article_id === selectedArticleId
-                )?.heading}
-              />
-            )}
-          </>
-        )}
+        {currentModule === 'document' && <DocumentModule />}
 
         {/* Braille Module */}
         {currentModule === 'braille' && (

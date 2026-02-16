@@ -6,7 +6,7 @@ import { Textarea } from '../ui/textarea';
 import { VoiceButton } from '../VoiceButton';
 import { AudioPlayer } from '../AudioPlayer';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { documentService } from '../../services/documentService';
 
 interface QAItem {
   question: string;
@@ -24,9 +24,6 @@ interface DocumentQAProps {
   articleId: string | null;
   articleHeading?: string;
 }
-
-const API_URL =
-  import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
 export const DocumentQA = ({
   mode,
@@ -59,12 +56,13 @@ export const DocumentQA = ({
   // Auto-start voice recording when entering voice mode
   useEffect(() => {
     // STOP all previous speech immediately
-    safeCancel();
+    window.speechSynthesis.cancel();
     
     if (mode === 'voice' && !hasAutoStarted) {
       setHasAutoStarted(true);
       // Announce and auto-start
-      safeSpeak('Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press Escape to go back. Recording will start automatically in 2 seconds.');
+      const utterance = new SpeechSynthesisUtterance('Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press Escape to go back. Recording will start automatically in 2 seconds.');
+      window.speechSynthesis.speak(utterance);
       
       // Auto-start after announcement
       setTimeout(() => {
@@ -74,7 +72,7 @@ export const DocumentQA = ({
     
     // Cleanup: stop speech when leaving page
     return () => {
-      safeCancel();
+      window.speechSynthesis.cancel();
     };
   }, [mode]);
 
@@ -108,8 +106,9 @@ export const DocumentQA = ({
         if (e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
           e.preventDefault();
           // Trigger audio replay by speaking the answer again
-          safeCancel(); // Stop any current speech
-          safeSpeak(currentAnswer);
+          window.speechSynthesis.cancel(); // Stop any current speech
+          const utterance = new SpeechSynthesisUtterance(currentAnswer);
+          window.speechSynthesis.speak(utterance);
         }
       }
 
@@ -138,34 +137,13 @@ export const DocumentQA = ({
     setQaError(null);
 
     try {
-      const response = await fetch(`${API_URL}/ask-question`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          document_id: documentId,
-          article_id: articleId,
-          question: question,
-          max_answer_len: 64,
-          score_threshold: 0.15,
-        }),
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to get answer. Please try again.';
-        try {
-          const errorData = await response.json();
-          if (errorData?.detail) {
-            errorMessage = errorData.detail;
-          }
-        } catch {
-          // ignore JSON parse errors
-        }
-        throw new Error(errorMessage);
-      }
-
-      const qaData = await response.json();
+      const qaData = await documentService.askQuestion(
+        documentId,
+        articleId,
+        question,
+        64,
+        0.15
+      );
 
       const timestamp = new Date().toLocaleTimeString();
       const newItem: QAItem = {
@@ -184,9 +162,10 @@ export const DocumentQA = ({
 
       // Announce that answer is ready and how to replay
       setTimeout(() => {
-        safeSpeak(
+        const utterance = new SpeechSynthesisUtterance(
           'Answer received. Press A to replay the answer anytime, or press Space to ask another question.'
         );
+        window.speechSynthesis.speak(utterance);
       }, 8000);
     } catch (error) {
       const message =
