@@ -41,7 +41,7 @@ def load_models():
         logger.info("Loading Sentence-BERT...")
         sbert = SentenceTransformer("all-MiniLM-L6-v2")
 
-        logger.info("✅ All models loaded successfully")
+        logger.info("All models loaded successfully")
     except Exception as e:
         logger.error(f"Error loading models: {e}")
         raise

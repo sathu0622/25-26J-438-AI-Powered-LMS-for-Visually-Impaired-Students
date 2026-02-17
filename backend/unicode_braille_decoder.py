@@ -1,5 +1,3 @@
-# unicode_braille_decoder.py
-
 # Mapping of Unicode Braille to normal letters
 UNICODE_BRAILLE_DICT = {
     '⠁': 'a', '⠃': 'b', '⠉': 'c', '⠙': 'd', '⠑': 'e',
@@ -18,9 +16,7 @@ def unicode_braille_to_text(braille_str: str) -> str:
     """
     return ''.join(UNICODE_BRAILLE_DICT.get(c, '?') for c in braille_str)
 
-# =========================
 # Test
-# =========================
 if __name__ == "__main__":
     braille_input = "⠑ ⠭ ⠏ ⠇ ⠁ ⠊ ⠝"
     text_output = unicode_braille_to_text(braille_input)

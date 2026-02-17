@@ -1,5 +1,3 @@
-# main.py
-
 from fastapi import FastAPI, HTTPException, UploadFile, File
 import os
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,8 +10,6 @@ from logger_config import logger
 
 import torch
 import tempfile
-
-# ✅ Import Braille PDF Decoder
 from braille_decoder import decode_braille_pdf
 
 
@@ -40,10 +36,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ========================
-# Root Endpoints
-# ========================
-
 @app.get("/")
 async def root():
     return {
@@ -59,11 +51,6 @@ async def health_check():
         "status": "healthy",
         "models_loaded": models_loader.model is not None
     }
-
-
-# ========================
-# Answer Evaluation Endpoint
-# ========================
 
 @app.post("/evaluate", response_model=EvaluationResponse)
 async def evaluate_answer(request: EvaluationRequest):
@@ -83,11 +70,6 @@ async def evaluate_answer(request: EvaluationRequest):
     )
 
     return EvaluationResponse(**result)
-
-
-# ========================
-# ✅ Braille Unicode PDF Endpoint
-# ========================
 
 @app.post("/braille/convert-pdf")
 async def convert_braille_pdf(file: UploadFile = File(...)):
@@ -116,11 +98,6 @@ async def convert_braille_pdf(file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Braille PDF decoding failed: {str(e)}")
-
-
-# ========================
-# Run Server
-# ========================
 
 if __name__ == "__main__":
     import uvicorn

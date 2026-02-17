@@ -1,11 +1,5 @@
-# braille_pdf_decoder.py
-
 import fitz  # PyMuPDF
 import re
-
-# --------------------------------------------
-# Braille Dictionaries
-# --------------------------------------------
 
 BRAILLE_ALPHA = {
     "⠁":"a","⠃":"b","⠉":"c","⠙":"d","⠑":"e",
@@ -36,10 +30,7 @@ BRAILLE_PUNCT = {
 CAPITAL_SIGN = "⠠"
 NUMBER_SIGN = "⠼"
 
-
-# --------------------------------------------
 # Extract Braille Unicode Text from PDF
-# --------------------------------------------
 def extract_braille_text(pdf_path: str) -> str:
     doc = fitz.open(pdf_path)
     braille_text = ""
@@ -49,10 +40,7 @@ def extract_braille_text(pdf_path: str) -> str:
 
     return braille_text
 
-
-# --------------------------------------------
 # Convert Braille Unicode → English
-# --------------------------------------------
 def braille_to_english(text: str) -> str:
     result = ""
     capitalize_next = False
@@ -93,17 +81,11 @@ def braille_to_english(text: str) -> str:
 
     return result
 
-
-# --------------------------------------------
 # Fix Broken Line Words
-# --------------------------------------------
 def clean_wrapped_lines(text: str) -> str:
     return re.sub(r"(\w+)\n(\w+)", r"\1 \2", text)
 
-
-# --------------------------------------------
 # Split Question + Answer
-# --------------------------------------------
 def split_question_answer(text: str):
     text = text.strip()
 
@@ -116,10 +98,7 @@ def split_question_answer(text: str):
 
     return text, ""
 
-
-# --------------------------------------------
 # Main Function: PDF → Question + Answer
-# --------------------------------------------
 def decode_braille_pdf(pdf_path: str):
 
     braille_text = extract_braille_text(pdf_path)
