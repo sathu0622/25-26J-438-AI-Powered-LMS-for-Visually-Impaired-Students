@@ -3,22 +3,13 @@ import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
 import { VoiceCommandSystem } from './components/VoiceCommandSystem';
 
-// Document Module
-import { DocumentUpload } from './components/document/DocumentUpload';
-import { DocumentProcessing } from './components/document/DocumentProcessing';
-import { DocumentSummary } from './components/document/DocumentSummary';
-import { DocumentQA } from './components/document/DocumentQA';
-
-// Braille Module
+// Module Components
+import { DocumentModule } from './components/document/DocumentModule';
 import { BrailleUpload } from './components/braille/BrailleUpload';
 import { BrailleEvaluation } from './components/braille/BrailleEvaluation';
-
-// Quiz Module
 import { QuizStart } from './components/quiz/QuizStart';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
-
-// History Module
 import { HistoryHome } from './components/history/HistoryHome';
 import { LessonList } from './components/history/LessonList';
 import { LessonPlayer } from './components/history/LessonPlayer';
@@ -28,7 +19,6 @@ import { getQuestionsByTopic } from './data/quizData';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 
-type DocumentScreen = 'upload' | 'processing' | 'summary' | 'qa';
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback';
 type HistoryScreen = 'home' | 'lessons' | 'player';
@@ -43,12 +33,6 @@ interface Question {
 
 export default function App() {
   const [currentModule, setCurrentModule] = useState<Module>('home');
-
-  // Document module state
-  const [documentScreen, setDocumentScreen] = useState<DocumentScreen>('upload');
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-  const [documentSummary, setDocumentSummary] = useState('');
-  const [qaMode, setQaMode] = useState<'voice' | 'text'>('voice');
 
   // Braille module state
   const [brailleScreen, setBrailleScreen] = useState<BrailleScreen>('upload');
@@ -65,17 +49,16 @@ export default function App() {
   const [selectedGrade, setSelectedGrade] = useState<number>(10);
   const [selectedLesson, setSelectedLesson] = useState<number>(1);
 
-  const handleNavigate = (module: Module) => {
-    setCurrentModule(module);
+  const handleNavigate = (module: string) => {
+    const target = module as Module;
+    setCurrentModule(target);
 
     // Reset module states when navigating
-    if (module === 'document') {
-      setDocumentScreen('upload');
-    } else if (module === 'braille') {
+    if (target === 'braille') {
       setBrailleScreen('upload');
-    } else if (module === 'quiz') {
+    } else if (target === 'quiz') {
       setQuizScreen('start');
-    } else if (module === 'history') {
+    } else if (target === 'history') {
       setHistoryScreen('home');
     }
   };
@@ -100,26 +83,6 @@ export default function App() {
   const getCurrentPage = (): string => {
     if (currentModule === 'document') return 'document-upload';
     return currentModule;
-  };
-
-  // Document Module Handlers
-  const handleDocumentUpload = (file: File) => {
-    setUploadedFile(file);
-    setDocumentScreen('processing');
-  };
-
-  const handleDocumentProcessingComplete = (summary: string) => {
-    setDocumentSummary(summary);
-    setDocumentScreen('summary');
-  };
-
-  const handleAskQuestion = (mode: 'voice' | 'text') => {
-    setQaMode(mode);
-    setDocumentScreen('qa');
-  };
-
-  const handleBackToSummary = () => {
-    setDocumentScreen('summary');
   };
 
   // Braille Module Handlers
@@ -194,28 +157,7 @@ export default function App() {
         {currentModule === 'home' && <HomePage onNavigate={handleNavigate} />}
 
         {/* Document Module */}
-        {currentModule === 'document' && (
-          <>
-            {documentScreen === 'upload' && (
-              <DocumentUpload onUpload={handleDocumentUpload} />
-            )}
-            {documentScreen === 'processing' && uploadedFile && (
-              <DocumentProcessing
-                fileName={uploadedFile.name}
-                onComplete={handleDocumentProcessingComplete}
-              />
-            )}
-            {documentScreen === 'summary' && (
-              <DocumentSummary
-                summary={documentSummary}
-                onAskQuestion={handleAskQuestion}
-              />
-            )}
-            {documentScreen === 'qa' && (
-              <DocumentQA mode={qaMode} onBack={handleBackToSummary} />
-            )}
-          </>
-        )}
+        {currentModule === 'document' && <DocumentModule />}
 
         {/* Braille Module */}
         {currentModule === 'braille' && (

@@ -6,19 +6,32 @@ import { Textarea } from '../ui/textarea';
 import { VoiceButton } from '../VoiceButton';
 import { AudioPlayer } from '../AudioPlayer';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { documentService } from '../../services/documentService';
 
 interface QAItem {
   question: string;
   answer: string;
+  confidence?: number;
+  articleHeading?: string;
+  timestamp?: string;
+  context?: string;
 }
 
 interface DocumentQAProps {
   mode: 'voice' | 'text';
   onBack: () => void;
+  documentId: string;
+  articleId: string | null;
+  articleHeading?: string;
 }
 
-export const DocumentQA = ({ mode, onBack }: DocumentQAProps) => {
+export const DocumentQA = ({
+  mode,
+  onBack,
+  documentId,
+  articleId,
+  articleHeading,
+}: DocumentQAProps) => {
   const [question, setQuestion] = useState('');
   const [qaHistory, setQaHistory] = useState<QAItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -26,6 +39,7 @@ export const DocumentQA = ({ mode, onBack }: DocumentQAProps) => {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
+  const [qaError, setQaError] = useState<string | null>(null);
 
   const {
     isListening,
@@ -42,12 +56,13 @@ export const DocumentQA = ({ mode, onBack }: DocumentQAProps) => {
   // Auto-start voice recording when entering voice mode
   useEffect(() => {
     // STOP all previous speech immediately
-    safeCancel();
+    window.speechSynthesis.cancel();
     
     if (mode === 'voice' && !hasAutoStarted) {
       setHasAutoStarted(true);
       // Announce and auto-start
-      safeSpeak('Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press Escape to go back. Recording will start automatically in 2 seconds.');
+      const utterance = new SpeechSynthesisUtterance('Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press Escape to go back. Recording will start automatically in 2 seconds.');
+      window.speechSynthesis.speak(utterance);
       
       // Auto-start after announcement
       setTimeout(() => {
@@ -57,7 +72,7 @@ export const DocumentQA = ({ mode, onBack }: DocumentQAProps) => {
     
     // Cleanup: stop speech when leaving page
     return () => {
-      safeCancel();
+      window.speechSynthesis.cancel();
     };
   }, [mode]);
 
@@ -91,8 +106,9 @@ export const DocumentQA = ({ mode, onBack }: DocumentQAProps) => {
         if (e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
           e.preventDefault();
           // Trigger audio replay by speaking the answer again
-          safeCancel(); // Stop any current speech
-          safeSpeak(currentAnswer);
+          window.speechSynthesis.cancel(); // Stop any current speech
+          const utterance = new SpeechSynthesisUtterance(currentAnswer);
+          window.speechSynthesis.speak(utterance);
         }
       }
 
@@ -114,62 +130,73 @@ export const DocumentQA = ({ mode, onBack }: DocumentQAProps) => {
   }, [transcript, isListening]);
 
   const handleAsk = async () => {
-    if (!question.trim()) return;
+    if (!question.trim() || !documentId || !articleId) return;
 
     setIsLoading(true);
     setCurrentAnswer(null);
+    setQaError(null);
 
-    // Simulate AI response
-    setTimeout(() => {
-      const mockAnswer = `Based on the document, ${question.toLowerCase().includes('what') ? 'the answer involves' : 'this relates to'} the educational methodologies discussed. The document emphasizes accessible learning materials and adaptive technologies that support students with visual impairments through multi-sensory experiences and personalized teaching approaches.`;
+    try {
+      const qaData = await documentService.askQuestion(
+        documentId,
+        articleId,
+        question,
+        64,
+        0.15
+      );
 
-      setQaHistory((prev) => [...prev, { question, answer: mockAnswer }]);
-      setCurrentAnswer(mockAnswer);
-      setQuestion('')
+      const timestamp = new Date().toLocaleTimeString();
+      const newItem: QAItem = {
+        question,
+        answer: qaData.answer,
+        confidence: qaData.confidence,
+        articleHeading: articleHeading || qaData.article_heading,
+        timestamp,
+        context: qaData.context_preview,
+      };
+
+      setQaHistory((prev) => [...prev, newItem]);
+      setCurrentAnswer(qaData.answer);
+      setQuestion('');
       resetTranscript();
-      setIsLoading(false);
-      
+
       // Announce that answer is ready and how to replay
       setTimeout(() => {
-        safeSpeak('Answer received. Press A to replay the answer anytime, or press Space to ask another question.');
-      }, 8000); // Wait for answer to finish reading
-    }, 2000);
+        const utterance = new SpeechSynthesisUtterance(
+          'Answer received. Press A to replay the answer anytime, or press Space to ask another question.'
+        );
+        window.speechSynthesis.speak(utterance);
+      }, 8000);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to get answer. Please try again.';
+      setQaError(message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleVoiceToggle = () => {
-    // Use mock voice recording for demo
     if (isRecording) {
-      // Clear timer if manually stopped
       if (recordingTimer) {
         clearTimeout(recordingTimer);
         setRecordingTimer(null);
       }
       setIsRecording(false);
-      // Simulate question after recording
-      const mockQuestions = [
-        'What are the main benefits of accessible education?',
-        'How do adaptive technologies help visually impaired students?',
-        'What is multi-sensory learning and why is it important?',
-        'Can you explain the role of inclusive teaching methods?'
-      ];
-      const randomQuestion = mockQuestions[Math.floor(Math.random() * mockQuestions.length)];
-      setQuestion(randomQuestion);
+      stopListening();
     } else {
       setIsRecording(true);
       setQuestion('');
-      // Auto-stop after 3 seconds for demo
+      resetTranscript();
+      startListening();
+      // Auto-stop after 10 seconds to avoid very long recordings
       const timer = setTimeout(() => {
-        const mockQuestions = [
-          'What are the main benefits of accessible education?',
-          'How do adaptive technologies help visually impaired students?',
-          'What is multi-sensory learning and why is it important?',
-          'Can you explain the role of inclusive teaching methods?'
-        ];
-        const randomQuestion = mockQuestions[Math.floor(Math.random() * mockQuestions.length)];
-        setQuestion(randomQuestion);
+        stopListening();
         setIsRecording(false);
         setRecordingTimer(null);
-      }, 3000);
+      }, 10000);
       setRecordingTimer(timer);
     }
   };
@@ -202,7 +229,7 @@ export const DocumentQA = ({ mode, onBack }: DocumentQAProps) => {
         </div>
       </div>
 
-      {/* Error Alert */}
+      {/* Speech Recognition Error */}
       {speechError && mode === 'voice' && (
         <Card className="border-destructive bg-destructive/10 p-4">
           <div className="flex items-start gap-3">
@@ -232,6 +259,16 @@ export const DocumentQA = ({ mode, onBack }: DocumentQAProps) => {
             >
               <X className="h-4 w-4" />
             </Button>
+          </div>
+        </Card>
+      )}
+
+      {/* Q&A API Error */}
+      {qaError && (
+        <Card className="border-destructive bg-destructive/10 p-4">
+          <div className="space-y-1 text-sm">
+            <p className="font-medium">Question answering error</p>
+            <p>{qaError}</p>
           </div>
         </Card>
       )}
