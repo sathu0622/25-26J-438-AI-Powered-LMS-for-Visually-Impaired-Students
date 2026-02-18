@@ -1,0 +1,100 @@
+from fastapi import APIRouter, File, UploadFile, HTTPException
+from fastapi.responses import FileResponse
+import os
+from app.services.tts_service import tts_service
+from app.services.chapter_service import chapter_service
+
+
+router = APIRouter(prefix="/api/audio", tags=["audio"])
+
+
+@router.post("/generate")
+async def generate_audio(text: str):
+    """
+    Generate audio from text using TTS model
+    
+    Args:
+        text: Content to convert to speech (query parameter)
+        
+    Returns:
+        Audio file
+    """
+    try:
+        if not text or len(text.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Text cannot be empty")
+        
+        # Generate unique output path
+        import uuid
+        unique_id = str(uuid.uuid4())[:8]
+        output_path = f"generated_audio_{unique_id}.wav"
+        
+        # Generate audio
+        audio_path = tts_service.generate_audio(text, output_path)
+        
+        return FileResponse(
+            path=audio_path,
+            media_type="audio/wav",
+            filename=f"lesson_audio.wav"
+        )
+    
+    except Exception as e:
+        print(f"Error generating audio: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating audio: {str(e)}")
+
+
+@router.get("/chapter/{grade}/{chapter_idx}/{topic_idx}")
+async def get_chapter_audio(grade: int, chapter_idx: int, topic_idx: int):
+    """
+    Generate audio for a specific topic using the chapter data with sound effects
+    
+    Args:
+        grade: Grade (10 or 11)
+        chapter_idx: Chapter index
+        topic_idx: Topic index
+        
+    Returns:
+        Generated audio file for the topic with atmospheric sound effects
+    """
+    try:
+        # Get the topic data
+        topic = chapter_service.get_topic_by_id(grade, chapter_idx, topic_idx)
+        
+        if not topic:
+            raise HTTPException(status_code=404, detail="Topic not found")
+        
+        # Use simplified_text if available, otherwise original_text
+        text_to_speak = topic.get("simplified_text") or topic.get("original_text", "")
+        
+        if not text_to_speak:
+            raise HTTPException(status_code=400, detail="No content to generate audio")
+        
+        # Extract emotion and sound effects from topic data
+        emotion = topic.get("emotion", "")
+        sound_effects = topic.get("sound_effects", "")
+        
+        print(f"🎭 Generating audio with emotion='{emotion}', sound_effects='{sound_effects}'")
+        
+        # Generate unique output path
+        import uuid
+        unique_id = str(uuid.uuid4())[:8]
+        output_path = f"chapter_audio_{grade}_{chapter_idx}_{topic_idx}_{unique_id}.wav"
+        
+        # Generate audio with emotion and sound effects
+        audio_path = tts_service.generate_audio(
+            text=text_to_speak, 
+            output_path=output_path,
+            emotion=emotion,
+            sound_effects=sound_effects
+        )
+        
+        return FileResponse(
+            path=audio_path,
+            media_type="audio/wav",
+            filename=f"lesson_{grade}_{chapter_idx}_{topic_idx}.wav"
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating chapter audio: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating audio: {str(e)}")
