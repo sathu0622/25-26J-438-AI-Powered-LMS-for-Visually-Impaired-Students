@@ -10,9 +10,13 @@ interface ProcessingStep {
 
 interface DocumentProcessingProps {
   fileName: string;
+  onComplete: (summary: string) => void;
 }
 
-export const DocumentProcessing = ({ fileName }: DocumentProcessingProps) => {
+export const DocumentProcessing = ({
+  fileName,
+  onComplete,
+}: DocumentProcessingProps) => {
   const [steps, setSteps] = useState<ProcessingStep[]>([
     { label: 'Detecting document type', completed: false },
     { label: 'Extracting text', completed: false },
@@ -22,7 +26,7 @@ export const DocumentProcessing = ({ fileName }: DocumentProcessingProps) => {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
-    // Simulate visible processing steps for accessibility feedback
+    // Simulate processing steps
     const timer1 = setTimeout(() => {
       setSteps((prev) => {
         const newSteps = [...prev];
@@ -50,6 +54,11 @@ export const DocumentProcessing = ({ fileName }: DocumentProcessingProps) => {
         return newSteps;
       });
       setProgress(100);
+      
+      // Generate mock summary
+      const mockSummary = `This document discusses educational methodologies and learning strategies for students with visual impairments. It emphasizes the importance of accessible materials, audio-based learning tools, and adaptive technologies. The document highlights various approaches to inclusive education, focusing on multi-sensory learning experiences and personalized teaching methods that cater to individual student needs.`;
+      
+      setTimeout(() => onComplete(mockSummary), 1000);
     }, 4500);
 
     return () => {
@@ -57,7 +66,7 @@ export const DocumentProcessing = ({ fileName }: DocumentProcessingProps) => {
       clearTimeout(timer2);
       clearTimeout(timer3);
     };
-  }, []);
+  }, [onComplete]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 pb-24">

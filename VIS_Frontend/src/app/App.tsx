@@ -3,15 +3,25 @@ import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
 import { VoiceCommandSystem } from './components/VoiceCommandSystem';
 
-// Module Components
-import { DocumentModule } from './components/document/DocumentModule';
+// Document Module
+import { DocumentUpload } from './components/document/DocumentUpload';
+import { DocumentProcessing } from './components/document/DocumentProcessing';
+import { DocumentSummary } from './components/document/DocumentSummary';
+import { DocumentQA } from './components/document/DocumentQA';
+
+// Braille Module
 import { BrailleUpload } from './components/braille/BrailleUpload';
 import { BrailleEvaluation } from './components/braille/BrailleEvaluation';
+
+// Quiz Module
 import { QuizStart } from './components/quiz/QuizStart';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
+
+// History Module
 import { HistoryHome } from './components/history/HistoryHome';
-import { LessonList } from './components/history/LessonList';
+import { ChapterList } from './components/history/ChapterList';
+import { TopicList } from './components/history/TopicList';
 import { LessonPlayer } from './components/history/LessonPlayer';
 
 // Data
@@ -19,9 +29,10 @@ import { getQuestionsByTopic } from './data/quizData';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 
+type DocumentScreen = 'upload' | 'processing' | 'summary' | 'qa';
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback';
-type HistoryScreen = 'home' | 'lessons' | 'player';
+type HistoryScreen = 'home' | 'chapters' | 'topics' | 'player';
 
 interface Question {
   id: number;
@@ -33,6 +44,12 @@ interface Question {
 
 export default function App() {
   const [currentModule, setCurrentModule] = useState<Module>('home');
+
+  // Document module state
+  const [documentScreen, setDocumentScreen] = useState<DocumentScreen>('upload');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [documentSummary, setDocumentSummary] = useState('');
+  const [qaMode, setQaMode] = useState<'voice' | 'text'>('voice');
 
   // Braille module state
   const [brailleScreen, setBrailleScreen] = useState<BrailleScreen>('upload');
@@ -47,18 +64,23 @@ export default function App() {
   // History module state
   const [historyScreen, setHistoryScreen] = useState<HistoryScreen>('home');
   const [selectedGrade, setSelectedGrade] = useState<number>(10);
-  const [selectedLesson, setSelectedLesson] = useState<number>(1);
+  const [selectedChapter, setSelectedChapter] = useState<number>(0);
+  const [selectedChapterName, setSelectedChapterName] = useState<string>('');
+  const [selectedTopicIdx, setSelectedTopicIdx] = useState<number>(0);
+  const [selectedTopicName, setSelectedTopicName] = useState<string>('');
+  const [selectedTopicContent, setSelectedTopicContent] = useState<string>('');
 
-  const handleNavigate = (module: string) => {
-    const target = module as Module;
-    setCurrentModule(target);
+  const handleNavigate = (module: Module) => {
+    setCurrentModule(module);
 
     // Reset module states when navigating
-    if (target === 'braille') {
+    if (module === 'document') {
+      setDocumentScreen('upload');
+    } else if (module === 'braille') {
       setBrailleScreen('upload');
-    } else if (target === 'quiz') {
+    } else if (module === 'quiz') {
       setQuizScreen('start');
-    } else if (target === 'history') {
+    } else if (module === 'history') {
       setHistoryScreen('home');
     }
   };
@@ -83,6 +105,26 @@ export default function App() {
   const getCurrentPage = (): string => {
     if (currentModule === 'document') return 'document-upload';
     return currentModule;
+  };
+
+  // Document Module Handlers
+  const handleDocumentUpload = (file: File) => {
+    setUploadedFile(file);
+    setDocumentScreen('processing');
+  };
+
+  const handleDocumentProcessingComplete = (summary: string) => {
+    setDocumentSummary(summary);
+    setDocumentScreen('summary');
+  };
+
+  const handleAskQuestion = (mode: 'voice' | 'text') => {
+    setQaMode(mode);
+    setDocumentScreen('qa');
+  };
+
+  const handleBackToSummary = () => {
+    setDocumentScreen('summary');
   };
 
   // Braille Module Handlers
@@ -127,18 +169,30 @@ export default function App() {
   // History Module Handlers
   const handleSelectGrade = (grade: number) => {
     setSelectedGrade(grade);
-    setHistoryScreen('lessons');
+    setHistoryScreen('chapters');
   };
 
-  const handleSelectLesson = (lessonId: number) => {
-    setSelectedLesson(lessonId);
+  const handleSelectChapter = (chapterId: number, chapterName?: string) => {
+    setSelectedChapter(chapterId);
+    if (chapterName) {
+      setSelectedChapterName(chapterName);
+    }
+    setHistoryScreen('topics');
+  };
+
+  const handleSelectTopic = (topicId: number, topicName: string, content: string) => {
+    setSelectedTopicIdx(topicId);
+    setSelectedTopicName(topicName);
+    setSelectedTopicContent(content);
     setHistoryScreen('player');
   };
 
   const handleHistoryBack = () => {
     if (historyScreen === 'player') {
-      setHistoryScreen('lessons');
-    } else if (historyScreen === 'lessons') {
+      setHistoryScreen('topics');
+    } else if (historyScreen === 'topics') {
+      setHistoryScreen('chapters');
+    } else if (historyScreen === 'chapters') {
       setHistoryScreen('home');
     }
   };
@@ -157,7 +211,28 @@ export default function App() {
         {currentModule === 'home' && <HomePage onNavigate={handleNavigate} />}
 
         {/* Document Module */}
-        {currentModule === 'document' && <DocumentModule />}
+        {currentModule === 'document' && (
+          <>
+            {documentScreen === 'upload' && (
+              <DocumentUpload onUpload={handleDocumentUpload} />
+            )}
+            {documentScreen === 'processing' && uploadedFile && (
+              <DocumentProcessing
+                fileName={uploadedFile.name}
+                onComplete={handleDocumentProcessingComplete}
+              />
+            )}
+            {documentScreen === 'summary' && (
+              <DocumentSummary
+                summary={documentSummary}
+                onAskQuestion={handleAskQuestion}
+              />
+            )}
+            {documentScreen === 'qa' && (
+              <DocumentQA mode={qaMode} onBack={handleBackToSummary} />
+            )}
+          </>
+        )}
 
         {/* Braille Module */}
         {currentModule === 'braille' && (
@@ -202,15 +277,32 @@ export default function App() {
             {historyScreen === 'home' && (
               <HistoryHome onSelectGrade={handleSelectGrade} />
             )}
-            {historyScreen === 'lessons' && (
-              <LessonList
+            {historyScreen === 'chapters' && (
+              <ChapterList
                 grade={selectedGrade}
-                onSelectLesson={handleSelectLesson}
+                onSelectChapter={handleSelectChapter}
+                onBack={handleHistoryBack}
+              />
+            )}
+            {historyScreen === 'topics' && (
+              <TopicList
+                grade={selectedGrade}
+                chapterId={selectedChapter}
+                chapterName={selectedChapterName}
+                onSelectTopic={handleSelectTopic}
                 onBack={handleHistoryBack}
               />
             )}
             {historyScreen === 'player' && (
-              <LessonPlayer lessonId={selectedLesson} onBack={handleHistoryBack} />
+              <LessonPlayer
+                topicName={selectedTopicName}
+                content={selectedTopicContent}
+                grade={selectedGrade}
+                chapterIdx={selectedChapter}
+                topicIdx={selectedTopicIdx}
+                autoPlay={true}
+                onBack={handleHistoryBack}
+              />
             )}
           </>
         )}

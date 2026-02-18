@@ -4,93 +4,40 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { AudioPlayer } from '../AudioPlayer';
 
-interface ArticleInfo {
-  article_id: string;
-  index?: number;
-  heading?: string;
-  subheading?: string;
-  column?: string;
-  word_count?: number;
-}
-
 interface DocumentSummaryProps {
   summary: string;
   onAskQuestion: (mode: 'voice' | 'text') => void;
-  articles?: ArticleInfo[];
-  selectedArticleId?: string | null;
-  onSelectArticle?: (articleId: string) => void;
 }
 
-export const DocumentSummary = ({
-  summary,
-  onAskQuestion,
-  articles,
-  selectedArticleId,
-  onSelectArticle,
-}: DocumentSummaryProps) => {
+export const DocumentSummary = ({ summary, onAskQuestion }: DocumentSummaryProps) => {
   const [textSize, setTextSize] = useState(100);
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
 
-  // Initial voice instructions + article list (run once)
+  // Auto-play summary when page loads
   useEffect(() => {
     // STOP all previous speech immediately
     window.speechSynthesis.cancel();
-
+    
     if (!hasAutoPlayed) {
       setHasAutoPlayed(true);
-
+      // Announce page and auto-play
       setTimeout(() => {
-        // Main instructions
-        const introText =
-          'Document Summary page. Press A to replay summary, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size.';
-        const introUtterance = new SpeechSynthesisUtterance(introText);
-        window.speechSynthesis.speak(introUtterance);
-
-        // If we have detected articles, read them out for visually impaired users
-        if (articles && articles.length > 0) {
-          const parts: string[] = [];
-          parts.push(`There are ${articles.length} articles in this document.`);
-
-          articles.forEach((article, index) => {
-            const number = index + 1;
-            const heading = article.heading || `Article ${number}`;
-            parts.push(`Number ${number} article: ${heading}.`);
-          });
-
-          parts.push(
-            'To summarize an article, press the number key that matches the article. For example, press 1 for article 1, press 2 for article 2, and so on.'
-          );
-
-          const articlesText = parts.join(' ');
-          const articlesUtterance = new SpeechSynthesisUtterance(articlesText);
-          window.speechSynthesis.speak(articlesUtterance);
-        }
-
+        const utterance = new SpeechSynthesisUtterance('Document Summary page. Press A to replay summary, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size. Playing summary now.');
+        window.speechSynthesis.speak(utterance);
+        
+        // Auto-play summary after announcement
+        setTimeout(() => {
+          const summaryUtterance = new SpeechSynthesisUtterance(summary);
+          window.speechSynthesis.speak(summaryUtterance);
+        }, 6000);
       }, 500);
     }
-
+    
     // Cleanup: stop speech when leaving page
     return () => {
       window.speechSynthesis.cancel();
     };
-  }, [hasAutoPlayed, articles]);
-
-  // Speak summary automatically whenever a new summary is available
-  useEffect(() => {
-    const trimmed = summary.trim();
-    if (!trimmed) return;
-
-    // Stop any ongoing speech and announce the new summary
-    window.speechSynthesis.cancel();
-
-    const preface = new SpeechSynthesisUtterance(
-      'Reading the latest summary for the selected article.'
-    );
-    const content = new SpeechSynthesisUtterance(trimmed);
-
-    window.speechSynthesis.speak(preface);
-    window.speechSynthesis.speak(content);
-  }, [summary, selectedArticleId]);
+  }, [summary, hasAutoPlayed]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -101,63 +48,36 @@ export const DocumentSummary = ({
         const utterance = new SpeechSynthesisUtterance(summary);
         window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
-        return;
       }
 
       // V key for voice question
       if (e.key === 'v' || e.key === 'V') {
         e.preventDefault();
         onAskQuestion('voice');
-        return;
       }
 
       // T key for text question
       if (e.key === 't' || e.key === 'T') {
         e.preventDefault();
         onAskQuestion('text');
-        return;
       }
 
       // Plus/Equals key to increase text size
       if (e.key === '+' || e.key === '=') {
         e.preventDefault();
         increaseTextSize();
-        return;
       }
 
       // Minus key to decrease text size
       if (e.key === '-' || e.key === '_') {
         e.preventDefault();
         decreaseTextSize();
-        return;
-      }
-
-      // Number keys 1-9 to select articles directly
-      if (onSelectArticle && articles && articles.length > 0) {
-        const num = parseInt(e.key, 10);
-        if (!Number.isNaN(num) && num >= 1 && num <= 9) {
-          const index = num - 1;
-          if (index < articles.length) {
-            e.preventDefault();
-            const targetArticle = articles[index];
-            onSelectArticle(targetArticle.article_id);
-
-            // Optional spoken confirmation for visually impaired users
-            const confirmText = `Article ${num} selected: ${
-              targetArticle.heading || 'no heading'
-            }. Summary will be shown below.`;
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(
-              new SpeechSynthesisUtterance(confirmText)
-            );
-          }
-        }
       }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [summary, onAskQuestion, articles, onSelectArticle]);
+  }, [summary, onAskQuestion]);
 
   const increaseTextSize = () => {
     setTextSize((prev) => Math.min(prev + 10, 150));
@@ -167,11 +87,6 @@ export const DocumentSummary = ({
     setTextSize((prev) => Math.max(prev - 10, 80));
   };
 
-  const selectedArticle =
-    articles && selectedArticleId
-      ? articles.find((article) => article.article_id === selectedArticleId)
-      : undefined;
-
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
       {/* Header */}
@@ -180,69 +95,7 @@ export const DocumentSummary = ({
         <p className="text-muted-foreground">
           A to replay • V for voice question • T for text question • +/- to resize text
         </p>
-        {selectedArticle && (
-          <p className="text-sm text-secondary">
-            Currently summarizing:{' '}
-            <span className="font-medium">
-              {selectedArticle.heading || `Article ${selectedArticle.index}`}
-            </span>
-          </p>
-        )}
       </div>
-
-      {/* Article selection (from processed document) */}
-      {articles && articles.length > 0 && onSelectArticle && (
-        <Card className="p-4 space-y-3" aria-label="Select article to summarize">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg">Articles in this document</h2>
-            <p className="text-xs text-muted-foreground">
-              Press number keys 1 to 9 to select an article
-            </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {articles.map((article) => {
-              const isSelected = article.article_id === selectedArticleId;
-              return (
-                <button
-                  key={article.article_id}
-                  type="button"
-                  onClick={() => onSelectArticle(article.article_id)}
-                  className={`text-left rounded-lg border p-3 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-colors ${
-                    isSelected
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/60'
-                  }`}
-                  aria-pressed={isSelected}
-                  aria-label={`Select article ${article.index || ''} ${
-                    article.heading || ''
-                  }`}
-                >
-                  <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {article.heading || `Article ${article.index}`}
-                      </p>
-                      {article.subheading && (
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {article.subheading}
-                        </p>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground text-right">
-                      {article.column && article.column !== 'full' && (
-                        <p>Column: {article.column}</p>
-                      )}
-                      {article.word_count != null && article.word_count > 0 && (
-                        <p>{article.word_count} words</p>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </Card>
-      )}
 
       {/* Audio Player */}
       <AudioPlayer text={summary} autoPlay={false} />
