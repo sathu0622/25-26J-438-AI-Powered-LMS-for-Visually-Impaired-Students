@@ -77,7 +77,7 @@ class AnswerRequest(BaseModel):
     key_phrase: str = ""
     chapter_name: str
 
-# --- 4. AI GENERATION (WITH RETRY) ---
+# --- 4. Question genaration ---
 def run_ai_generation(chapter_name: str):
     print(f"   Generating question for: {chapter_name}...")
     
@@ -112,7 +112,7 @@ Context: "{context[:1500]}"
 {avoid_instruction}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 QUESTION:"""
 
-    # 🔄 RETRY LOOP: Try twice if the first attempt is bad
+    # retry logic
     for attempt in range(2):
         try:
             response_obj = ollama.generate(model=OLLAMA_MODEL_NAME, prompt=prompt)

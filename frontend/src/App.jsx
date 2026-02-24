@@ -7,7 +7,7 @@ const TopicList = ({ chapters, onSelect }) => {
   return (
     <>
       <header>
-        <h1>Select a Topic</h1>
+        <h1>Select a Chapter to take the quiz</h1>
         <button className="header-btn">Help</button>
       </header>
       <div className="topic-container">
@@ -22,7 +22,7 @@ const TopicList = ({ chapters, onSelect }) => {
   );
 };
 
-// --- VIEW 2: QUESTION SCREEN (UPDATED) ---
+// --- VIEW 2: QUESTION SCREEN  ---
 const QuestionView = ({ data, loading, onSubmit, onSkip, onGoHome }) => {
   const [text, setText] = useState("");
   const [isRecording, setIsRecording] = useState(false);
@@ -43,18 +43,19 @@ const QuestionView = ({ data, loading, onSubmit, onSkip, onGoHome }) => {
   return (
     <>
       <header>
-        {/* Updated "Back" button to actually go home */}
         <button className="header-btn" onClick={onGoHome}>Back</button>
         <h1>{data.chapter_name || "Quiz"}</h1>
         <div style={{width: 20}}></div> 
       </header>
 
       <div className="question-container">
-        <div>
-          <span className="q-badge">Question 1</span>
+        {/* LEFT PANE: Question Text */}
+        <div className="question-left-pane">
+          <span className="q-badge">Question</span>
           <div className="q-content">{data.question}</div>
         </div>
 
+        {/* RIGHT PANE: Inputs */}
         <div className="mic-section">
           <button 
             className={`mic-button ${isRecording ? 'recording' : ''}`} 
@@ -65,7 +66,7 @@ const QuestionView = ({ data, loading, onSubmit, onSkip, onGoHome }) => {
           
           <textarea 
             className="input-box"
-            rows="3"
+            rows="5"
             placeholder="Tap microphone or type your answer..."
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -76,22 +77,20 @@ const QuestionView = ({ data, loading, onSubmit, onSkip, onGoHome }) => {
             <button className="btn btn-submit" onClick={() => onSubmit(text)}>Submit</button>
           </div>
 
-          {/* NEW BUTTON ADDED HERE */}
           <button 
               className="btn btn-skip" 
-              style={{ width: '100%', marginTop: '12px' }} 
+              style={{ width: '100%', marginTop: '16px', background: 'transparent', border: '1px solid #e5e7eb' }} 
               onClick={onGoHome}
           >
             Select Another Chapter
           </button>
-
         </div>
       </div>
     </>
   );
 };
 
-// --- VIEW 3: FEEDBACK SCREEN ---
+// --- VIEW 3: FEEDBACK SCREEN  ---
 const FeedbackView = ({ result, userAnswer, onNext, onGoHome }) => {
   const isCorrect = result.score >= 60;
   
@@ -102,51 +101,59 @@ const FeedbackView = ({ result, userAnswer, onNext, onGoHome }) => {
       </header>
       
       <div className="feedback-container">
-        <div className={`feedback-banner ${isCorrect ? 'success' : 'error'}`}>
-          <div className="score-circle" style={{background: isCorrect ? '#10b981' : '#ef4444'}}>
-            {isCorrect ? '✓' : '✕'}
-          </div>
-          <h2 className="score-percent">{result.score}%</h2>
-          <div className="score-label">{result.feedback}</div>
-        </div>
-
-        <div className="answer-block" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-          <div>
-            <span className="block-label" style={{marginBottom: 0}}>Audio Playback</span>
-            <span style={{fontSize: 13, color: '#6b7280'}}>Ready to play</span>
-          </div>
-          <button style={{background: '#1e1b4b', color: '#fff', border: 'none', borderRadius: 4, padding: '5px 10px'}}>▶</button>
-        </div>
-
-        <div className="answer-block">
-          <span className="block-label">Your Answer</span>
-          <div className="text-content">{userAnswer}</div>
-        </div>
-
-        <div className="answer-block" style={{borderColor: '#dbeafe', background: '#eff6ff'}}>
-          <span className="block-label">Model Answer</span>
-          <div className="text-content">{result.correct_answer}</div>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <button className="btn btn-submit" style={{width: '100%'}} onClick={onNext}>
-            Next Question ➡
-            </button>
+        
+        {/* LEFT PANE: Score & Navigation */}
+        <div className="feedback-left">
+          <div className={`feedback-banner ${isCorrect ? 'success' : 'error'}`}>
+            <div className="score-circle" style={{background: isCorrect ? '#10b981' : '#ef4444'}}>
+              {isCorrect ? '✓' : '✕'}
+            </div>
             
-            <button 
-                className="btn btn-skip" 
-                style={{width: '100%'}} 
-                onClick={onGoHome}
-            >
-            Select Another Chapter
-            </button>
+            <div className="score-label">{result.feedback}</div>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button className="btn btn-submit" style={{width: '100%'}} onClick={onNext}>
+              Next Question ➡
+              </button>
+              
+              <button 
+                  className="btn btn-skip" 
+                  style={{width: '100%'}} 
+                  onClick={onGoHome}
+              >
+              Select Another Chapter
+              </button>
+          </div>
         </div>
+
+        {/* RIGHT PANE: Detailed Answers */}
+        <div className="feedback-right">
+          <div className="answer-block" style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <div>
+              <span className="block-label" style={{marginBottom: 0}}>Audio Playback</span>
+              <span style={{fontSize: 13, color: '#6b7280'}}>Ready to play</span>
+            </div>
+            <button style={{background: '#1e1b4b', color: '#fff', border: 'none', borderRadius: 4, padding: '8px 12px', cursor: 'pointer'}}>▶ Play</button>
+          </div>
+
+          <div className="answer-block">
+            <span className="block-label">Your Answer</span>
+            <div className="text-content">{userAnswer}</div>
+          </div>
+
+          <div className="answer-block" style={{borderColor: '#dbeafe', background: '#eff6ff'}}>
+            <span className="block-label">Model Answer</span>
+            <div className="text-content">{result.correct_answer}</div>
+          </div>
+        </div>
+
       </div>
     </>
   );
 };
 
-
+// --- MAIN CONTROLLER ---
 export default function App() {
   const [currentView, setCurrentView] = useState("topics");
   const [chapters, setChapters] = useState([]);
@@ -206,7 +213,6 @@ export default function App() {
     startQuiz(selectedChapter); 
   };
 
-  // Reset state and go back to topics
   const handleGoHome = () => {
     setFeedbackData(null);
     setQuestionData(null);
@@ -215,7 +221,7 @@ export default function App() {
   };
 
   return (
-    <div className="app-root">
+    <div id="root"> {/* Ensure root ID matches CSS */}
       {currentView === "topics" && (
         <TopicList chapters={chapters} onSelect={startQuiz} />
       )}
