@@ -4,8 +4,7 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { MockVoiceRecorder } from '../MockVoiceRecorder';
-import { useMockSpeechSynthesis } from '../../hooks/useMockSpeechSynthesis';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface Question {
   id: number;
@@ -33,27 +32,23 @@ export const QuizQuestion = ({
   const [hasReadQuestion, setHasReadQuestion] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
 
-  const { speak, stop } = useMockSpeechSynthesis();
+  const { speak, cancel } = useTTS();
 
-  // Auto-read question with proper speech coordination
   useEffect(() => {
-    // STOP all previous speech immediately
-    safeCancel();
-    stop();
-    setHasReadQuestion(false); // Reset for new question
-    
-    // Announce question after brief delay
+    cancel();
+    setHasReadQuestion(false);
     const timer = setTimeout(() => {
-      speak(`Question ${questionNumber} of ${totalQuestions}. ${question.text}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question.`);
+      speak(
+        `Question ${questionNumber} of ${totalQuestions}. ${question.text}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question.`,
+        { interrupt: true }
+      );
       setHasReadQuestion(true);
     }, 500);
-
     return () => {
       clearTimeout(timer);
-      stop();
-      safeCancel();
+      cancel();
     };
-  }, [question.id]); // Only re-run when question changes, not when hasReadQuestion changes
+  }, [question.id, questionNumber, totalQuestions, question.text, speak, cancel]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -92,8 +87,8 @@ export const QuizQuestion = ({
   }, [showVoiceModal, answer]);
 
   const handleReadQuestion = () => {
-    stop();
-    speak(`Question ${questionNumber}. ${question.text}`);
+    cancel();
+    speak(`Question ${questionNumber}. ${question.text}`, { interrupt: true });
   };
 
   const handleVoiceToggle = () => {

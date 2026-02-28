@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Play,
   Pause,
@@ -11,9 +11,8 @@ import {
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
-import { useMockSpeechSynthesis } from '../../hooks/useMockSpeechSynthesis';
 import { getLessonById } from '../../data/historyData';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface LessonPlayerProps {
   lessonId: number;
@@ -33,180 +32,133 @@ export const LessonPlayer = ({ lessonId, onBack }: LessonPlayerProps) => {
     );
   }
 
+  const { speak, cancel, isSpeaking } = useTTS();
   const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
   const [progress, setProgress] = useState(0);
   const [hasAnnounced, setHasAnnounced] = useState(false);
-  const { speak, pause, resume, stop, isSpeaking, isPaused } = useMockSpeechSynthesis();
+  const hasAnnouncedRef = useRef(false);
+  const lastTopicIndexRef = useRef<number>(-1);
 
   const currentTopic = lesson.topics[currentTopicIndex];
 
-  // STOP all previous speech when component mounts and announce commands
   useEffect(() => {
-    safeCancel();
-    stop(); // Also stop hook-based speech
+    cancel();
     setHasAnnounced(false);
-    
-    let announcementTimer: NodeJS.Timeout;
-    let autoPlayTimer: NodeJS.Timeout;
-    
-    // Announce lesson and instructions
-    announcementTimer = setTimeout(() => {
-      safeSpeak(
-        `${lesson.title}. Topic ${currentTopicIndex + 1} of ${lesson.topics.length}. ${currentTopic.title}. Press Space to play or pause. Press Right Arrow for next topic. Press Left Arrow for previous topic. Press number keys 1 to ${lesson.topics.length} to jump to specific topics. Press H for help.`
-      );
-      setHasAnnounced(true);
-      
-      // Auto-play after announcement finishes (calculated based on announcement length)
-      const announcementWords = 35; // Approximate word count
-      const announcementDuration = (announcementWords / 2.5) * 1000;
-      autoPlayTimer = setTimeout(() => {
-        safeCancel(); // Cancel any lingering speech
-        speak(currentTopic.content);
-      }, announcementDuration + 500); // Add 500ms buffer
-    }, 500);
-    
-    // Cleanup: stop speech when leaving page
-    return () => {
-      clearTimeout(announcementTimer);
-      clearTimeout(autoPlayTimer);
-      safeCancel();
-      stop();
-    };
-  }, [lessonId]); // Only re-run when lesson changes
+    hasAnnouncedRef.current = false;
 
-  // Keyboard shortcuts
+    const announcement = `${lesson.title}. Topic ${currentTopicIndex + 1} of ${lesson.topics.length}. ${currentTopic.title}. Press Space to play or pause. Press Right Arrow for next topic. Press Left Arrow for previous topic. Press number keys 1 to ${lesson.topics.length} to jump to specific topics. Press H for help.`;
+
+    const t = setTimeout(() => {
+      speak(announcement, {
+        interrupt: true,
+        onEnd: () => {
+          hasAnnouncedRef.current = true;
+          lastTopicIndexRef.current = currentTopicIndex;
+          setHasAnnounced(true);
+          speak(currentTopic.content, { interrupt: false });
+        },
+      });
+    }, 500);
+
+    return () => {
+      clearTimeout(t);
+      cancel();
+    };
+  }, [lessonId]);
+
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Space bar to play/pause
       if (e.key === ' ') {
         e.preventDefault();
         handlePlayPause();
-        const msg = isSpeaking && !isPaused ? 'Paused' : 'Playing';
-        stop(); // Stop any hook speech
-        setTimeout(() => safeSpeak(msg), 100);
+        speak(isSpeaking ? 'Paused' : 'Playing', { interrupt: true });
       }
-
-      // Arrow keys for navigation
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         if (currentTopicIndex > 0) {
           handlePrevious();
-          stop(); // Stop hook speech before announcement
-          safeCancel();
-          safeSpeak(`Previous topic. ${lesson.topics[currentTopicIndex - 1].title}`);
+          cancel();
+          speak(`Previous topic. ${lesson.topics[currentTopicIndex - 1].title}`, { interrupt: true });
         } else {
-          stop(); // Stop hook speech before announcement
-          safeCancel();
-          safeSpeak('Already at first topic');
+          cancel();
+          speak('Already at first topic', { interrupt: true });
         }
       }
-
       if (e.key === 'ArrowRight') {
         e.preventDefault();
         if (currentTopicIndex < lesson.topics.length - 1) {
           handleNext();
-          stop(); // Stop hook speech before announcement
-          safeCancel();
-          safeSpeak(`Next topic. ${lesson.topics[currentTopicIndex + 1].title}`);
+          cancel();
+          speak(`Next topic. ${lesson.topics[currentTopicIndex + 1].title}`, { interrupt: true });
         } else {
-          stop(); // Stop hook speech before announcement
-          safeCancel();
-          safeSpeak('Already at last topic');
+          cancel();
+          speak('Already at last topic', { interrupt: true });
         }
       }
-
-      // Number keys to jump to specific topics
       const num = parseInt(e.key);
       if (num >= 1 && num <= lesson.topics.length) {
         e.preventDefault();
         handleSelectTopic(num - 1);
-        stop(); // Stop hook speech before announcement
-        safeCancel();
-        safeSpeak(`Topic ${num}. ${lesson.topics[num - 1].title}`);
+        cancel();
+        speak(`Topic ${num}. ${lesson.topics[num - 1].title}`, { interrupt: true });
       }
-
-      // H key for help
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
-        stop(); // Stop hook speech before announcement
-        safeCancel();
-        safeSpeak(
-          `Press Space to play or pause. Press Left Arrow for previous topic. Press Right Arrow for next topic. Press numbers 1 to ${lesson.topics.length} to jump to topics. Press Escape to go back.`
+        cancel();
+        speak(
+          `Press Space to play or pause. Press Left Arrow for previous topic. Press Right Arrow for next topic. Press numbers 1 to ${lesson.topics.length} to jump to topics. Press Escape to go back.`,
+          { interrupt: true }
         );
       }
-
-      // L key to list all topics
       if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
         let list = `${lesson.topics.length} topics in this lesson. `;
         lesson.topics.forEach((topic, index) => {
           list += `${index + 1}. ${topic.title}. `;
         });
-        stop(); // Stop hook speech before announcement
-        safeCancel();
-        safeSpeak(list);
+        cancel();
+        speak(list, { interrupt: true });
       }
-
-      // Escape to go back
       if (e.key === 'Escape') {
         e.preventDefault();
-        safeCancel();
-        stop();
+        cancel();
         onBack();
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentTopicIndex, lesson, isSpeaking, isPaused, onBack, stop]);
+  }, [currentTopicIndex, lesson, isSpeaking, onBack, speak, cancel]);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (isSpeaking && !isPaused) {
-      interval = setInterval(() => {
-        setProgress((prev) => Math.min(prev + 1, 100));
-      }, 100);
+    if (isSpeaking) {
+      interval = setInterval(() => setProgress((prev) => Math.min(prev + 1, 100)), 100);
     }
     return () => clearInterval(interval);
-  }, [isSpeaking, isPaused]);
+  }, [isSpeaking]);
 
-  // Handle topic changes - stop current speech and play new topic
   useEffect(() => {
-    // Skip initial mount (handled by first useEffect)
-    if (hasAnnounced) {
-      // Stop all speech
-      safeCancel();
-      stop();
-      
-      // Reset progress
-      setProgress(0);
-      
-      // Play new topic after brief delay
-      const timer = setTimeout(() => {
-        speak(currentTopic.content);
-      }, 500);
-
-      return () => {
-        clearTimeout(timer);
-      };
-    }
-  }, [currentTopicIndex, currentTopic.content, stop, speak, hasAnnounced]);
+    if (!hasAnnounced) return;
+    if (lastTopicIndexRef.current === currentTopicIndex) return;
+    lastTopicIndexRef.current = currentTopicIndex;
+    cancel();
+    setProgress(0);
+    const timer = setTimeout(() => speak(currentTopic.content, { interrupt: false }), 500);
+    return () => clearTimeout(timer);
+  }, [currentTopicIndex, currentTopic.content, speak, cancel, hasAnnounced]);
 
   const handlePlayPause = () => {
-    safeCancel(); // Stop any safeSpeak announcements
-    if (isSpeaking && !isPaused) {
-      pause();
-    } else if (isPaused) {
-      resume();
+    cancel();
+    if (isSpeaking) {
+      // Pause = stop
     } else {
-      speak(currentTopic.content);
+      speak(currentTopic.content, { interrupt: false });
     }
   };
 
   const handlePrevious = () => {
     if (currentTopicIndex > 0) {
-      stop(); // Stop current speech
-      safeCancel();
+      cancel();
       setCurrentTopicIndex(currentTopicIndex - 1);
       setProgress(0);
     }
@@ -214,16 +166,14 @@ export const LessonPlayer = ({ lessonId, onBack }: LessonPlayerProps) => {
 
   const handleNext = () => {
     if (currentTopicIndex < lesson.topics.length - 1) {
-      stop(); // Stop current speech
-      safeCancel();
+      cancel();
       setCurrentTopicIndex(currentTopicIndex + 1);
       setProgress(0);
     }
   };
 
   const handleSelectTopic = (index: number) => {
-    stop(); // Stop current speech
-    safeCancel();
+    cancel();
     setCurrentTopicIndex(index);
     setProgress(0);
   };
@@ -271,7 +221,7 @@ export const LessonPlayer = ({ lessonId, onBack }: LessonPlayerProps) => {
             />
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>
-                {isSpeaking ? (isPaused ? 'Paused' : 'Playing') : 'Ready'}
+                {isSpeaking ? 'Playing' : 'Ready'}
               </span>
               <span>{progress}%</span>
             </div>
@@ -294,9 +244,9 @@ export const LessonPlayer = ({ lessonId, onBack }: LessonPlayerProps) => {
               onClick={handlePlayPause}
               size="icon"
               className="h-16 w-16"
-              aria-label={isSpeaking && !isPaused ? 'Pause' : 'Play'}
+              aria-label={isSpeaking ? 'Pause' : 'Play'}
             >
-              {isSpeaking && !isPaused ? (
+              {isSpeaking ? (
                 <Pause className="h-8 w-8" />
               ) : (
                 <Play className="h-8 w-8" />

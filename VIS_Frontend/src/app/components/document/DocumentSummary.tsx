@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ZoomIn, ZoomOut, MessageSquare, Keyboard } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { AudioPlayer } from '../AudioPlayer';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface ArticleInfo {
   article_id: string;
@@ -28,69 +29,91 @@ export const DocumentSummary = ({
   selectedArticleId,
   onSelectArticle,
 }: DocumentSummaryProps) => {
+  const { speak, cancel } = useTTS();
   const [textSize, setTextSize] = useState(100);
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
+  const initialSpeakDoneRef = useRef(false);
+  const prevSelectedArticleIdRef = useRef<string | null | undefined>(undefined);
+  const hasScheduledInitialRef = useRef(false);
+  /** Track last spoken summary so we only read when API returns new content (not the stale one). */
+  const lastSpokenSummaryRef = useRef<string>('');
 
-  // Initial voice instructions + article list (run once)
+  // Single initial voice sequence: intro → articles (if any) → "Reading summary..." → summary (once on mount)
   useEffect(() => {
-    // STOP all previous speech immediately
-    window.speechSynthesis.cancel();
+    cancel();
 
-    if (!hasAutoPlayed) {
-      setHasAutoPlayed(true);
-
-      setTimeout(() => {
-        // Main instructions
-        const introText =
-          'Document Summary page. Press A to replay summary, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size.';
-        const introUtterance = new SpeechSynthesisUtterance(introText);
-        window.speechSynthesis.speak(introUtterance);
-
-        // If we have detected articles, read them out for visually impaired users
-        if (articles && articles.length > 0) {
-          const parts: string[] = [];
-          parts.push(`There are ${articles.length} articles in this document.`);
-
-          articles.forEach((article, index) => {
-            const number = index + 1;
-            const heading = article.heading || `Article ${number}`;
-            parts.push(`Number ${number} article: ${heading}.`);
-          });
-
-          parts.push(
-            'To summarize an article, press the number key that matches the article. For example, press 1 for article 1, press 2 for article 2, and so on.'
-          );
-
-          const articlesText = parts.join(' ');
-          const articlesUtterance = new SpeechSynthesisUtterance(articlesText);
-          window.speechSynthesis.speak(articlesUtterance);
-        }
-
-      }, 500);
+    if (!summary.trim() || hasScheduledInitialRef.current) {
+      return () => cancel();
     }
+    hasScheduledInitialRef.current = true;
+    setHasAutoPlayed(true);
+    initialSpeakDoneRef.current = true;
+    const trimmed = summary.trim();
+    lastSpokenSummaryRef.current = trimmed;
 
-    // Cleanup: stop speech when leaving page
-    return () => {
-      window.speechSynthesis.cancel();
+    const introText =
+        'Document Summary page. Press A to replay summary, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size.';
+
+    const readSummary = () => {
+      lastSpokenSummaryRef.current = trimmed;
+      speak('Reading the latest summary for the selected article.', {
+        interrupt: true,
+        onEnd: () => speak(trimmed, { interrupt: false }),
+      });
     };
-  }, [hasAutoPlayed, articles]);
 
-  // Speak summary automatically whenever a new summary is available
+    const runIntro = () => {
+      if (articles && articles.length > 0) {
+        const parts: string[] = [];
+        parts.push(`There are ${articles.length} articles in this document.`);
+        articles.forEach((article, index) => {
+          const number = index + 1;
+          const heading = article.heading || `Article ${number}`;
+          parts.push(`Number ${number} article: ${heading}.`);
+        });
+        parts.push(
+          'To summarize an article, press the number key that matches the article. For example, press 1 for article 1, press 2 for article 2, and so on.'
+        );
+        const articlesText = parts.join(' ');
+        speak(introText, {
+          interrupt: true,
+          onEnd: () => speak(articlesText, { interrupt: true, onEnd: readSummary }),
+        });
+      } else {
+        speak(introText, { interrupt: true, onEnd: readSummary });
+      }
+    };
+
+    setTimeout(runIntro, 500);
+
+    return () => cancel();
+  }, [hasAutoPlayed, articles, summary, speak, cancel]);
+
+  // When user selects a different article: only say "Loading summary" — do NOT read the old summary
+  useEffect(() => {
+    if (!initialSpeakDoneRef.current) return;
+    if (prevSelectedArticleIdRef.current === undefined) {
+      prevSelectedArticleIdRef.current = selectedArticleId;
+      return;
+    }
+    if (prevSelectedArticleIdRef.current === selectedArticleId) return;
+    prevSelectedArticleIdRef.current = selectedArticleId;
+    cancel();
+    speak('Article selected. Loading summary.', { interrupt: true });
+  }, [selectedArticleId, speak, cancel]);
+
+  // When summary content changes (e.g. after API returns for the selected article), read the new summary
   useEffect(() => {
     const trimmed = summary.trim();
-    if (!trimmed) return;
-
-    // Stop any ongoing speech and announce the new summary
-    window.speechSynthesis.cancel();
-
-    const preface = new SpeechSynthesisUtterance(
-      'Reading the latest summary for the selected article.'
-    );
-    const content = new SpeechSynthesisUtterance(trimmed);
-
-    window.speechSynthesis.speak(preface);
-    window.speechSynthesis.speak(content);
-  }, [summary, selectedArticleId]);
+    if (!trimmed || !initialSpeakDoneRef.current) return;
+    if (trimmed === lastSpokenSummaryRef.current) return;
+    lastSpokenSummaryRef.current = trimmed;
+    cancel();
+    speak('Reading the latest summary for the selected article.', {
+      interrupt: true,
+      onEnd: () => speak(trimmed, { interrupt: false }),
+    });
+  }, [summary, speak, cancel]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -98,9 +121,8 @@ export const DocumentSummary = ({
       // A key to replay summary
       if (e.key === 'a' || e.key === 'A') {
         e.preventDefault();
-        const utterance = new SpeechSynthesisUtterance(summary);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+        cancel();
+        speak(summary, { interrupt: true });
         return;
       }
 
@@ -142,14 +164,12 @@ export const DocumentSummary = ({
             const targetArticle = articles[index];
             onSelectArticle(targetArticle.article_id);
 
-            // Optional spoken confirmation for visually impaired users
+            // Optional spoken confirmation; new summary will be read when API returns
             const confirmText = `Article ${num} selected: ${
               targetArticle.heading || 'no heading'
-            }. Summary will be shown below.`;
-            window.speechSynthesis.cancel();
-            window.speechSynthesis.speak(
-              new SpeechSynthesisUtterance(confirmText)
-            );
+            }. Loading summary.`;
+            cancel();
+            speak(confirmText, { interrupt: true });
           }
         }
       }
@@ -157,7 +177,7 @@ export const DocumentSummary = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [summary, onAskQuestion, articles, onSelectArticle]);
+  }, [summary, onAskQuestion, articles, onSelectArticle, speak, cancel]);
 
   const increaseTextSize = () => {
     setTextSize((prev) => Math.min(prev + 10, 150));

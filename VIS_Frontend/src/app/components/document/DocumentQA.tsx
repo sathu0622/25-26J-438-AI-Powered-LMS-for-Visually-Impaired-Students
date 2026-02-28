@@ -7,6 +7,7 @@ import { VoiceButton } from '../VoiceButton';
 import { AudioPlayer } from '../AudioPlayer';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { documentService } from '../../services/documentService';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface QAItem {
   question: string;
@@ -41,6 +42,7 @@ export const DocumentQA = ({
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
   const [qaError, setQaError] = useState<string | null>(null);
 
+  const { speak, cancel } = useTTS();
   const {
     isListening,
     transcript,
@@ -55,25 +57,22 @@ export const DocumentQA = ({
 
   // Auto-start voice recording when entering voice mode
   useEffect(() => {
-    // STOP all previous speech immediately
-    window.speechSynthesis.cancel();
-    
+    cancel();
+
     if (mode === 'voice' && !hasAutoStarted) {
       setHasAutoStarted(true);
-      // Announce and auto-start
-      const utterance = new SpeechSynthesisUtterance('Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press Escape to go back. Recording will start automatically in 2 seconds.');
-      window.speechSynthesis.speak(utterance);
-      
-      // Auto-start after announcement
-      setTimeout(() => {
-        handleVoiceToggle();
-      }, 2000);
+      speak(
+        'Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press Escape to go back. Recording will start automatically in 2 seconds.',
+        {
+          interrupt: true,
+          onEnd: () => {
+            setTimeout(() => handleVoiceToggle(), 500);
+          },
+        }
+      );
     }
-    
-    // Cleanup: stop speech when leaving page
-    return () => {
-      window.speechSynthesis.cancel();
-    };
+
+    return () => cancel();
   }, [mode]);
 
   // Keyboard shortcuts for voice recording
@@ -105,10 +104,8 @@ export const DocumentQA = ({
       if ((e.key === 'a' || e.key === 'A') && currentAnswer) {
         if (e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
           e.preventDefault();
-          // Trigger audio replay by speaking the answer again
-          window.speechSynthesis.cancel(); // Stop any current speech
-          const utterance = new SpeechSynthesisUtterance(currentAnswer);
-          window.speechSynthesis.speak(utterance);
+          cancel();
+          speak(currentAnswer, { interrupt: true });
         }
       }
 
@@ -121,7 +118,7 @@ export const DocumentQA = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isRecording, isLoading, question, currentAnswer, onBack]);
+  }, [isRecording, isLoading, question, currentAnswer, onBack, speak, cancel]);
 
   useEffect(() => {
     if (transcript && !isListening) {
@@ -160,12 +157,12 @@ export const DocumentQA = ({
       setQuestion('');
       resetTranscript();
 
-      // Announce that answer is ready and how to replay
+      // Announce that answer is ready and how to replay (after answer TTS finishes)
       setTimeout(() => {
-        const utterance = new SpeechSynthesisUtterance(
-          'Answer received. Press A to replay the answer anytime, or press Space to ask another question.'
+        speak(
+          'Answer received. Press A to replay the answer anytime, or press Space to ask another question.',
+          { interrupt: false }
         );
-        window.speechSynthesis.speak(utterance);
       }, 8000);
     } catch (error) {
       const message =

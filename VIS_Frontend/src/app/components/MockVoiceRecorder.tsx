@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Mic, MicOff, Check, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
-import { safeSpeak } from '../utils/mockSpeech';
+import { useTTS } from '../contexts/TTSContext';
 
 interface MockVoiceRecorderProps {
   isOpen: boolean;
@@ -32,25 +32,25 @@ export const MockVoiceRecorder = ({
   title = 'Record Your Answer',
   context,
 }: MockVoiceRecorderProps) => {
+  const { speak } = useTTS();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [hasRecorded, setHasRecorded] = useState(false);
   const [transcript, setTranscript] = useState('');
 
-  // Reset state when modal opens
   useEffect(() => {
     if (isOpen) {
       setIsRecording(false);
       setRecordingTime(0);
       setHasRecorded(false);
       setTranscript('');
-      
-      // Announce modal opened
-      setTimeout(() => {
-        safeSpeak('Voice recorder ready. Press Space or R to start recording.');
-      }, 300);
+      const t = setTimeout(
+        () => speak('Voice recorder ready. Press Space or R to start recording.', { interrupt: true }),
+        300
+      );
+      return () => clearTimeout(t);
     }
-  }, [isOpen]);
+  }, [isOpen, speak]);
 
   // Recording timer
   useEffect(() => {
@@ -105,7 +105,7 @@ export const MockVoiceRecorder = ({
   const handleStartRecording = () => {
     setIsRecording(true);
     setRecordingTime(0);
-    safeSpeak('Recording started. Speak your answer now.');
+    speak('Recording started. Speak your answer now.', { interrupt: true });
   };
 
   const handleStopRecording = () => {
@@ -118,7 +118,7 @@ export const MockVoiceRecorder = ({
     
     // Announce completion
     setTimeout(() => {
-      safeSpeak(`Recording complete. Mock answer generated. Press Enter to submit or Space to re-record.`);
+      speak('Recording complete. Mock answer generated. Press Enter to submit or Space to re-record.', { interrupt: true });
     }, 500);
   };
 
@@ -134,7 +134,7 @@ export const MockVoiceRecorder = ({
     setRecordingTime(0);
     setHasRecorded(false);
     setTranscript('');
-    safeSpeak('Recording cleared. Press Space to record again.');
+    speak('Recording cleared. Press Space to record again.', { interrupt: true });
   };
 
   const formatTime = (seconds: number): string => {

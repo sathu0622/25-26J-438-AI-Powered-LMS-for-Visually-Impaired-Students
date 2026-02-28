@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Mic, MicOff, HelpCircle, X } from 'lucide-react';
+import { Mic, HelpCircle, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
+import { useTTS } from '../contexts/TTSContext';
 
 interface VoiceCommandSystemProps {
   onNavigate: (route: string) => void;
@@ -9,6 +10,7 @@ interface VoiceCommandSystemProps {
 }
 
 export const VoiceCommandSystem = ({ onNavigate, currentPage }: VoiceCommandSystemProps) => {
+  const { speak, cancel } = useTTS();
   const [isListening, setIsListening] = useState(false);
   const [lastCommand, setLastCommand] = useState('');
   const [showHelp, setShowHelp] = useState(false);
@@ -48,13 +50,9 @@ export const VoiceCommandSystem = ({ onNavigate, currentPage }: VoiceCommandSyst
   ];
 
   const speakText = useCallback((text: string) => {
-    window.speechSynthesis.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
-    window.speechSynthesis.speak(utterance);
-  }, []);
+    cancel();
+    speak(text, { interrupt: true });
+  }, [speak, cancel]);
 
   const processCommand = useCallback((transcript: string) => {
     const normalizedCommand = transcript.toLowerCase().trim();

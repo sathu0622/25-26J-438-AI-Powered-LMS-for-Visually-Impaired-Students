@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Play, BookOpen, ArrowLeft } from 'lucide-react';
+import { Play, BookOpen } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { useTTS } from '../../contexts/TTSContext';
 import { getAllTopics } from '../../data/quizData';
 
 interface QuizStartProps {
@@ -10,14 +10,13 @@ interface QuizStartProps {
 }
 
 export const QuizStart = ({ onStart }: QuizStartProps) => {
+  const { speak, cancel } = useTTS();
   const topics = getAllTopics();
   const [hasAnnounced, setHasAnnounced] = useState(false);
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
 
-  // Voice announcement on page load
   useEffect(() => {
-    safeCancel();
-    
+    cancel();
     if (!hasAnnounced) {
       setHasAnnounced(true);
       setTimeout(() => {
@@ -26,37 +25,27 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
           announcement += `Press ${index + 1} for ${topic}. `;
         });
         announcement += 'Press H for help, or Escape to go back.';
-        
-        safeSpeak(announcement);
+        speak(announcement, { interrupt: true });
       }, 500);
     }
-    
-    return () => {
-      safeCancel();
-    };
-  }, [hasAnnounced, topics]);
+    return () => cancel();
+  }, [hasAnnounced, topics, speak, cancel]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Number keys to select topic
       const num = parseInt(e.key);
       if (num >= 1 && num <= topics.length) {
         e.preventDefault();
         const topic = topics[num - 1];
         setSelectedTopic(topic);
-        safeCancel();
-        safeSpeak(`${topic} selected. Press Enter to start quiz.`);
+        cancel();
+        speak(`${topic} selected. Press Enter to start quiz.`, { interrupt: true });
       }
-
-      // Enter to start quiz with selected topic
       if (e.key === 'Enter' && selectedTopic) {
         e.preventDefault();
-        safeCancel();
+        cancel();
         onStart(selectedTopic);
       }
-
-      // H key for help
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
         let help = 'Available topics: ';
@@ -64,30 +53,27 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
           help += `${index + 1}. ${topic}. `;
         });
         help += 'Press a number to select, then Enter to start.';
-        safeCancel();
-        safeSpeak(help);
+        cancel();
+        speak(help, { interrupt: true });
       }
-
-      // L key to list all topics
       if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
         let list = `${topics.length} topics available. `;
         topics.forEach((topic, index) => {
           list += `${index + 1}. ${topic}. `;
         });
-        safeCancel();
-        safeSpeak(list);
+        cancel();
+        speak(list, { interrupt: true });
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [selectedTopic, onStart, topics]);
+  }, [selectedTopic, onStart, topics, speak, cancel]);
 
   const handleTopicSelect = (topic: string) => {
     setSelectedTopic(topic);
-    safeCancel();
-    safeSpeak(`${topic} selected. Press Start Quiz or Enter to begin.`);
+    cancel();
+    speak(`${topic} selected. Press Start Quiz or Enter to begin.`, { interrupt: true });
   };
 
   return (
