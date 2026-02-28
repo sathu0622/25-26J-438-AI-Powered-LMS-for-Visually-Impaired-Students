@@ -81,7 +81,7 @@ export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
       formData.append('file', selectedFile);
 
       const response = await api.postFormData<ConvertPdfResponse>(
-        '/braille/convert-pdf',
+        '/decode',
         formData
       );
 
