@@ -42,7 +42,9 @@ export const BrailleEvaluation = ({ onBack, convertedData }: BrailleEvaluationPr
   const [modelAnswer, setModelAnswer] = useState('');
   const [evaluationError, setEvaluationError] = useState<string | null>(null);
   const [showDetailedReport, setShowDetailedReport] = useState(false);
-
+const [semanticScore, setSemanticScore] = useState(0);
+const [keywordScore, setKeywordScore] = useState(0);
+const [jaccardScore, setJaccardScore] = useState(0);
   // Voice announcements for page state changes
   useEffect(() => {
     // STOP all previous speech immediately when component mounts
@@ -178,6 +180,9 @@ export const BrailleEvaluation = ({ onBack, convertedData }: BrailleEvaluationPr
       setProgress(100);
       setModelAnswer(response.model_answer);
       setScore(Math.round(response.final_score));
+      setSemanticScore(response.semantic_similarity || 0);
+      setKeywordScore(response.keyword_match || 0);
+      setJaccardScore(response.jaccard_similarity || 0);
 
       // Determine result type based on score
       if (response.final_score >= 75) {
@@ -425,6 +430,25 @@ export const BrailleEvaluation = ({ onBack, convertedData }: BrailleEvaluationPr
               <p className="text-lg">{score}%</p>
             </div>
           </Card>
+          
+            <Card className="p-6 space-y-4">
+      <h2 className="font-semibold">Similarity Breakdown</h2>
+
+      <div>
+        <p>Semantic Similarity: {Math.round(semanticScore)}%</p>
+        <Progress value={semanticScore} />
+      </div>
+
+      <div>
+        <p>Keyword Match: {Math.round(keywordScore)}%</p>
+        <Progress value={keywordScore} />
+      </div>
+
+      <div>
+        <p>Jaccard Similarity: {Math.round(jaccardScore)}%</p>
+        <Progress value={jaccardScore} />
+      </div>
+    </Card>
           
           {/* Model Answer (100% Correct Answer) */}
           <Card className="border-2 border-success bg-success/5 p-6">
