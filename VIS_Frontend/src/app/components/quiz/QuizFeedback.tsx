@@ -18,13 +18,6 @@ interface QuizFeedbackProps {
   onGoHome: () => void;
 }
 
-type FeedbackType = 'correct' | 'partial' | 'incorrect';
-
-interface FeedbackData {
-  type: FeedbackType;
-  score: number;
-  explanation: string;
-}
 
 export const QuizFeedback = ({
   question,
@@ -32,34 +25,30 @@ export const QuizFeedback = ({
   result,
   onNext,
   onGoHome,
-  expectedAnswer,
-  feedback: providedFeedback
-}: QuizFeedbackProps & { expectedAnswer?: string; feedback?: string }) => {
+}: QuizFeedbackProps & { onGoHome: () => void }) => {
   const { speak, cancel } = useTTS();
-  const [feedback, setFeedback] = useState<FeedbackData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasAnnounced, setHasAnnounced] = useState(false);
-  const isCorrect = result.correct;
+  const isCorrect = result.score>=60;
 
   // 🔊 Automatically speak feedback, given answer, and model answer in sequence on load
   useEffect(() => {
     cancel();
     // Chain speech segments using onEnd callback
-    if (result) {
       speak(`You scored ${result.score} percent. ${result.feedback}`, {
-        interrupt: true,
         onEnd: () => {
           speak(`Your answer: ${answer}`, {
-            interrupt: false,
             onEnd: () => {
-              speak(`Model answer: ${result.correct_answer || expectedAnswer || "No model answer available."}`);
+              speak(`Model answer: ${result.correct_answer || "No model answer available."}`);
             }
           });
         }
       });
-    }
+        
+      
+    
     return () => cancel();
-  }, [result, answer, expectedAnswer, speak, cancel]);
+  }, [result, answer, speak, cancel]);
 
   const getIcon = () => {
     if (result.correct && result.score > 75)
@@ -71,9 +60,7 @@ export const QuizFeedback = ({
     return <XCircle className="h-12 w-12 text-red-500" />;
   };
 
-  function safeSpeak(text: string): void {
-    speak(text);
-  }
+  
 
   return (
     <div className="min-h-screen bg-background p-6">
@@ -112,7 +99,7 @@ export const QuizFeedback = ({
                   variant="ghost"
                   size="icon"
                   aria-label="Speak correctness"
-                  onClick={() => safeSpeak(isCorrect ? "Your answer is correct." : "Your answer is incorrect.")}
+                  onClick={() => speak(isCorrect ? "Your answer is correct." : "Your answer is incorrect.")}
                   className="ml-2"
                 >
                   <Play className="h-4 w-4 text-blue-600" />
@@ -139,7 +126,7 @@ export const QuizFeedback = ({
               </div>
               <Button
                 variant="secondary"
-                onClick={() => safeSpeak(`You scored ${result.score} percent. ${result.feedback}`)}
+                onClick={() => speak(`You scored ${result.score} percent. ${result.feedback}`)}
                 className="font-semibold"
               >
                 <Play className="mr-2 h-4 w-4" /> Play
@@ -155,7 +142,7 @@ export const QuizFeedback = ({
                 variant="ghost"
                 size="icon"
                 aria-label="Speak your answer"
-                onClick={() => safeSpeak(`Your answer: ${answer}`)}
+                onClick={() => speak(`Your answer: ${answer}`)}
               >
                 <Play className="h-4 w-4 text-blue-600" />
               </Button>
@@ -170,7 +157,7 @@ export const QuizFeedback = ({
                 variant="ghost"
                 size="icon"
                 aria-label="Speak model answer"
-                onClick={() => safeSpeak(`Model answer: ${result.correct_answer || "No model answer available."}`)}
+                onClick={() => speak(`Model answer: ${result.correct_answer || "No model answer available."}`)}
               >
                 <Play className="h-4 w-4 text-blue-600" />
               </Button>

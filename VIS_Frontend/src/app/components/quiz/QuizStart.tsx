@@ -24,7 +24,7 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
 
         // 🔊 Speak instructions after chapters load
         setTimeout(() => {
-          safeSpeak(
+          speak(
             `Chapters loaded. Use number keys or arrow keys to select a chapter. Press Enter to start.`
           );
         }, 600);
@@ -40,12 +40,12 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
 
   const handleTopicSelect = (index: number) => {
     setSelectedIndex(index);
-    safeCancel();
-    safeSpeak(`${topics[index]} selected.`);
+    cancel();
+    speak(`${topics[index]} selected.`);
   };
 
   const startQuiz = (index: number) => {
-    safeCancel();
+    cancel();
     onStart(topics[index]);
   };
 
@@ -75,7 +75,7 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
               ? 0
               : (prev - 1 + topics.length) % topics.length;
 
-          safeSpeak(topics[newIndex]);
+          speak(topics[newIndex]);
           return newIndex;
         });
       }
@@ -89,7 +89,7 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
               ? 0
               : (prev + 1) % topics.length;
 
-          safeSpeak(topics[newIndex]);
+          speak(topics[newIndex]);
           return newIndex;
         });
       }
@@ -170,3 +170,6 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
     </div>
   );
 };
+
+
+

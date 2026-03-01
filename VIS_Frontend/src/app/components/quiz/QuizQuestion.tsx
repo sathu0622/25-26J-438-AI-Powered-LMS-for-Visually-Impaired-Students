@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Volume2, Mic, Send, SkipForward } from 'lucide-react';
+import { Volume2, Mic, Send, Loader2, SkipForward, AlertCircle, X } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
-import { MockVoiceRecorder } from '../MockVoiceRecorder';
+import { VoiceRecorder } from '../MockVoiceRecorder';
 import { useTTS } from '../../contexts/TTSContext';
 
 interface Question {
@@ -18,10 +18,11 @@ interface QuizQuestionProps {
     correct_answer: string;
     key_phrase: string;
   };
-  questionNumber: number;
+ questionNumber: number;
   totalQuestions: number;
   onSubmit: (answer: string) => void;
   onSkip: () => void;
+
 }
 
 export const QuizQuestion = ({
@@ -32,6 +33,8 @@ export const QuizQuestion = ({
   onSkip,
 }: QuizQuestionProps) => {
   const [answer, setAnswer] = useState('');
+  const [inputMode, setInputMode] = useState<'voice' | 'text'>('voice');
+  const [hasReadQuestion, setHasReadQuestion] = useState(false);
   const [showVoiceModal, setShowVoiceModal] = useState(false);
 
   const { speak, cancel } = useTTS();
@@ -41,7 +44,7 @@ export const QuizQuestion = ({
     setHasReadQuestion(false);
     const timer = setTimeout(() => {
       speak(
-        `Question ${questionNumber} of ${totalQuestions}. ${question.text}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question.`,
+        `Question ${questionNumber} . ${question.question}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question.`,
         { interrupt: true }
       );
       setHasReadQuestion(true);
@@ -50,7 +53,7 @@ export const QuizQuestion = ({
       clearTimeout(timer);
       cancel();
     };
-  }, [question.id, questionNumber, totalQuestions, question.text, speak, cancel]);
+  }, [questionNumber, totalQuestions, question, speak, cancel]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -90,7 +93,7 @@ export const QuizQuestion = ({
 
   const handleReadQuestion = () => {
     cancel();
-    speak(`Question ${questionNumber}. ${question.text}`, { interrupt: true });
+    speak(`Question ${questionNumber}. ${question.question}`, { interrupt: true });
   };
 
   const handleVoiceToggle = () => {
@@ -107,83 +110,142 @@ export const QuizQuestion = ({
     if (answer.trim()) {
       onSubmit(answer);
       setAnswer('');
+      setHasReadQuestion(false);
     }
+  };
+
+  const handleSkip = () => {
+    onSkip();
+    setAnswer('');
+    setHasReadQuestion(false);
   };
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
+      {/* Progress */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            Press Q to repeat • Space to record • S to skip
+          </span>
+          <span>
+            {questionNumber} / {totalQuestions}
+          </span>
+        </div>
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full bg-primary transition-all"
+            style={{ width: `${(questionNumber / totalQuestions) * 100}%` }}
+          />
+        </div>
+      </div>
+
+     
+
+      {/* Question Card */}
       <Card className="p-6">
-        <h2 className="text-lg">{question.question}</h2>
+        <div className="space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 space-y-2">
+              <h2 className="text-sm text-muted-foreground">
+                Question {questionNumber}
+              </h2>
+              <p className="text-lg leading-relaxed">{question.question}</p>
+            </div>
+            <Button
+              onClick={handleReadQuestion}
+              variant="outline"
+              size="icon"
+              aria-label="Read question aloud"
+            >
+              <Volume2 className="h-5 w-5" />
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Input Mode Toggle */}
+      <div className="flex justify-center gap-2">
         <Button
-          variant="outline"
-          size="icon"
-          onClick={() => speak(question.question)}
+          onClick={() => setInputMode('voice')}
+          variant={inputMode === 'voice' ? 'default' : 'outline'}
+          size="sm"
         >
-          <Volume2 className="h-5 w-5" />
+          <Mic className="mr-2 h-4 w-4" />
+          Voice
         </Button>
-      </Card>
+        <Button
+          onClick={() => setInputMode('text')}
+          variant={inputMode === 'text' ? 'default' : 'outline'}
+          size="sm"
+        >
+          Text
+        </Button>
+      </div>
 
+      {/* Answer Input */}
       <Card className="p-6">
-        <Textarea
-          value={answer}
-          onChange={(e) => setAnswer(e.target.value)}
-          placeholder="Type your answer..."
-          className="min-h-[120px]"
-        />
+        <div className="space-y-4">
+          <label htmlFor="answer-input" className="text-sm">
+            Your Answer
+          </label>
+          <Textarea
+            id="answer-input"
+            value={answer}
+            onChange={(e) => {
+              setAnswer(e.target.value);
+              setInputMode('text');
+            }}
+            placeholder={
+              inputMode === 'voice'
+                ? 'Tap microphone and speak your answer...'
+                : 'Type your answer here...'
+            }
+            className="min-h-[120px] text-base"
+          />
+        </div>
       </Card>
 
+      {/* Action Buttons */}
       <div className="grid gap-3 sm:grid-cols-2">
-        <Button
-          variant="outline"
-          onClick={() => setShowVoiceModal(true)}
-        >
-          <Mic className="mr-2 h-5 w-5" />
-          Record Answer
-        </Button>
-
+        {inputMode === 'voice' && (
+          <Button
+            onClick={handleVoiceToggle}
+            variant="outline"
+            size="lg"
+            className="min-h-[56px]"
+          >
+            <Mic className="mr-2 h-5 w-5" />
+            Record Answer
+          </Button>
+        )}
         <Button
           onClick={handleSubmit}
           disabled={!answer.trim()}
+          size="lg"
+          className="min-h-[56px]"
         >
           <Send className="mr-2 h-5 w-5" />
-          Submit
+          Submit Answer
         </Button>
       </div>
 
-      <Button variant="ghost" onClick={onSkip}>
+      {/* Skip Button */}
+      <Button
+        onClick={handleSkip}
+        variant="ghost"
+        className="w-full"
+        aria-label="Skip question"
+      >
         <SkipForward className="mr-2 h-4 w-4" />
         Skip Question
       </Button>
 
-      <MockVoiceRecorder
+      {/* Voice Recorder Modal */}
+      <VoiceRecorder
         isOpen={showVoiceModal}
         onClose={() => setShowVoiceModal(false)}
-        onSubmit={(text) => {
-          setAnswer(text);
-          setShowVoiceModal(false);
-        }}
-        title="Record Your Answer"
-        context={question.question}
-      />
-    </div>
-  );
-};"mr-2 h-5 w-5" />
-          Submit
-        </Button>
-      </div>
-
-      <Button variant="ghost" onClick={onSkip}>
-        <SkipForward className="mr-2 h-4 w-4" />
-        Skip Question
-      </Button>
-
-      <MockVoiceRecorder
-        isOpen={showVoiceModal}
-        onClose={() => setShowVoiceModal(false)}
-        onSubmit={(text) => {
-          setAnswer(text);
-          setShowVoiceModal(false);
-        }}
+        onSubmit={handleVoiceSubmit}
         title="Record Your Answer"
         context={question.question}
       />
