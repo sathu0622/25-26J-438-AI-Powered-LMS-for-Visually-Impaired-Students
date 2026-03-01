@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Loader2, FileText, CheckCircle2 } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Progress } from '../ui/progress';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface ProcessingStep {
   label: string;
@@ -13,6 +14,7 @@ interface DocumentProcessingProps {
 }
 
 export const DocumentProcessing = ({ fileName }: DocumentProcessingProps) => {
+  const { speak, cancel } = useTTS();
   const [steps, setSteps] = useState<ProcessingStep[]>([
     { label: 'Detecting document type', completed: false },
     { label: 'Extracting text', completed: false },
@@ -20,6 +22,16 @@ export const DocumentProcessing = ({ fileName }: DocumentProcessingProps) => {
   ]);
   const [currentStep, setCurrentStep] = useState(0);
   const [progress, setProgress] = useState(0);
+  const hasAnnouncedRef = useRef(false);
+
+  useEffect(() => {
+    cancel();
+    if (!hasAnnouncedRef.current) {
+      hasAnnouncedRef.current = true;
+      speak(`Processing document: ${fileName}. Please wait.`, { interrupt: true });
+    }
+    return () => cancel();
+  }, [fileName, speak, cancel]);
 
   useEffect(() => {
     // Simulate visible processing steps for accessibility feedback
@@ -41,6 +53,7 @@ export const DocumentProcessing = ({ fileName }: DocumentProcessingProps) => {
       });
       setCurrentStep(2);
       setProgress(66);
+      speak('Extracting text.', { interrupt: true });
     }, 3000);
 
     const timer3 = setTimeout(() => {
@@ -50,6 +63,7 @@ export const DocumentProcessing = ({ fileName }: DocumentProcessingProps) => {
         return newSteps;
       });
       setProgress(100);
+      speak('Generating summary. Almost done.', { interrupt: true });
     }, 4500);
 
     return () => {
@@ -57,7 +71,7 @@ export const DocumentProcessing = ({ fileName }: DocumentProcessingProps) => {
       clearTimeout(timer2);
       clearTimeout(timer3);
     };
-  }, []);
+  }, [speak]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 pb-24">

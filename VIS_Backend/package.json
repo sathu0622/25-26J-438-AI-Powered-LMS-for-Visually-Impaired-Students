@@ -1,0 +1,17 @@
+{
+  "name": "vis-backend",
+  "version": "1.0.0",
+  "description": "Backend for AI-Powered LMS (TTS API with Google Cloud)",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "@google-cloud/text-to-speech": "^5.0.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0"
+  }
+}

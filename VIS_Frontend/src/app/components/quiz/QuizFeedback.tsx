@@ -1,15 +1,9 @@
-import { useEffect } from "react";
-import {
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  ArrowRight,
-  Home,
-  Play,
-} from "lucide-react";
-import { Card } from "../ui/card";
-import { Button } from "../ui/button";
-import { safeSpeak, safeCancel } from "../../utils/mockSpeech";
+import { useState, useEffect } from 'react';
+import { CheckCircle2, XCircle, AlertCircle, ArrowRight, Loader2, Home, Play } from 'lucide-react';
+import { Card } from '../ui/card';
+import { Button } from '../ui/button';
+import { AudioPlayer } from '../AudioPlayer';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface QuizFeedbackProps {
   question: string;
@@ -24,26 +18,48 @@ interface QuizFeedbackProps {
   onGoHome: () => void;
 }
 
+type FeedbackType = 'correct' | 'partial' | 'incorrect';
+
+interface FeedbackData {
+  type: FeedbackType;
+  score: number;
+  explanation: string;
+}
+
 export const QuizFeedback = ({
   question,
   answer,
   result,
   onNext,
   onGoHome,
-}: QuizFeedbackProps) => {
-  const isCorrect = result.score >= 60;
+  expectedAnswer,
+  feedback: providedFeedback
+}: QuizFeedbackProps & { expectedAnswer?: string; feedback?: string }) => {
+  const { speak, cancel } = useTTS();
+  const [feedback, setFeedback] = useState<FeedbackData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasAnnounced, setHasAnnounced] = useState(false);
+  const isCorrect = result.correct;
 
   // 🔊 Automatically speak feedback, given answer, and model answer in sequence on load
   useEffect(() => {
-    safeCancel();
+    cancel();
     // Chain speech segments using onEnd callback
-    safeSpeak(`You scored ${result.score} percent. ${result.feedback}`, () => {
-      safeSpeak(`Your answer: ${answer}`, () => {
-        safeSpeak(`Model answer: ${result.correct_answer || "No model answer available."}`);
+    if (result) {
+      speak(`You scored ${result.score} percent. ${result.feedback}`, {
+        interrupt: true,
+        onEnd: () => {
+          speak(`Your answer: ${answer}`, {
+            interrupt: false,
+            onEnd: () => {
+              speak(`Model answer: ${result.correct_answer || expectedAnswer || "No model answer available."}`);
+            }
+          });
+        }
       });
-    });
-    return () => safeCancel();
-  }, [result, answer]);
+    }
+    return () => cancel();
+  }, [result, answer, expectedAnswer, speak, cancel]);
 
   const getIcon = () => {
     if (result.correct && result.score > 75)
@@ -54,6 +70,10 @@ export const QuizFeedback = ({
 
     return <XCircle className="h-12 w-12 text-red-500" />;
   };
+
+  function safeSpeak(text: string): void {
+    speak(text);
+  }
 
   return (
     <div className="min-h-screen bg-background p-6">

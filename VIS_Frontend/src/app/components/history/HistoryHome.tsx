@@ -2,67 +2,57 @@ import { BookOpen, Headphones, GraduationCap } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { useEffect, useState } from 'react';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface HistoryHomeProps {
   onSelectGrade: (grade: number) => void;
 }
 
 export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
+  const { speak, cancel } = useTTS();
   const [hasAnnounced, setHasAnnounced] = useState(false);
 
-  // Voice announcement on page load
   useEffect(() => {
-    // STOP all previous speech immediately
-    safeCancel();
-    
+    cancel();
     if (!hasAnnounced) {
       setHasAnnounced(true);
       setTimeout(() => {
-        safeSpeak(
-          'AI History Teacher. Learn History with Smart Audio Lessons. Please select your grade. Press 1 for Grade 10: Ancient Civilizations, World History, and Cultural Studies. Press 2 for Grade 11: Modern History, World Wars, and Contemporary Issues. You can also press Escape to go back to home.'
+        speak(
+          'AI History Teacher. Learn History with Smart Audio Lessons. Please select your grade. Press 1 for Grade 10: Ancient Civilizations, World History, and Cultural Studies. Press 2 for Grade 11: Modern History, World Wars, and Contemporary Issues. You can also press Escape to go back to home.',
+          { interrupt: true }
         );
       }, 500);
     }
-    
-    // Cleanup: stop speech when leaving page
-    return () => {
-      safeCancel();
-    };
-  }, [hasAnnounced]);
+    return () => cancel();
+  }, [hasAnnounced, speak, cancel]);
 
-  // Keyboard shortcuts for number-based selection
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // 1 key for Grade 10
       if (e.key === '1') {
         e.preventDefault();
-        safeCancel();
-        safeSpeak('Grade 10 selected. Loading lessons.', () => {
-          setTimeout(() => onSelectGrade(10), 500);
+        cancel();
+        speak('Grade 10 selected. Loading lessons.', {
+          interrupt: true,
+          onEnd: () => setTimeout(() => onSelectGrade(10), 500),
         });
       }
-
-      // 2 key for Grade 11
       if (e.key === '2') {
         e.preventDefault();
-        safeCancel();
-        safeSpeak('Grade 11 selected. Loading lessons.', () => {
-          setTimeout(() => onSelectGrade(11), 500);
+        cancel();
+        speak('Grade 11 selected. Loading lessons.', {
+          interrupt: true,
+          onEnd: () => setTimeout(() => onSelectGrade(11), 500),
         });
       }
-
-      // H key to repeat help
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
-        safeCancel();
-        safeSpeak('Press 1 for Grade 10, Press 2 for Grade 11, Press Escape to go back.');
+        cancel();
+        speak('Press 1 for Grade 10, Press 2 for Grade 11, Press Escape to go back.', { interrupt: true });
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [onSelectGrade]);
+  }, [onSelectGrade, speak, cancel]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 pb-24">

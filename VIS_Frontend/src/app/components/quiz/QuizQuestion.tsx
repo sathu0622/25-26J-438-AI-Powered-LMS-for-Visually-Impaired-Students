@@ -4,7 +4,13 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
 import { MockVoiceRecorder } from '../MockVoiceRecorder';
-import { useSpeechSynthesis } from '../../hooks/useSpeechSynthesis';
+import { useTTS } from '../../contexts/TTSContext';
+
+interface Question {
+  id: number;
+  text: string;
+  topic: string;
+}
 
 interface QuizQuestionProps {
   question: {
@@ -28,21 +34,74 @@ export const QuizQuestion = ({
   const [answer, setAnswer] = useState('');
   const [showVoiceModal, setShowVoiceModal] = useState(false);
 
-  const { speak, stop } = useSpeechSynthesis();
+  const { speak, cancel } = useTTS();
 
   useEffect(() => {
-    stop();
+    cancel();
+    setHasReadQuestion(false);
     const timer = setTimeout(() => {
       speak(
-        `Question ${questionNumber}. ${question.question}. Press space to answer or S to skip.`
+        `Question ${questionNumber} of ${totalQuestions}. ${question.text}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question.`,
+        { interrupt: true }
       );
+      setHasReadQuestion(true);
     }, 500);
-
     return () => {
       clearTimeout(timer);
-      stop();
+      cancel();
     };
-  }, [question]);
+  }, [question.id, questionNumber, totalQuestions, question.text, speak, cancel]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      // Space or Enter to toggle recording/submit (when not in textarea)
+      if ((e.key === ' ' || e.key === 'Enter') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        if (answer.trim() && !showVoiceModal) {
+          handleSubmit();
+        } else {
+          handleVoiceToggle();
+        }
+      }
+
+      // R key to start recording
+      if ((e.key === 'r' || e.key === 'R') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        handleVoiceToggle();
+      }
+
+      // S key to skip
+      if ((e.key === 's' || e.key === 'S') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        handleSkip();
+      }
+
+      // Q key to read question
+      if ((e.key === 'q' || e.key === 'Q') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        handleReadQuestion();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [showVoiceModal, answer]);
+
+  const handleReadQuestion = () => {
+    cancel();
+    speak(`Question ${questionNumber}. ${question.text}`, { interrupt: true });
+  };
+
+  const handleVoiceToggle = () => {
+    setInputMode('voice');
+    setShowVoiceModal(true);
+  };
+
+  const handleVoiceSubmit = (text: string) => {
+    setAnswer(text);
+    setShowVoiceModal(false);
+  };
 
   const handleSubmit = () => {
     if (answer.trim()) {
@@ -87,6 +146,28 @@ export const QuizQuestion = ({
           disabled={!answer.trim()}
         >
           <Send className="mr-2 h-5 w-5" />
+          Submit
+        </Button>
+      </div>
+
+      <Button variant="ghost" onClick={onSkip}>
+        <SkipForward className="mr-2 h-4 w-4" />
+        Skip Question
+      </Button>
+
+      <MockVoiceRecorder
+        isOpen={showVoiceModal}
+        onClose={() => setShowVoiceModal(false)}
+        onSubmit={(text) => {
+          setAnswer(text);
+          setShowVoiceModal(false);
+        }}
+        title="Record Your Answer"
+        context={question.question}
+      />
+    </div>
+  );
+};"mr-2 h-5 w-5" />
           Submit
         </Button>
       </div>

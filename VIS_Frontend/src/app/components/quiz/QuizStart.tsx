@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Play, BookOpen } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { useTTS } from '../../contexts/TTSContext';
 import { quizService } from '../../services/quizService';
 
 interface QuizStartProps {
@@ -10,6 +10,7 @@ interface QuizStartProps {
 }
 
 export const QuizStart = ({ onStart }: QuizStartProps) => {
+  const { speak, cancel } = useTTS();
   const [topics, setTopics] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);

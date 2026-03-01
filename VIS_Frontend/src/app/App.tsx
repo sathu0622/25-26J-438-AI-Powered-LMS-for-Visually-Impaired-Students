@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTTS } from './contexts/TTSContext';
 import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
 import { VoiceCommandSystem } from './components/VoiceCommandSystem';
@@ -71,6 +72,16 @@ export function App() {
     } else if (target === 'history') {
       setHistoryScreen('home');
     }
+
+    // Voice feedback: announce new section for visually impaired users
+    const labels: Record<string, string> = {
+      home: 'Home',
+      document: 'Documents',
+      braille: 'Braille',
+      quiz: 'Quiz',
+      history: 'History',
+    };
+    announce(labels[target] || target);
   };
   // Handler for successful login/register
   const handleQuizAuthSuccess = (username: string) => {
@@ -179,6 +190,8 @@ export function App() {
       setHistoryScreen('home');
     }
   };
+
+  const { announce } = useTTS();
 
   return (
     <div className="min-h-screen bg-background">

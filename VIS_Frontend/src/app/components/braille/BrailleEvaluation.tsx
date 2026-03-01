@@ -4,6 +4,7 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
 import { AudioPlayer } from '../AudioPlayer';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface BrailleEvaluationProps {
   onBack: () => void;
@@ -24,61 +25,64 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
   const question = "Explain the importance of accessible education for students with visual impairments.";
   const modelAnswer = "Accessible education for students with visual impairments is crucial for ensuring equal learning opportunities and fostering independence. It involves implementing adaptive technologies such as screen readers, Braille displays, and audio learning materials that enable students to access educational content effectively. Multi-sensory learning approaches help students engage with material through touch, sound, and other senses. Inclusive teaching methods ensure that educational materials are designed with accessibility in mind from the start, rather than as an afterthought. This comprehensive approach empowers visually impaired students to participate fully in academic activities, develop critical thinking skills, and achieve their educational goals without barriers.";
 
-  // Voice announcements for page state changes
+  const { speak, cancel } = useTTS();
+
   useEffect(() => {
-    // STOP all previous speech immediately when component mounts
-    window.speechSynthesis.cancel();
-    
+    cancel();
     if (status === 'converted' && convertedText) {
-      const announcement = new SpeechSynthesisUtterance('Answer converted from Braille. Press E to evaluate your answer, or Press A to hear your answer read aloud.');
-      setTimeout(() => window.speechSynthesis.speak(announcement), 500);
+      const t = setTimeout(
+        () =>
+          speak(
+            'Answer converted from Braille. Press E to evaluate your answer, or Press A to hear your answer read aloud.',
+            { interrupt: true }
+          ),
+        500
+      );
+      return () => clearTimeout(t);
     }
-    
     if (status === 'complete' && !showDetailedReport) {
-      setTimeout(() => {
-        const announcement = new SpeechSynthesisUtterance(`Evaluation complete. Your score is ${score} percent. Press F to replay feedback, Press D for detailed report, Press B to upload another answer, or Press Escape to go back.`);
-        window.speechSynthesis.speak(announcement);
-      }, 10000); // After feedback finishes
+      const t = setTimeout(
+        () =>
+          speak(
+            `Evaluation complete. Your score is ${score} percent. Press F to replay feedback, Press D for detailed report, Press B to upload another answer, or Press Escape to go back.`,
+            { interrupt: true }
+          ),
+        10000
+      );
+      return () => clearTimeout(t);
     }
-    
     if (showDetailedReport) {
-      window.speechSynthesis.cancel(); // Stop any ongoing speech
-      const announcement = new SpeechSynthesisUtterance('Detailed Report page. Press A to hear your answer, Press M to hear the model answer, Press B to go back to summary, or Press Escape.');
-      setTimeout(() => window.speechSynthesis.speak(announcement), 500);
+      cancel();
+      const t = setTimeout(
+        () =>
+          speak(
+            'Detailed Report page. Press A to hear your answer, Press M to hear the model answer, Press B to go back to summary, or Press Escape.',
+            { interrupt: true }
+          ),
+        500
+      );
+      return () => clearTimeout(t);
     }
-    
-    // Cleanup: stop speech when leaving page
-    return () => {
-      window.speechSynthesis.cancel();
-    };
-  }, [status, showDetailedReport, convertedText, score]);
+    return () => cancel();
+  }, [status, showDetailedReport, convertedText, score, speak, cancel]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // A key to replay answer
       if ((e.key === 'a' || e.key === 'A') && convertedText) {
         e.preventDefault();
-        const utterance = new SpeechSynthesisUtterance(convertedText);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+        cancel();
+        speak(convertedText, { interrupt: true });
       }
-
-      // M key to play model answer
       if ((e.key === 'm' || e.key === 'M') && showDetailedReport) {
         e.preventDefault();
-        const utterance = new SpeechSynthesisUtterance(modelAnswer);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+        cancel();
+        speak(modelAnswer, { interrupt: true });
       }
-
-      // F key to replay feedback
       if ((e.key === 'f' || e.key === 'F') && status === 'complete' && feedback.length > 0) {
         e.preventDefault();
-        const feedbackText = `Your score is ${score}%. ${feedback.join('. ')}`;
-        const utterance = new SpeechSynthesisUtterance(feedbackText);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+        cancel();
+        speak(`Your score is ${score}%. ${feedback.join('. ')}`, { interrupt: true });
       }
 
       // E key to evaluate (when converted)
@@ -116,7 +120,7 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [status, convertedText, feedback, score, showDetailedReport, onBack]);
+  }, [status, convertedText, feedback, score, showDetailedReport, onBack, speak, cancel]);
 
   useEffect(() => {
     // Simulate Braille conversion
