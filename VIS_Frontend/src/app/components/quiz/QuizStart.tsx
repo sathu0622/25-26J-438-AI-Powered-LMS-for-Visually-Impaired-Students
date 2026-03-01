@@ -1,135 +1,148 @@
 import { useState, useEffect } from 'react';
-import { Play, BookOpen, ArrowLeft } from 'lucide-react';
+import { Play, BookOpen } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
-import { getAllTopics } from '../../data/quizData';
+import { quizService } from '../../services/quizService';
 
 interface QuizStartProps {
   onStart: (topic: string) => void;
 }
 
 export const QuizStart = ({ onStart }: QuizStartProps) => {
-  const topics = getAllTopics();
-  const [hasAnnounced, setHasAnnounced] = useState(false);
-  const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
+  const [topics, setTopics] = useState<string[]>([]);
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Voice announcement on page load
+  // Load chapters from backend
   useEffect(() => {
-    safeCancel();
-    
-    if (!hasAnnounced) {
-      setHasAnnounced(true);
-      setTimeout(() => {
-        let announcement = 'Voice-Enabled Quiz. Select a topic to begin. ';
-        topics.forEach((topic, index) => {
-          announcement += `Press ${index + 1} for ${topic}. `;
-        });
-        announcement += 'Press H for help, or Escape to go back.';
-        
-        safeSpeak(announcement);
-      }, 500);
-    }
-    
-    return () => {
-      safeCancel();
-    };
-  }, [hasAnnounced, topics]);
+    const loadChapters = async () => {
+      try {
+        const chapters = await quizService.getChapters();
+        setTopics(chapters);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Number keys to select topic
-      const num = parseInt(e.key);
-      if (num >= 1 && num <= topics.length) {
-        e.preventDefault();
-        const topic = topics[num - 1];
-        setSelectedTopic(topic);
-        safeCancel();
-        safeSpeak(`${topic} selected. Press Enter to start quiz.`);
-      }
-
-      // Enter to start quiz with selected topic
-      if (e.key === 'Enter' && selectedTopic) {
-        e.preventDefault();
-        safeCancel();
-        onStart(selectedTopic);
-      }
-
-      // H key for help
-      if (e.key === 'h' || e.key === 'H') {
-        e.preventDefault();
-        let help = 'Available topics: ';
-        topics.forEach((topic, index) => {
-          help += `${index + 1}. ${topic}. `;
-        });
-        help += 'Press a number to select, then Enter to start.';
-        safeCancel();
-        safeSpeak(help);
-      }
-
-      // L key to list all topics
-      if (e.key === 'l' || e.key === 'L') {
-        e.preventDefault();
-        let list = `${topics.length} topics available. `;
-        topics.forEach((topic, index) => {
-          list += `${index + 1}. ${topic}. `;
-        });
-        safeCancel();
-        safeSpeak(list);
+        // 🔊 Speak instructions after chapters load
+        setTimeout(() => {
+          safeSpeak(
+            `Chapters loaded. Use number keys or arrow keys to select a chapter. Press Enter to start.`
+          );
+        }, 600);
+      } catch (err) {
+        console.error('Failed to load chapters', err);
+      } finally {
+        setLoading(false);
       }
     };
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [selectedTopic, onStart, topics]);
+    loadChapters();
+  }, []);
 
-  const handleTopicSelect = (topic: string) => {
-    setSelectedTopic(topic);
+  const handleTopicSelect = (index: number) => {
+    setSelectedIndex(index);
     safeCancel();
-    safeSpeak(`${topic} selected. Press Start Quiz or Enter to begin.`);
+    safeSpeak(`${topics[index]} selected.`);
   };
+
+  const startQuiz = (index: number) => {
+    safeCancel();
+    onStart(topics[index]);
+  };
+
+  // ✅ KEYBOARD NAVIGATION
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (loading || topics.length === 0) return;
+
+      // 🔢 Number selection (1–9)
+      if (/^[1-9]$/.test(e.key)) {
+        const index = parseInt(e.key) - 1;
+
+        if (topics[index]) {
+          handleTopicSelect(index);
+
+          // 🚀 Auto-start after short delay
+          setTimeout(() => startQuiz(index), 700);
+        }
+      }
+
+      // ⬆ Arrow Up
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSelectedIndex((prev) => {
+          const newIndex =
+            prev === null
+              ? 0
+              : (prev - 1 + topics.length) % topics.length;
+
+          safeSpeak(topics[newIndex]);
+          return newIndex;
+        });
+      }
+
+      // ⬇ Arrow Down
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSelectedIndex((prev) => {
+          const newIndex =
+            prev === null
+              ? 0
+              : (prev + 1) % topics.length;
+
+          safeSpeak(topics[newIndex]);
+          return newIndex;
+        });
+      }
+
+      // ⏎ Enter to start
+      if (e.key === 'Enter' && selectedIndex !== null) {
+        startQuiz(selectedIndex);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [topics, selectedIndex, loading]);
+
+  if (loading) {
+    return (
+      <div className="p-6 text-center">
+        <p>Loading Chapters...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 pb-24">
-      {/* Header */}
       <div className="space-y-4 text-center">
         <div className="flex justify-center">
           <div className="rounded-full bg-green-500 p-6">
-            <BookOpen className="h-12 w-12 text-white" aria-hidden="true" />
+            <BookOpen className="h-12 w-12 text-white" />
           </div>
         </div>
-        <h1 className="text-2xl">Voice-Enabled Quiz</h1>
-        <p className="text-muted-foreground">
-          1-{topics.length}: Select Topic • Enter: Start • H: Help • L: List All
-        </p>
+        <h1 className="text-2xl">Voice-Enabled History Quiz</h1>
       </div>
 
-      {/* Topics */}
       <div className="space-y-3">
-        <h2 className="text-center">Select a Topic</h2>
+        <h2 className="text-center">
+          Select a Chapter (Use ↑ ↓ or 1-{topics.length})
+        </h2>
+
         <div className="grid gap-2">
           {topics.map((topic, index) => (
-            <Card 
-              key={index} 
+            <Card
+              key={index}
               className={`overflow-hidden transition-all ${
-                selectedTopic === topic
+                selectedIndex === index
                   ? 'border-primary bg-primary/5 border-2'
                   : 'hover:shadow-md'
               }`}
             >
               <button
-                onClick={() => handleTopicSelect(topic)}
+                onClick={() => handleTopicSelect(index)}
                 className="w-full p-4 text-left"
-                aria-label={`Select ${topic}`}
-                aria-pressed={selectedTopic === topic}
               >
                 <div className="flex items-center gap-3">
-                  <div className={`flex h-8 w-8 items-center justify-center rounded-full text-sm ${
-                    selectedTopic === topic
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-muted text-muted-foreground'
-                  }`}>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-sm">
                     {index + 1}
                   </div>
                   <span>{topic}</span>
@@ -140,15 +153,18 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
         </div>
       </div>
 
-      {/* Start Button */}
-      <Button 
-        onClick={() => selectedTopic && onStart(selectedTopic)} 
-        disabled={!selectedTopic}
-        size="lg" 
+      <Button
+        onClick={() =>
+          selectedIndex !== null && startQuiz(selectedIndex)
+        }
+        disabled={selectedIndex === null}
+        size="lg"
         className="w-full min-h-[64px]"
       >
-        <Play className="mr-2 h-6 w-6" aria-hidden="true" />
-        {selectedTopic ? `Start ${selectedTopic} Quiz` : 'Select a Topic First'}
+        <Play className="mr-2 h-6 w-6" />
+        {selectedIndex !== null
+          ? 'Press Enter or Click to Start'
+          : 'Select a Chapter First'}
       </Button>
     </div>
   );

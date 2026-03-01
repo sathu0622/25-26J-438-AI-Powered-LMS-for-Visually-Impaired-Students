@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
 import { VoiceCommandSystem } from './components/VoiceCommandSystem';
@@ -10,39 +10,47 @@ import { BrailleEvaluation } from './components/braille/BrailleEvaluation';
 import { QuizStart } from './components/quiz/QuizStart';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
+import UserAuth from './components/UserAuth';
 import { HistoryHome } from './components/history/HistoryHome';
 import { LessonList } from './components/history/LessonList';
 import { LessonPlayer } from './components/history/LessonPlayer';
 
-// Data
-import { getQuestionsByTopic } from './data/quizData';
+// ✅ NEW: Import quizService instead of local data
+import { quizService } from './services/quizService';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
-
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback';
 type HistoryScreen = 'home' | 'lessons' | 'player';
 
-interface Question {
-  id: number;
-  text: string;
-  topic: string;
-  expectedAnswer?: string;
-  feedback?: string;
-}
-
-export default function App() {
+export function App() {
   const [currentModule, setCurrentModule] = useState<Module>('home');
 
   // Braille module state
   const [brailleScreen, setBrailleScreen] = useState<BrailleScreen>('upload');
 
-  // Quiz module state
+  // =========================
+  //  QUIZ STATE
+  // =========================
   const [quizScreen, setQuizScreen] = useState<QuizScreen>('start');
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [currentAnswer, setCurrentAnswer] = useState('');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
-  const [quizQuestions, setQuizQuestions] = useState<Question[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<any>(null);
+  const [currentAnswer, setCurrentAnswer] = useState('');
+  const [evaluationResult, setEvaluationResult] = useState<any>(null);
+  const [questionNumber, setQuestionNumber] = useState(1);
+  // User state for Quiz
+  const [quizUser, setQuizUser] = useState<string | null>(() => {
+    return localStorage.getItem('quizUser');
+  });
+
+  // Persist quizUser to localStorage
+  useEffect(() => {
+    if (quizUser) {
+      localStorage.setItem('quizUser', quizUser);
+    } else {
+      localStorage.removeItem('quizUser');
+    }
+  }, [quizUser]);
 
   // History module state
   const [historyScreen, setHistoryScreen] = useState<HistoryScreen>('home');
@@ -58,9 +66,15 @@ export default function App() {
       setBrailleScreen('upload');
     } else if (target === 'quiz') {
       setQuizScreen('start');
+      setQuestionNumber(1);
+      // Do NOT reset quizUser here; keep login persistent until logout
     } else if (target === 'history') {
       setHistoryScreen('home');
     }
+  };
+  // Handler for successful login/register
+  const handleQuizAuthSuccess = (username: string) => {
+    setQuizUser(username);
   };
 
   // Handle voice command navigation
@@ -72,7 +86,7 @@ export default function App() {
       'quiz': 'quiz',
       'history': 'history',
     };
-    
+
     const module = routeMap[route];
     if (module) {
       handleNavigate(module);
@@ -95,36 +109,59 @@ export default function App() {
     setBrailleScreen('upload');
   };
 
-  // Quiz Module Handlers
-  const handleQuizStart = (topic: string) => {
+  // =========================
+  // UPDATED QUIZ HANDLERS
+  // =========================
+
+  const handleQuizStart = async (topic: string) => {
     setSelectedTopic(topic);
-    const questions = getQuestionsByTopic(topic);
-    setQuizQuestions(questions);
-    setCurrentQuestionIndex(0);
+    setQuestionNumber(1);
+
+    const question = await quizService.generateQuestion(topic);
+    setCurrentQuestion(question);
+
     setQuizScreen('question');
   };
 
-  const handleQuizSubmit = (answer: string) => {
+  const handleQuizSubmit = async (answer: string) => {
+    if (!currentQuestion) return;
+
     setCurrentAnswer(answer);
+
+    const result = await quizService.evaluateAnswer(
+      answer,
+      currentQuestion.correct_answer,
+      currentQuestion.key_phrase,
+      selectedTopic
+    );
+
+    setEvaluationResult(result);
     setQuizScreen('feedback');
   };
 
-  const handleQuizNext = () => {
-    if (currentQuestionIndex < quizQuestions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-      setQuizScreen('question');
-    } else {
-      // Quiz complete
-      setQuizScreen('start');
-      setCurrentQuestionIndex(0);
-    }
+  const handleQuizNext = async () => {
+    const nextQuestion = await quizService.generateQuestion(selectedTopic);
+
+    setCurrentQuestion(nextQuestion);
+    setQuestionNumber((prev) => prev + 1);
+    setQuizScreen('question');
   };
 
   const handleQuizSkip = () => {
     handleQuizNext();
   };
 
-  // History Module Handlers
+  const handleQuizHome = () => {
+  setQuizScreen('start');
+  setCurrentQuestion(null);
+  setCurrentAnswer('');
+  setEvaluationResult(null);
+  setSelectedTopic('');
+  setQuestionNumber(1);
+};
+
+ // History Module Handlers
+
   const handleSelectGrade = (grade: number) => {
     setSelectedGrade(grade);
     setHistoryScreen('lessons');
@@ -145,6 +182,17 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Global Logout Button for logged-in user */}
+      {quizUser && (
+  <button
+    style={{ position: 'fixed', top: 16, right: 16, zIndex: 1000, background: '#fff', border: '1px solid #ccc', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px #0001' }}
+    onClick={() => {
+      if (window.confirm('Are you sure you want to logout?')) setQuizUser(null);
+    }}
+  >
+    Logout ({quizUser})
+  </button>
+)}
       {/* Voice Command System - Global Accessibility Control */}
       <VoiceCommandSystem 
         onNavigate={handleVoiceNavigate} 
@@ -153,12 +201,11 @@ export default function App() {
 
       {/* Main Content */}
       <main className="min-h-screen">
-        {/* Home */}
+      {/* Home */}
         {currentModule === 'home' && <HomePage onNavigate={handleNavigate} />}
 
         {/* Document Module */}
         {currentModule === 'document' && <DocumentModule />}
-
         {/* Braille Module */}
         {currentModule === 'braille' && (
           <>
@@ -171,31 +218,38 @@ export default function App() {
           </>
         )}
 
-        {/* Quiz Module */}
+        {/* =========================
+            UPDATED QUIZ RENDER
+           ========================= */}
         {currentModule === 'quiz' && (
-          <>
-            {quizScreen === 'start' && <QuizStart onStart={handleQuizStart} />}
-            {quizScreen === 'question' && quizQuestions.length > 0 && (
-              <QuizQuestion
-                question={quizQuestions[currentQuestionIndex]}
-                questionNumber={currentQuestionIndex + 1}
-                totalQuestions={quizQuestions.length}
-                onSubmit={handleQuizSubmit}
-                onSkip={handleQuizSkip}
-              />
-            )}
-            {quizScreen === 'feedback' && quizQuestions.length > 0 && (
-              <QuizFeedback
-                question={quizQuestions[currentQuestionIndex].text}
-                answer={currentAnswer}
-                expectedAnswer={quizQuestions[currentQuestionIndex].expectedAnswer || ''}
-                feedback={quizQuestions[currentQuestionIndex].feedback || ''}
-                onNext={handleQuizNext}
-              />
-            )}
-          </>
-        )}
+  <>
+    {quizUser == null ? (
+      <UserAuth onAuthSuccess={handleQuizAuthSuccess} />
+    ) : quizScreen === 'start' && (
+      <QuizStart onStart={handleQuizStart} />
+    )}
 
+    {quizUser && quizScreen === 'question' && currentQuestion && (
+      <QuizQuestion
+        question={currentQuestion}
+        questionNumber={questionNumber}
+        totalQuestions={10}
+        onSubmit={handleQuizSubmit}
+        onSkip={handleQuizSkip}
+      />
+    )}
+
+    {quizUser && quizScreen === 'feedback' && evaluationResult && (
+      <QuizFeedback
+        question={currentQuestion.question}
+        answer={currentAnswer}
+        result={evaluationResult}
+        onNext={handleQuizNext}
+        onGoHome={handleQuizHome}
+      />
+    )}
+  </>
+)}
         {/* History Module */}
         {currentModule === 'history' && (
           <>
@@ -215,7 +269,6 @@ export default function App() {
           </>
         )}
       </main>
-
       {/* Bottom Navigation */}
       <Navigation currentModule={currentModule} onNavigate={handleNavigate} />
     </div>

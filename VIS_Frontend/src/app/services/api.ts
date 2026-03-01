@@ -11,7 +11,7 @@ export const api = {
 
   /**
    * Generic fetch wrapper with error handling
-   */
+  */
   async request<T>(
     endpoint: string,
     options: RequestInit & { method?: string } = {}

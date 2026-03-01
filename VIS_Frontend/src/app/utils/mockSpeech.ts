@@ -7,7 +7,7 @@
 interface MockUtterance {
   text: string;
   onEnd?: () => void;
-  timeoutId?: NodeJS.Timeout;
+  timeoutId?: ReturnType<typeof setTimeout>;
 }
 
 let currentUtterance: MockUtterance | null = null;
@@ -16,56 +16,38 @@ let currentUtterance: MockUtterance | null = null;
  * Calculate speaking duration based on text length
  * Average speaking rate: ~150 words per minute = 2.5 words per second
  */
-const calculateDuration = (text: string): number => {
-  const words = text.split(/\s+/).length;
-  const durationMs = (words / 2.5) * 1000; // 2.5 words per second
-  return Math.max(1000, durationMs); // Minimum 1 second
-};
+function isSpeechSynthesisSupported() {
+  return typeof window !== 'undefined' && 'speechSynthesis' in window && typeof window.SpeechSynthesisUtterance === 'function';
+}
 
-/**
- * Safely speak text using mock synthesis
- * @param text - The text to speak
- * @param onEnd - Optional callback when speech ends
- * @returns A mock utterance object
- */
-export const safeSpeak = async (
-  text: string,
-  onEnd?: () => void
-): Promise<MockUtterance | null> => {
-  // Cancel any ongoing speech
+export function safeSpeak(text: string, onEnd?: () => void) {
   safeCancel();
+  if (!text) return;
+  const duration = Math.max(1, Math.min(8, Math.round(text.length / 30)));
+  console.log(`[Mock TTS] Speaking (${duration}s): ${text}`);
+  if (isSpeechSynthesisSupported()) {
+    try {
+      const utter = new window.SpeechSynthesisUtterance(text);
+      if (onEnd) utter.onend = onEnd;
+      window.speechSynthesis.speak(utter);
+    } catch (err) {
+      console.warn('Speech synthesis error:', err);
+      alert('Speech synthesis failed. Please check your browser settings.');
+      if (onEnd) onEnd();
+    }
+  } else {
+    console.warn('Speech synthesis not supported in this browser');
+    alert('Speech synthesis is not supported in your browser. Please use Chrome, Edge, or Firefox in normal mode.');
+    if (onEnd) onEnd();
+  }
+}
 
-  const duration = calculateDuration(text);
-  
-  // Log for accessibility testing
-  const preview = text.length > 100 ? `${text.substring(0, 100)}...` : text;
-  console.log(`[Mock TTS] Speaking (${Math.round(duration / 1000)}s): ${preview}`);
-
-  const utterance: MockUtterance = {
-    text,
-    onEnd,
-  };
-
-  // Simulate speech duration
-  utterance.timeoutId = setTimeout(() => {
-    currentUtterance = null;
-    onEnd?.();
-  }, duration);
-
-  currentUtterance = utterance;
-  return utterance;
-};
-
-/**
- * Safely cancel ongoing speech
- */
-export const safeCancel = () => {
-  if (currentUtterance?.timeoutId) {
-    clearTimeout(currentUtterance.timeoutId);
-    currentUtterance = null;
+export function safeCancel() {
+  if (isSpeechSynthesisSupported()) {
+    window.speechSynthesis.cancel();
     console.log('[Mock TTS] Cancelled');
   }
-};
+}
 
 /**
  * Check if speech synthesis is supported (always true for mock)
