@@ -24,7 +24,6 @@ interface EvaluationResponse {
   semantic_similarity: number;
   keyword_match: number;
   jaccard_similarity: number;
-  error_penalty: string;
   status: string;
   feedback: string;
 }

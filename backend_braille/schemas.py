@@ -12,6 +12,5 @@ class EvaluationResponse(BaseModel):
     semantic_similarity: float
     keyword_match: float
     jaccard_similarity: float
-    error_penalty: str
     status: str
     feedback: str
