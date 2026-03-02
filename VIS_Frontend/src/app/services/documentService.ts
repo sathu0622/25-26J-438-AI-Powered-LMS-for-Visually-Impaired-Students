@@ -1,9 +1,14 @@
 /**
  * Document Service
  * Handles all API calls related to document processing, summarization, and Q&A
+ * Uses VITE_API_URL (Python backend). Set VITE_API_DOCUMENT_PREFIX if your backend
+ * uses a path prefix (e.g. /api for /api/process).
  */
 
 import { api } from './api';
+
+const DOCUMENT_PREFIX =
+  (import.meta as any).env?.VITE_API_DOCUMENT_PREFIX ?? '';
 
 export interface DocumentProcessResponse {
   document_id: string;
@@ -42,7 +47,10 @@ export const documentService = {
   async uploadDocument(file: File): Promise<DocumentProcessResponse> {
     const formData = new FormData();
     formData.append('file', file);
-    return api.postFormData<DocumentProcessResponse>('/process', formData);
+    return api.postFormData<DocumentProcessResponse>(
+      `${DOCUMENT_PREFIX}/process`,
+      formData
+    );
   },
 
   /**
@@ -52,7 +60,7 @@ export const documentService = {
     documentId: string,
     articleId: string
   ): Promise<SummaryResponse> {
-    return api.postForm<SummaryResponse>('/summarize-article', {
+    return api.postForm<SummaryResponse>(`${DOCUMENT_PREFIX}/summarize-article`, {
       document_id: documentId,
       article_id: articleId,
     });
@@ -68,7 +76,7 @@ export const documentService = {
     maxAnswerLen: number = 64,
     scoreThreshold: number = 0.15
   ): Promise<QAResponse> {
-    return api.post<QAResponse>('/ask-question', {
+    return api.post<QAResponse>(`${DOCUMENT_PREFIX}/ask-question`, {
       document_id: documentId,
       article_id: articleId,
       question,

@@ -3,7 +3,7 @@ import { CheckCircle2, XCircle, AlertCircle, ArrowRight, Loader2 } from 'lucide-
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { AudioPlayer } from '../AudioPlayer';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface QuizFeedbackProps {
   question: string;
@@ -22,14 +22,13 @@ interface FeedbackData {
 }
 
 export const QuizFeedback = ({ question, answer, expectedAnswer, feedback: providedFeedback, onNext }: QuizFeedbackProps) => {
+  const { speak, cancel } = useTTS();
   const [feedback, setFeedback] = useState<FeedbackData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasAnnounced, setHasAnnounced] = useState(false);
 
   useEffect(() => {
-    // STOP all previous speech immediately
-    safeCancel();
-    
+    cancel();
     // Simulate AI evaluation with actual quiz data if available
     setTimeout(() => {
       // Calculate similarity score (mock)
@@ -44,51 +43,44 @@ export const QuizFeedback = ({ question, answer, expectedAnswer, feedback: provi
       setIsLoading(false);
     }, 2000);
     
-    // Cleanup: stop speech when leaving page
-    return () => {
-      safeCancel();
-    };
-  }, [question, answer, providedFeedback]);
+    return () => cancel();
+  }, [question, answer, providedFeedback, cancel]);
 
-  // Auto-announce feedback after loading
   useEffect(() => {
     if (!isLoading && feedback && !hasAnnounced) {
       setHasAnnounced(true);
       setTimeout(() => {
         const audioText = `${getTitle()} You scored ${feedback.score} percent. ${feedback.explanation}`;
-        safeSpeak(audioText, () => {
-          // After feedback, announce next step
-          setTimeout(() => {
-            safeSpeak('Press F to replay feedback. Press Space, Enter, or N for next question.');
-          }, 1000);
+        speak(audioText, {
+          interrupt: true,
+          onEnd: () => {
+            setTimeout(() => {
+              speak('Press F to replay feedback. Press Space, Enter, or N for next question.', { interrupt: false });
+            }, 1000);
+          },
         });
       }, 500);
     }
-  }, [isLoading, feedback, hasAnnounced]);
+  }, [isLoading, feedback, hasAnnounced, speak]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     if (!isLoading && feedback) {
       const handleKeyPress = (e: KeyboardEvent) => {
-        // F key to replay feedback
         if (e.key === 'f' || e.key === 'F') {
           e.preventDefault();
           const audioText = `${getTitle()} You scored ${feedback.score} percent. ${feedback.explanation}`;
-          safeCancel();
-          safeSpeak(audioText);
+          cancel();
+          speak(audioText, { interrupt: true });
         }
-
-        // N key or Space/Enter to go to next question
         if (e.key === 'n' || e.key === 'N' || e.key === ' ' || e.key === 'Enter') {
           e.preventDefault();
           onNext();
         }
       };
-
       window.addEventListener('keydown', handleKeyPress);
       return () => window.removeEventListener('keydown', handleKeyPress);
     }
-  }, [isLoading, feedback, onNext]);
+  }, [isLoading, feedback, onNext, speak, cancel]);
 
   const getIcon = () => {
     if (!feedback) return null;

@@ -1,0 +1,7 @@
+node_modules/
+.env
+*.log
+.DS_Store
+
+# Google service account key
+voicevis-26ab9b751401.json
