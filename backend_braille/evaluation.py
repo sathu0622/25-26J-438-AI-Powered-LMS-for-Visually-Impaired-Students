@@ -1,15 +1,14 @@
-from utils import semantic_similarity, keyword_overlap_score, jaccard_similarity, length_penalty, detect_historical_errors
+from utils import semantic_similarity, keyword_overlap_score, jaccard_similarity, length_penalty
 from logger_config import logger
 import torch
 
 def generate_correct_answer(question, tokenizer, model):
     torch.manual_seed(42)
     prompt = f"""You are an expert Sri Lankan O/L History teacher.
-Answer the question clearly and factually in a detailed, exam-style narrative suitable for a Grade 11 student.
-Include all key historical points, but keep the language simple.
-Limit the answer to approximately 200 words.
-Do NOT mention the word limit or any instructions in the answer.
-Do NOT add unnecessary commentary or endnotes.
+Write a concise, factual exam answer for a Grade 11 student.
+- Cover only the most important historical facts
+- Use clear, simple language
+- Maximum 200 words. Stop writing after your last point.
 
 Question:
 {question}
@@ -28,10 +27,22 @@ Answer:
             top_p=1.0,
             repetition_penalty=1.1,
             pad_token_id=tokenizer.eos_token_id,
+            eos_token_id=tokenizer.eos_token_id,
             do_sample=True
         )
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    return response.split("Answer:")[-1].strip()
+
+    input_length = inputs["input_ids"].shape[1]
+    response = tokenizer.decode(
+        outputs[0][input_length:],
+        skip_special_tokens=True
+    )
+    answer = response.strip()
+
+    sentences = [s.strip() for s in answer.split('.') if s.strip()]
+    if sentences:
+        answer = '. '.join(sentences) + '.'
+
+    return answer
 
 def calculate_final_score(correct, student, sbert_model):
     semantic = semantic_similarity(correct, student, sbert_model)
@@ -39,22 +50,24 @@ def calculate_final_score(correct, student, sbert_model):
     jaccard = jaccard_similarity(correct, student)
 
     length_factor = length_penalty(correct, student)
-    error_factor = detect_historical_errors(student)
 
-    final = (semantic*0.65 + keyword*0.25 + jaccard*0.1) * length_factor * error_factor
-    if semantic >= 60 and keyword >= 50 and error_factor == 1.0:
+    final = (semantic * 0.65 + keyword * 0.35 + jaccard * 0.10) * length_factor
+
+    if semantic >= 60 and keyword >= 50:
         final += 5
 
-    return round(final,2), semantic, keyword, jaccard, error_factor
+    return round(final, 2), semantic, keyword, jaccard
 
 def generate_feedback(score):
-    if score >= 75: return "Excellent answer with correct historical understanding."
-    elif score >= 45: return "Basic understanding shown, but key facts are missing."
-    return "Incorrect or weak answer. Please revise the lesson."
+    if score >= 75:
+        return "Excellent answer. You have demonstrated a strong and accurate understanding of the historical topic, with well-explained points and relevant details."
+    elif score >= 45:
+        return "Good attempt. You have shown a basic understanding of the topic, but some important facts, explanations, or supporting details are missing."
+    return "The answer shows limited understanding of the topic. Several key points are incorrect or incomplete. Please review the lesson and try again."
 
 def evaluate_student_answer(question, student_answer, tokenizer, model, sbert):
     correct_answer = generate_correct_answer(question, tokenizer, model)
-    final, semantic, keyword, jaccard, error_factor = calculate_final_score(correct_answer, student_answer, sbert)
+    final, semantic, keyword, jaccard = calculate_final_score(correct_answer, student_answer, sbert)
 
     status = "PASS" if final >= 75 else "NEEDS IMPROVEMENT" if final >= 45 else "FAIL"
     return {
@@ -65,7 +78,6 @@ def evaluate_student_answer(question, student_answer, tokenizer, model, sbert):
         "semantic_similarity": semantic,
         "keyword_match": keyword,
         "jaccard_similarity": jaccard,
-        "error_penalty": f"{int(error_factor*100)}%",
         "status": status,
         "feedback": generate_feedback(final)
     }

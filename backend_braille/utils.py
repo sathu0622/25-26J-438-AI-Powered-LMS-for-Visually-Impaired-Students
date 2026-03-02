@@ -1,7 +1,6 @@
 import re
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sentence_transformers import util
-from config import HISTORICAL_ERRORS
 
 def semantic_similarity(correct, student, sbert_model):
     emb1 = sbert_model.encode(correct, convert_to_tensor=True)
@@ -36,12 +35,5 @@ def jaccard_similarity(correct, student):
 def length_penalty(correct, student):
     r = len(student.split()) / max(len(correct.split()), 1)
     if 0.5 <= r <= 1.5: return 1.0
-    elif r < 0.5: return 0.8
-    return 0.9
-
-def detect_historical_errors(answer):
-    errors = sum(1 for e in HISTORICAL_ERRORS if e in answer.lower())
-    if errors >= 3: return 0.3
-    elif errors == 2: return 0.5
-    elif errors == 1: return 0.8
-    return 1.0
+    elif r < 0.8: return 0.6
+    return 0.95
