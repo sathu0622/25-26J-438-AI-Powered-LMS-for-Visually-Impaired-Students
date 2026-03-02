@@ -1,17 +1,26 @@
-import { useState, useRef } from 'react';
-import { Upload, Image as ImageIcon, X, Info } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Upload, FileText, X, Info, Loader2 } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
+import { api } from '../../services/api';
 
 interface BrailleUploadProps {
-  onUpload: (file: File) => void;
+  onUpload: (data: { question: string; answer: string; fullText: string }) => void;
+}
+
+interface ConvertPdfResponse {
+  status: string;
+  question: string;
+  answer: string;
+  full_text: string;
 }
 
 export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -27,40 +36,72 @@ export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
     e.preventDefault();
     setIsDragging(false);
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) {
+    if (file && file.type === 'application/pdf') {
       processFile(file);
+    } else {
+      setError('Please upload a PDF file');
     }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      processFile(file);
+      if (file.type === 'application/pdf' || file.name.endsWith('.pdf')) {
+        processFile(file);
+        setError(null);
+      } else {
+        setError('Please upload a PDF file');
+      }
     }
   };
 
   const processFile = (file: File) => {
     setFileName(file.name);
     setSelectedFile(file);
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      setPreview(e.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    setError(null);
   };
 
   const handleRemove = () => {
-    setPreview(null);
     setFileName(null);
     setSelectedFile(null);
+    setError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
-  const handleSubmit = () => {
-    if (selectedFile) {
-      onUpload(selectedFile);
+  const handleSubmit = async () => {
+    if (!selectedFile) return;
+
+    setIsUploading(true);
+    setError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const response = await api.postFormData<ConvertPdfResponse>(
+        '/decode',
+        formData
+      );
+
+      if (response.status === 'success') {
+        onUpload({
+          question: response.question,
+          answer: response.answer,
+          fullText: response.full_text,
+        });
+      } else {
+        setError('Failed to convert PDF. Please try again.');
+      }
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to upload PDF. Please try again.'
+      );
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -74,8 +115,15 @@ export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
         </p>
       </div>
 
+      {/* Error Message */}
+      {error && (
+        <Card className="border-destructive bg-destructive/10 p-4">
+          <p className="text-sm text-destructive">{error}</p>
+        </Card>
+      )}
+
       {/* Upload Area */}
-      {!preview ? (
+      {!selectedFile ? (
         <>
           <Card
             className={`border-2 border-dashed p-8 transition-all ${
@@ -93,16 +141,17 @@ export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
                 />
               </div>
               <div className="space-y-2">
-                <p>Drag and drop your image here</p>
+                <p>Drag and drop your PDF file here</p>
                 <p className="text-sm text-muted-foreground">or</p>
               </div>
               <Button
                 onClick={() => fileInputRef.current?.click()}
                 size="lg"
                 className="min-h-[56px]"
+                disabled={isUploading}
               >
-                <ImageIcon className="mr-2 h-5 w-5" aria-hidden="true" />
-                Browse Image
+                <FileText className="mr-2 h-5 w-5" aria-hidden="true" />
+                Browse PDF
               </Button>
             </div>
           </Card>
@@ -110,33 +159,32 @@ export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
           <input
             ref={fileInputRef}
             type="file"
-            accept="image/*"
+            accept=".pdf,application/pdf"
             className="hidden"
             onChange={handleFileSelect}
-            aria-label="Braille image upload"
+            aria-label="Braille PDF upload"
           />
         </>
       ) : (
         <>
-          {/* Image Preview */}
+          {/* File Preview */}
           <Card className="overflow-hidden p-4">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
-                <p className="truncate text-sm">{fileName}</p>
+                <div className="flex items-center gap-3">
+                  <FileText className="h-8 w-8 text-primary" />
+                  <p className="truncate text-sm font-medium">{fileName}</p>
+                </div>
                 <Button
                   onClick={handleRemove}
                   variant="ghost"
                   size="icon"
-                  aria-label="Remove image"
+                  aria-label="Remove file"
+                  disabled={isUploading}
                 >
                   <X className="h-5 w-5" />
                 </Button>
               </div>
-              <img
-                src={preview}
-                alt="Braille answer sheet preview"
-                className="w-full rounded-lg border"
-              />
             </div>
           </Card>
 
@@ -147,11 +195,24 @@ export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
               variant="outline"
               size="lg"
               className="min-h-[56px]"
+              disabled={isUploading}
             >
-              Replace Image
+              Replace PDF
             </Button>
-            <Button onClick={handleSubmit} size="lg" className="min-h-[56px]">
-              Process Answer Sheet
+            <Button
+              onClick={handleSubmit}
+              size="lg"
+              className="min-h-[56px]"
+              disabled={isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                'Convert & Evaluate'
+              )}
             </Button>
           </div>
         </>
@@ -164,10 +225,10 @@ export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
           <div className="space-y-2">
             <h3 className="text-sm">Image Guidelines:</h3>
             <ul className="space-y-1 text-xs text-muted-foreground">
-              <li>• Ensure good lighting</li>
-              <li>• Keep the image flat and clear</li>
-              <li>• Make sure all Braille dots are visible</li>
-              <li>• Supported formats: JPG, PNG</li>
+              <li>• Upload a PDF file containing Braille Unicode text</li>
+              <li>• The PDF should contain both question and answer</li>
+              <li>• Supported format: PDF (.pdf)</li>
+              <li>• The system will extract and convert Braille to text automatically</li>
             </ul>
           </div>
         </div>
