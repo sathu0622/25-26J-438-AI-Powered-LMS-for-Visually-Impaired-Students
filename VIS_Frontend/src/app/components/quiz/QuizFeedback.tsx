@@ -16,6 +16,7 @@ interface QuizFeedbackProps {
   };
   onNext: () => void;
   onGoHome: () => void;
+  isLastQuestion?: boolean;
 }
 
 
@@ -25,10 +26,9 @@ export const QuizFeedback = ({
   result,
   onNext,
   onGoHome,
+  isLastQuestion = false,
 }: QuizFeedbackProps & { onGoHome: () => void }) => {
   const { speak, cancel } = useTTS();
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasAnnounced, setHasAnnounced] = useState(false);
   const isCorrect = result.score>=60;
 
   // 🔊 Automatically speak feedback, given answer, and model answer in sequence on load
@@ -109,7 +109,8 @@ export const QuizFeedback = ({
             {/* Navigation Buttons */}
             <div className="flex flex-col gap-4 mt-6">
               <Button size="lg" className="font-semibold" onClick={onNext}>
-                Next Question <ArrowRight className="ml-2 h-5 w-5" />
+                {isLastQuestion ? 'See Summary' : 'Next Question'}
+                <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
               <Button variant="outline" size="lg" className="font-semibold" onClick={onGoHome}>
                 <Home className="mr-2 h-5 w-5" /> Select Another Chapter

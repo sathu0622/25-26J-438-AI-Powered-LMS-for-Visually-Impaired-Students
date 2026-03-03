@@ -7,9 +7,11 @@ import { quizService } from '../../services/quizService';
 
 interface QuizStartProps {
   onStart: (topic: string) => void;
+  onViewSaved: () => void;
+  hasSavedSets?: boolean;
 }
 
-export const QuizStart = ({ onStart }: QuizStartProps) => {
+export const QuizStart = ({ onStart, onViewSaved, hasSavedSets }: QuizStartProps) => {
   const { speak, cancel } = useTTS();
   const [topics, setTopics] = useState<string[]>([]);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
@@ -25,7 +27,9 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
         // 🔊 Speak instructions after chapters load
         setTimeout(() => {
           speak(
-            `Chapters loaded. Use number keys or arrow keys to select a chapter. Press Enter to start.`
+            `Chapters loaded. Use number keys or arrow keys to select a chapter. Press Enter to start. ${
+              hasSavedSets ? 'Press D to open your saved quiz sets.' : ''
+            }`
           );
         }, 600);
       } catch (err) {
@@ -98,11 +102,18 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
       if (e.key === 'Enter' && selectedIndex !== null) {
         startQuiz(selectedIndex);
       }
+
+      // Saved sets shortcut
+      if ((e.key === 'd' || e.key === 'D') && hasSavedSets) {
+        e.preventDefault();
+        cancel();
+        onViewSaved();
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [topics, selectedIndex, loading]);
+  }, [topics, selectedIndex, loading, hasSavedSets]);
 
   if (loading) {
     return (
@@ -166,6 +177,20 @@ export const QuizStart = ({ onStart }: QuizStartProps) => {
         {selectedIndex !== null
           ? 'Press Enter or Click to Start'
           : 'Select a Chapter First'}
+      </Button>
+
+      <Button
+        onClick={() => {
+          cancel();
+          onViewSaved();
+        }}
+        variant="outline"
+        size="lg"
+        className="w-full min-h-[56px]"
+        disabled={!hasSavedSets}
+        aria-label="Open saved quiz sets"
+      >
+        View Saved Quiz Sets
       </Button>
     </div>
   );

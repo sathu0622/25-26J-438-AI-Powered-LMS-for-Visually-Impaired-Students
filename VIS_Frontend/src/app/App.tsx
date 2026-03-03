@@ -11,17 +11,19 @@ import { BrailleEvaluation } from './components/braille/BrailleEvaluation';
 import { QuizStart } from './components/quiz/QuizStart';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
+import { QuizSummary } from './components/quiz/QuizSummary';
+import { QuizDashboard } from './components/quiz/QuizDashboard';
 import UserAuth from './components/UserAuth';
 import { HistoryHome } from './components/history/HistoryHome';
 import { LessonList } from './components/history/LessonList';
 import { LessonPlayer } from './components/history/LessonPlayer';
 
 // ✅ NEW: Import quizService instead of local data
-import { quizService } from './services/quizService';
+import { quizService, QuizSetListItem, QuizSetSummary, GenerateQuestionResponse } from './services/quizService';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 type BrailleScreen = 'upload' | 'evaluation';
-type QuizScreen = 'start' | 'question' | 'feedback';
+type QuizScreen = 'start' | 'question' | 'feedback' | 'summary' | 'dashboard';
 type HistoryScreen = 'home' | 'lessons' | 'player';
 
 export function App() {
@@ -35,10 +37,17 @@ export function App() {
   // =========================
   const [quizScreen, setQuizScreen] = useState<QuizScreen>('start');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
-  const [currentQuestion, setCurrentQuestion] = useState<any>(null);
+  const [quizQuestions, setQuizQuestions] = useState<GenerateQuestionResponse[]>([]);
+  const [quizSetId, setQuizSetId] = useState<string | null>(null);
+  const [attemptId, setAttemptId] = useState<string | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<GenerateQuestionResponse | null>(null);
   const [currentAnswer, setCurrentAnswer] = useState('');
   const [evaluationResult, setEvaluationResult] = useState<any>(null);
   const [questionNumber, setQuestionNumber] = useState(1);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [correctCount, setCorrectCount] = useState(0);
+  const [quizSummary, setQuizSummary] = useState<QuizSetSummary | null>(null);
+  const [savedQuizSets, setSavedQuizSets] = useState<QuizSetListItem[]>([]);
   // User state for Quiz
   const [quizUser, setQuizUser] = useState<string | null>(() => {
     return localStorage.getItem('quizUser');
@@ -51,6 +60,23 @@ export function App() {
     } else {
       localStorage.removeItem('quizUser');
     }
+  }, [quizUser]);
+
+  useEffect(() => {
+    const loadSets = async () => {
+      if (!quizUser) {
+        setSavedQuizSets([]);
+        return;
+      }
+      try {
+        const res = await quizService.getUserQuizSets(quizUser);
+        setSavedQuizSets(res.quiz_sets);
+      } catch (err) {
+        console.error('Failed to load quiz sets', err);
+      }
+    };
+
+    loadSets();
   }, [quizUser]);
 
   // History module state
@@ -66,8 +92,7 @@ export function App() {
     if (target === 'braille') {
       setBrailleScreen('upload');
     } else if (target === 'quiz') {
-      setQuizScreen('start');
-      setQuestionNumber(1);
+      handleQuizHome();
       // Do NOT reset quizUser here; keep login persistent until logout
     } else if (target === 'history') {
       setHistoryScreen('home');
@@ -123,53 +148,103 @@ export function App() {
   // =========================
   // UPDATED QUIZ HANDLERS
   // =========================
-
-  const handleQuizStart = async (topic: string) => {
-    setSelectedTopic(topic);
-    setQuestionNumber(1);
-
-    const question = await quizService.generateQuestion(topic);
-    setCurrentQuestion(question);
-
-    setQuizScreen('question');
+  const handleQuizStart = async (topic: string, existingSetId?: string) => {
+    if (!quizUser) return;
+    try {
+      const quizSet = await quizService.startQuizSet(quizUser, topic, existingSetId);
+      setSelectedTopic(quizSet.chapter_name);
+      setQuizSetId(quizSet.set_id);
+      setAttemptId(quizSet.attempt_id);
+      setQuizQuestions(quizSet.questions);
+      setCurrentQuestion(quizSet.questions[0]);
+      setCurrentQuestionIndex(0);
+      setQuestionNumber(1);
+      setCorrectCount(0);
+      setCurrentAnswer('');
+      setEvaluationResult(null);
+      setQuizSummary(null);
+      setQuizScreen('question');
+    } catch (err) {
+      console.error('Failed to start quiz', err);
+    }
   };
 
   const handleQuizSubmit = async (answer: string) => {
-    if (!currentQuestion) return;
+    if (!currentQuestion || !quizSetId || !attemptId || !quizUser) return;
 
     setCurrentAnswer(answer);
 
-    const result = await quizService.evaluateAnswer(
-      answer,
-      currentQuestion.correct_answer,
-      currentQuestion.key_phrase,
-      selectedTopic
-    );
+    try {
+      const result = await quizService.submitQuizSetAnswer(
+        quizSetId,
+        attemptId,
+        quizUser,
+        currentQuestionIndex,
+        answer
+      );
 
-    setEvaluationResult(result);
-    setQuizScreen('feedback');
+      setEvaluationResult(result);
+      if (result.correct) setCorrectCount((prev) => prev + 1);
+      setQuizScreen('feedback');
+    } catch (err) {
+      console.error('Failed to submit answer', err);
+    }
   };
 
   const handleQuizNext = async () => {
-    const nextQuestion = await quizService.generateQuestion(selectedTopic);
+    const nextIndex = currentQuestionIndex + 1;
+    if (nextIndex >= quizQuestions.length) {
+      await handleQuizComplete();
+      return;
+    }
 
-    setCurrentQuestion(nextQuestion);
-    setQuestionNumber((prev) => prev + 1);
+    setCurrentQuestionIndex(nextIndex);
+    setQuestionNumber(nextIndex + 1);
+    setCurrentQuestion(quizQuestions[nextIndex]);
+    setCurrentAnswer('');
+    setEvaluationResult(null);
     setQuizScreen('question');
   };
 
-  const handleQuizSkip = () => {
-    handleQuizNext();
+  const handleQuizSkip = async () => {
+    await handleQuizSubmit('Skipped');
   };
 
-  const handleQuizHome = () => {
-  setQuizScreen('start');
-  setCurrentQuestion(null);
-  setCurrentAnswer('');
-  setEvaluationResult(null);
-  setSelectedTopic('');
-  setQuestionNumber(1);
-};
+  const handleQuizComplete = async () => {
+    if (!quizSetId || !attemptId || !quizUser) return;
+    try {
+      const completion = await quizService.completeQuizAttempt(quizSetId, attemptId, quizUser);
+      setQuizSummary(completion.summary);
+      setQuizScreen('summary');
+
+      const sets = await quizService.getUserQuizSets(quizUser);
+      setSavedQuizSets(sets.quiz_sets);
+    } catch (err) {
+      console.error('Failed to complete quiz', err);
+    }
+  };
+
+  function handleQuizHome() {
+    setQuizScreen('start');
+    setCurrentQuestion(null);
+    setCurrentAnswer('');
+    setEvaluationResult(null);
+    setSelectedTopic('');
+    setQuestionNumber(1);
+    setCurrentQuestionIndex(0);
+    setCorrectCount(0);
+    setQuizSummary(null);
+    setQuizSetId(null);
+    setAttemptId(null);
+  }
+
+  const handleShowDashboard = () => {
+    setQuizScreen('dashboard');
+  };
+
+  const handleRetakeSet = (setId: string, chapterName: string) => {
+    handleQuizStart(chapterName, setId);
+  };
 
  // History Module Handlers
 
@@ -239,26 +314,46 @@ export function App() {
     {quizUser == null ? (
       <UserAuth onAuthSuccess={handleQuizAuthSuccess} />
     ) : quizScreen === 'start' && (
-      <QuizStart onStart={handleQuizStart} />
+      <QuizStart onStart={handleQuizStart} onViewSaved={handleShowDashboard} hasSavedSets={savedQuizSets.length > 0} />
+    )}
+
+    {quizUser && quizScreen === 'dashboard' && (
+      <QuizDashboard
+        sets={savedQuizSets}
+        onRetake={handleRetakeSet}
+        onBack={handleQuizHome}
+      />
     )}
 
     {quizUser && quizScreen === 'question' && currentQuestion && (
       <QuizQuestion
         question={currentQuestion}
         questionNumber={questionNumber}
-        totalQuestions={10}
+        totalQuestions={quizQuestions.length || 10}
         onSubmit={handleQuizSubmit}
         onSkip={handleQuizSkip}
       />
     )}
 
-    {quizUser && quizScreen === 'feedback' && evaluationResult && (
+    {quizUser && quizScreen === 'feedback' && evaluationResult && currentQuestion && (
       <QuizFeedback
         question={currentQuestion.question}
         answer={currentAnswer}
         result={evaluationResult}
         onNext={handleQuizNext}
         onGoHome={handleQuizHome}
+        isLastQuestion={questionNumber === quizQuestions.length}
+      />
+    )}
+
+    {quizUser && quizScreen === 'summary' && quizSummary && (
+      <QuizSummary
+        summary={quizSummary}
+        correctCount={correctCount}
+        totalQuestions={quizQuestions.length}
+        onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
+        onGoHome={handleQuizHome}
+        onStartNew={() => setQuizScreen('start')}
       />
     )}
   </>

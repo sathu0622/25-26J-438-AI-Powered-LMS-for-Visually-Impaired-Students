@@ -1,9 +1,16 @@
 import random
 import re
 import ollama
+import os
+from datetime import datetime
+from typing import Dict, List, Optional
+
+from bson import ObjectId
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
+from pymongo import MongoClient
 from sentence_transformers import util
+from dotenv import load_dotenv
 
 # These will be set by main.py
 sbert_model = None
@@ -12,6 +19,11 @@ AVAILABLE_CHAPTERS = []
 prefetch_cache = {}
 question_history = {}
 OLLAMA_MODEL_NAME = "history-tutor"  # Default, can be overwritten by main.py
+
+load_dotenv()
+client = MongoClient(os.getenv("MONGO_URL"))
+db = client[os.getenv("DATABASE_NAME", "vis_history")]
+quiz_sets_col = db["quiz_sets"]
 
 router = APIRouter()
 
@@ -23,6 +35,19 @@ class AnswerRequest(BaseModel):
     correct_answer: str = "Refer to context"
     key_phrase: str = ""
     chapter_name: str
+
+class StartSetRequest(BaseModel):
+    username: str
+    chapter_name: str
+    set_id: Optional[str] = None
+
+class AnswerSetRequest(BaseModel):
+    username: str
+    user_answer: str
+    question_index: int
+
+class CompleteAttemptRequest(BaseModel):
+    username: str
 
 # --- 4. Question genaration ---
 def run_ai_generation(chapter_name: str):
@@ -95,6 +120,89 @@ QUESTION:"""
     fallback_answer = context_text.split('.')[0].strip() + '.' if '.' in context_text else context_text.strip()
     return {"question": resp if resp else "No question generated.", "correct_answer": fallback_answer, "key_phrase": ""}
 
+
+def generate_question_batch(chapter_name: str, total: int = 10) -> List[Dict[str, str]]:
+    """Generate a batch of unique questions for a quiz set."""
+    questions: List[Dict[str, str]] = []
+    attempts = 0
+    seen: set[str] = set()
+
+    while len(questions) < total and attempts < total * 5:
+        attempts += 1
+        result = run_ai_generation(chapter_name)
+        if not result or not result.get("question"):
+            continue
+
+        question_text = result["question"].strip()
+        if question_text.lower() in seen:
+            continue
+
+        seen.add(question_text.lower())
+        questions.append(result)
+
+    if len(questions) < total:
+        raise HTTPException(500, f"Only generated {len(questions)} questions. Please try again.")
+
+    return questions
+
+
+def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str):
+    if not user_answer:
+        return {
+            "score": 0,
+            "feedback": "Please type an answer!",
+            "correct": False,
+            "correct_answer": correct_answer or "Refer to context",
+        }
+
+    target = correct_answer if correct_answer and len(correct_answer) > 2 else "Refer to context"
+
+    if key_phrase and len(key_phrase) > 2:
+        if key_phrase.lower() in user_answer.lower():
+            return {
+                "score": 100,
+                "feedback": "🎯 Excellent! You got it right!",
+                "correct": True,
+                "correct_answer": correct_answer,
+            }
+
+    emb1 = sbert_model.encode(user_answer, convert_to_tensor=True)
+    emb2 = sbert_model.encode(target, convert_to_tensor=True)
+    score = util.pytorch_cos_sim(emb1, emb2).item()
+
+    if score > 0.75:
+        return {
+            "score": int(score * 100),
+            "feedback": "✅ Your Answer is Correct",
+            "correct": True,
+            "correct_answer": correct_answer,
+        }
+    if score > 0.60:
+        return {
+            "score": int(score * 100),
+            "feedback": "⚠️ You are Partially Correct, You have missed some details",
+            "correct": True,
+            "correct_answer": correct_answer,
+        }
+
+    return {
+        "score": int(score * 100),
+        "feedback": "❌ Your Answer is Incorrect",
+        "correct": False,
+        "correct_answer": correct_answer,
+    }
+
+
+def to_object_id(id_str: str) -> ObjectId:
+    try:
+        return ObjectId(id_str)
+    except Exception:
+        raise HTTPException(400, "Invalid ID format")
+
+
+def to_iso(dt: Optional[datetime]):
+    return dt.isoformat() if dt else None
+
 def prefetch_next_question(chapter_name: str):
     result = run_ai_generation(chapter_name)
     if result:
@@ -118,23 +226,160 @@ def generate_question(req: ChapterRequest):
 @router.post("/evaluate_answer")
 def evaluate_answer(req: AnswerRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(prefetch_next_question, req.chapter_name)
-    
-    if not req.user_answer:
-        return {"score": 0, "feedback": "Please type an answer!", "correct": False, "correct_answer": req.correct_answer}
+    return evaluate_response(req.user_answer, req.correct_answer, req.key_phrase)
 
-    target = req.correct_answer if req.correct_answer and len(req.correct_answer) > 2 else "Refer to context"
 
-    if req.key_phrase and len(req.key_phrase) > 2:
-        if req.key_phrase.lower() in req.user_answer.lower():
-            return {"score": 100, "feedback": "🎯 Excellent! You got it right!", "correct": True, "correct_answer": req.correct_answer}
+@router.post("/quiz_sets/start")
+def start_quiz_set(req: StartSetRequest):
+    chapter_name = req.chapter_name
 
-    emb1 = sbert_model.encode(req.user_answer, convert_to_tensor=True)
-    emb2 = sbert_model.encode(target, convert_to_tensor=True)
-    score = util.pytorch_cos_sim(emb1, emb2).item()
+    if req.set_id:
+        set_oid = to_object_id(req.set_id)
+        doc = quiz_sets_col.find_one({"_id": set_oid})
+        if not doc:
+            raise HTTPException(404, "Quiz set not found")
+        if doc.get("username") != req.username:
+            raise HTTPException(403, "Access denied for this quiz set")
+    else:
+        questions = generate_question_batch(chapter_name, total=10)
+        doc = {
+            "username": req.username,
+            "chapter_name": chapter_name,
+            "questions": questions,
+            "created_at": datetime.utcnow(),
+            "attempts": [],
+        }
+        insert_result = quiz_sets_col.insert_one(doc)
+        doc["_id"] = insert_result.inserted_id
 
-    if score > 0.75:
-        return {"score": int(score*100), "feedback": "✅ Your Answer is Correct", "correct": True, "correct_answer": req.correct_answer}
-    if score > 0.60:
-        return {"score": int(score*100), "feedback": "⚠️ You are Partially Correct, You have missed some details", "correct": True, "correct_answer": req.correct_answer}
+    attempt_id = str(ObjectId())
+    attempt_entry = {
+        "attempt_id": attempt_id,
+        "started_at": datetime.utcnow(),
+        "answers": [],
+        "completed_at": None,
+        "summary": None,
+    }
 
-    return {"score": int(score*100), "feedback": "❌ Your Answer is Incorrect", "correct": False, "correct_answer": req.correct_answer}
+    quiz_sets_col.update_one({"_id": doc["_id"]}, {"$push": {"attempts": attempt_entry}})
+
+    return {
+        "set_id": str(doc["_id"]),
+        "attempt_id": attempt_id,
+        "chapter_name": doc.get("chapter_name", ""),
+        "questions": doc.get("questions", []),
+        "total_questions": len(doc.get("questions", [])),
+    }
+
+
+@router.post("/quiz_sets/{set_id}/attempts/{attempt_id}/answer")
+def answer_quiz_set(set_id: str, attempt_id: str, req: AnswerSetRequest):
+    set_oid = to_object_id(set_id)
+    doc = quiz_sets_col.find_one({"_id": set_oid, "username": req.username})
+    if not doc:
+        raise HTTPException(404, "Quiz set not found")
+
+    questions = doc.get("questions", [])
+    if req.question_index < 0 or req.question_index >= len(questions):
+        raise HTTPException(400, "Invalid question index")
+
+    target_question = questions[req.question_index]
+    evaluation = evaluate_response(
+        req.user_answer,
+        target_question.get("correct_answer", ""),
+        target_question.get("key_phrase", ""),
+    )
+
+    answer_entry = {
+        "question_index": req.question_index,
+        "user_answer": req.user_answer,
+        "score": evaluation["score"],
+        "correct": evaluation["correct"],
+        "feedback": evaluation["feedback"],
+        "correct_answer": target_question.get("correct_answer", ""),
+        "answered_at": datetime.utcnow(),
+    }
+
+    update_result = quiz_sets_col.update_one(
+        {"_id": set_oid, "attempts.attempt_id": attempt_id},
+        {"$push": {"attempts.$.answers": answer_entry}},
+    )
+
+    if update_result.matched_count == 0:
+        raise HTTPException(404, "Attempt not found")
+
+    return {**evaluation, "question_index": req.question_index}
+
+
+@router.post("/quiz_sets/{set_id}/attempts/{attempt_id}/complete")
+def complete_quiz_attempt(set_id: str, attempt_id: str, req: CompleteAttemptRequest):
+    set_oid = to_object_id(set_id)
+    doc = quiz_sets_col.find_one({"_id": set_oid, "username": req.username})
+    if not doc:
+        raise HTTPException(404, "Quiz set not found")
+
+    attempts = doc.get("attempts", [])
+    attempt = next((a for a in attempts if a.get("attempt_id") == attempt_id), None)
+    if not attempt:
+        raise HTTPException(404, "Attempt not found")
+
+    answers = attempt.get("answers", [])
+    total_questions = len(doc.get("questions", []))
+    correct_count = sum(1 for ans in answers if ans.get("correct"))
+    avg_score = int(sum(ans.get("score", 0) for ans in answers) / len(answers)) if answers else 0
+
+    summary = {
+        "correct_count": correct_count,
+        "total_questions": total_questions,
+        "average_score": avg_score,
+    }
+
+    quiz_sets_col.update_one(
+        {"_id": set_oid, "attempts.attempt_id": attempt_id},
+        {
+            "$set": {
+                "attempts.$.summary": summary,
+                "attempts.$.completed_at": datetime.utcnow(),
+            }
+        },
+    )
+
+    return {
+        "set_id": str(set_oid),
+        "attempt_id": attempt_id,
+        "summary": summary,
+    }
+
+
+@router.get("/quiz_sets/user/{username}")
+def list_quiz_sets(username: str):
+    docs = list(quiz_sets_col.find({"username": username}).sort("created_at", -1))
+    payload = []
+
+    for doc in docs:
+        attempts = doc.get("attempts", [])
+        attempts_sorted = sorted(
+            attempts,
+            key=lambda a: a.get("completed_at") or a.get("started_at"),
+            reverse=True,
+        )
+        latest = attempts_sorted[0] if attempts_sorted else None
+
+        payload.append(
+            {
+                "set_id": str(doc.get("_id")),
+                "chapter_name": doc.get("chapter_name", ""),
+                "created_at": to_iso(doc.get("created_at")),
+                "questions_count": len(doc.get("questions", [])),
+                "latest_attempt":
+                    {
+                        "attempt_id": latest.get("attempt_id"),
+                        "summary": latest.get("summary"),
+                        "completed_at": to_iso(latest.get("completed_at")),
+                    }
+                    if latest
+                    else None,
+            }
+        )
+
+    return {"quiz_sets": payload}
