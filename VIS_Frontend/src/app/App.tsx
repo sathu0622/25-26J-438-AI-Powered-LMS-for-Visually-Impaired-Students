@@ -684,7 +684,13 @@ export function App() {
     ) : (
       <>
         {adaptiveScreen === 'start' && (
-          <AdaptiveStart onStart={handleAdaptiveStart} />
+          <AdaptiveStart 
+            onStart={handleAdaptiveStart} 
+            onBack={() => {
+              setQuizMode('none');
+              setAdaptiveScreen('start');
+            }}
+          />
         )}
         {adaptiveScreen === 'question' && adaptiveItem && (
           <AdaptiveQuestion

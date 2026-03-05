@@ -16,7 +16,6 @@ export const PastPaperQuizStart = ({ onStart, onBack }: PastPaperQuizStartProps)
   const [selectedIndex, setSelectedIndex] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [hasInitiallySpoken, setHasInitiallySpoken] = useState(false);
 
   // Load past paper chapters from backend
   useEffect(() => {
@@ -24,84 +23,30 @@ export const PastPaperQuizStart = ({ onStart, onBack }: PastPaperQuizStartProps)
       try {
         const chapters = await pastPaperService.getChapters();
         setChapters(chapters);
-        console.log('Chapters loaded:', chapters); // Debug log
 
-        // Set first chapter as selected but don't speak yet
-        if (chapters.length > 0) {
-          setSelectedIndex(0);
-        }
-         
-        setLoading(false);
-        
-        // Voice announcement after everything is set
+        // 🔊 Speak instructions after chapters load
         setTimeout(() => {
-          if (chapters.length > 0) {
-            setHasInitiallySpoken(true);
-            console.log('About to speak initial announcement'); // Debug log
-            cancel();
-            console.log('TTS context available:', { speak: !!speak, cancel: !!cancel });
-            
-            try {
-              const speakResult = speak(
-                `Past Paper Quiz chapters loaded. ${chapters.length} chapters available. Currently on chapter 1: ${chapters[0]}. Use Up and Down arrow keys to navigate between chapters. Press Enter to start practice with the selected chapter. Press H for help. Press B to go back.`,
-                { interrupt: true }
-              );
-              console.log('Initial announcement speak result:', speakResult);
-            } catch (error) {
-              console.error('Error in initial announcement:', error);
-              // Fallback: try a simple message
-              try {
-                speak('Past Paper Quiz loaded', { interrupt: true });
-              } catch (fallbackError) {
-                console.error('Fallback TTS also failed:', fallbackError);
-              }
-            }
-          } else {
-            speak('No past paper chapters available. Press B to go back.');
-          }
-        }, 800);
+          speak(
+            `Past Paper Quiz chapters loaded. ${chapters.length} chapters available. Use Up and Down arrow keys or number keys 1 to 9 to select a chapter. Press Enter to start. Press H for help. Press B to go back.`
+          );
+        }, 600);
       } catch (err) {
         console.error('Failed to load past paper chapters', err);
         const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';
         setError(errorMessage);
         speak(`Error loading past paper chapters: ${errorMessage}. Press B to go back.`);
       } finally {
-        // Loading state handled above
+        setLoading(false);
       }
     };
 
-    // Cancel any previous speech on component mount
-    cancel();
-    console.log('PastPaper component mounted, loading chapters...'); // Debug log
     loadPastPaperChapters();
-  }, [speak, cancel]);
-
-  // Test TTS on component mount
-  useEffect(() => {
-    // Simple test to ensure TTS is working
-    const testTTS = () => {
-      setTimeout(() => {
-        console.log('Testing TTS functionality...'); // Debug log
-        if (speak) {
-          console.log('TTS speak function exists, attempting to speak...');
-          try {
-            const result = speak('Past Paper Quiz page loaded. Loading chapters...', { interrupt: true });
-            console.log('TTS speak result:', result);
-          } catch (error) {
-            console.error('Error calling TTS speak:', error);
-          }
-        } else {
-          console.error('TTS speak function not available');
-        }
-      }, 200);
-    };
-    
-    testTTS();
-  }, [speak]);
+  }, []);
 
   const handleChapterSelect = (index: number) => {
     setSelectedIndex(index);
-    // Note: Voice announcement moved to useEffect to prevent render-time state updates
+    cancel();
+    speak(`${chapters[index]} selected.`);
   };
 
   const startPastPaperQuiz = (index: number) => {
@@ -118,13 +63,24 @@ export const PastPaperQuizStart = ({ onStart, onBack }: PastPaperQuizStartProps)
     const handleKeyDown = (e: KeyboardEvent) => {
       if (loading || chapters.length === 0) return;
 
+      // 🔢 Number selection (1–9)
+      if (/^[1-9]$/.test(e.key)) {
+        const index = parseInt(e.key) - 1;
+
+        if (chapters[index]) {
+          handleChapterSelect(index);
+
+          // 🚀 Auto-start after short delay
+          setTimeout(() => startPastPaperQuiz(index), 700);
+        }
+      }
+
       // ⬆ Arrow Up - Navigate to previous chapter
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        console.log('Arrow up pressed'); // Debug log
         setSelectedIndex((prev) => {
           const newIndex = prev === null ? 0 : (prev - 1 + chapters.length) % chapters.length;
-          console.log('New index (up):', newIndex); // Debug log
+          speak(chapters[newIndex]);
           return newIndex;
         });
       }
@@ -132,10 +88,9 @@ export const PastPaperQuizStart = ({ onStart, onBack }: PastPaperQuizStartProps)
       // ⬇ Arrow Down - Navigate to next chapter
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        console.log('Arrow down pressed'); // Debug log
         setSelectedIndex((prev) => {
           const newIndex = prev === null ? 0 : (prev + 1) % chapters.length;
-          console.log('New index (down):', newIndex); // Debug log
+          speak(chapters[newIndex]);
           return newIndex;
         });
       }
@@ -143,13 +98,7 @@ export const PastPaperQuizStart = ({ onStart, onBack }: PastPaperQuizStartProps)
       // ↵ Enter to start practice with selected chapter
       if (e.key === 'Enter' && selectedIndex !== null) {
         e.preventDefault();
-        cancel();
-        speak(`Starting Past Paper Quiz for ${chapters[selectedIndex]}. Please wait while we load examination questions from previous years.`, {
-          interrupt: true,
-          onEnd: () => {
-            setTimeout(() => startPastPaperQuiz(selectedIndex), 500);
-          }
-        });
+        startPastPaperQuiz(selectedIndex);
       }
 
       // 🆘 Help instructions
@@ -158,7 +107,7 @@ export const PastPaperQuizStart = ({ onStart, onBack }: PastPaperQuizStartProps)
         cancel();
         const currentChapter = selectedIndex !== null ? `Currently on chapter ${selectedIndex + 1}: ${chapters[selectedIndex]}. ` : '';
         speak(
-          `Past Paper Quiz Help. ${currentChapter}Use Up and Down arrow keys to navigate between ${chapters.length} chapters. Press Enter to start practice with the selected chapter. Press B to go back to quiz mode selection. Chapters available: ${chapters.join(', ')}.`,
+          `Past Paper Quiz Help. ${currentChapter}Use Up and Down arrow keys to navigate between ${chapters.length} chapters. Press number keys 1 to 9 for quick selection. Press Enter to start practice with the selected chapter. Press B to go back to quiz mode selection.`,
           { interrupt: true }
         );
       }
@@ -173,30 +122,9 @@ export const PastPaperQuizStart = ({ onStart, onBack }: PastPaperQuizStartProps)
       }
     };
 
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-      cancel();
-    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, [chapters, loading, selectedIndex, speak, cancel, onStart, onBack]);
-
-  // Voice announcements for navigation - separated from state updates to prevent render warnings
-  useEffect(() => {
-    // Only announce navigation changes, not the initial selection
-    if (selectedIndex !== null && chapters.length > 0 && hasInitiallySpoken) {
-      console.log('Navigation announcement for index:', selectedIndex); // Debug log
-      cancel();
-      
-      try {
-        const message = `Chapter ${selectedIndex + 1} of ${chapters.length}: ${chapters[selectedIndex]}. Press Enter to start past paper practice for this chapter.`;
-        console.log('About to speak navigation message:', message);
-        const result = speak(message, { interrupt: true });
-        console.log('Navigation speak result:', result);
-      } catch (error) {
-        console.error('Error in navigation announcement:', error);
-      }
-    }
-  }, [selectedIndex, chapters, speak, cancel, hasInitiallySpoken]);
 
   // Focus management for keyboard navigation
   useEffect(() => {
@@ -286,7 +214,7 @@ export const PastPaperQuizStart = ({ onStart, onBack }: PastPaperQuizStartProps)
       <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg" role="complementary" aria-labelledby="nav-help">
         <h2 id="nav-help" className="text-sm font-semibold mb-1">Keyboard Navigation</h2>
         <p className="text-xs text-muted-foreground">
-          Up/Down arrows to navigate chapters, Enter to start, H for detailed help, B to go back
+          Up/Down arrows or 1-{chapters.length} to select chapters, Enter to start, H for detailed help, B to go back
         </p>
         {selectedIndex !== null && (
           <p className="text-xs text-blue-600 mt-1" role="status" aria-live="polite">
@@ -315,24 +243,16 @@ export const PastPaperQuizStart = ({ onStart, onBack }: PastPaperQuizStartProps)
               aria-selected={selectedIndex === index}
               aria-label={`Chapter ${index + 1} of ${chapters.length}: ${chapter}. Real exam questions from previous years.`}
               tabIndex={selectedIndex === index ? 0 : -1}
-              onClick={() => {
-                setSelectedIndex(index);
-                // Remove auto-start on click to prevent accidental starts
-              }}
+              onClick={() => handleChapterSelect(index)}
               onFocus={() => {
-                // Only update state, voice announcement handled by useEffect
                 if (selectedIndex !== index) {
-                  setSelectedIndex(index);
+                  handleChapterSelect(index);
                 }
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' || e.key === ' ') {
                   e.preventDefault();
-                  cancel();
-                  speak(`Starting Past Paper Quiz for ${chapter}. Loading questions now.`, {
-                    interrupt: true,
-                    onEnd: () => startPastPaperQuiz(index)
-                  });
+                  startPastPaperQuiz(index);
                 }
               }}
             >

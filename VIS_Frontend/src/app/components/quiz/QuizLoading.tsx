@@ -21,17 +21,17 @@ export const QuizLoading = ({ mode, topic, onCancel }: QuizLoadingProps) => {
         let message = '';
         switch (mode) {
           case 'generative':
-            message = `Generating personalized quiz questions for ${topic}. Our AI is creating unique questions tailored to this chapter. This may take 10 to 20 seconds. Please wait.`;
+            message = `Generating personalized quiz questions for ${topic}. Our AI is creating unique questions tailored to this chapter. This may take 10 to 20 seconds. Please wait. Press Escape or B to cancel.`;
             break;
           case 'pastpaper':
-            message = `Loading past paper questions for ${topic}. Collecting examination questions from previous years. Please wait.`;
+            message = `Loading past paper questions for ${topic}. Collecting examination questions from previous years. This may take 5 to 10 seconds. Please wait. Press Escape or B to cancel.`;
             break;
           case 'adaptive':
-            message = `Preparing adaptive quiz for ${topic}. Setting up personalized difficulty adjustment. Please wait.`;
+            message = `Preparing adaptive quiz for ${topic}. Setting up personalized difficulty adjustment. This may take 5 to 15 seconds. Please wait. Press Escape or B to cancel.`;
             break;
         }
         speak(message, { interrupt: true });
-      }, 500);
+      }, 300);
     };
 
     announceLoading();
