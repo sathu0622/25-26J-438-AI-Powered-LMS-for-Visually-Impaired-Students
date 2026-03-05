@@ -10,6 +10,8 @@ import { BrailleUpload } from './components/braille/BrailleUpload';
 import { BrailleEvaluation } from './components/braille/BrailleEvaluation';
 import { QuizStart } from './components/quiz/QuizStart';
 import { QuizModeSelect } from './components/quiz/QuizModeSelect';
+import { PastPaperQuizStart } from './components/quiz/PastPaperQuizStart';
+import { QuizLoading } from './components/quiz/QuizLoading';
 import { AdaptiveStart } from './components/quiz/AdaptiveStart';
 import { AdaptiveQuestion } from './components/quiz/AdaptiveQuestion';
 import { AdaptiveSummary } from './components/quiz/AdaptiveSummary';
@@ -22,16 +24,18 @@ import UserAuth from './components/UserAuth';
 import { HistoryHome } from './components/history/HistoryHome';
 import { LessonList } from './components/history/LessonList';
 import { LessonPlayer } from './components/history/LessonPlayer';
+import { UserProfilePage } from './components/UserProfilePage';
 
 // ✅ NEW: Import quizService instead of local data
 import { quizService, QuizSetListItem, QuizSetSummary, GenerateQuestionResponse } from './services/quizService';
+import { pastPaperService, PastPaperQuestion } from './services/pastPaperService';
 import { adaptiveService, AdaptiveItem, AdaptiveAnswerResponse } from './services/adaptiveService';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 type BrailleScreen = 'upload' | 'evaluation';
-type QuizScreen = 'start' | 'question' | 'feedback' | 'summary' | 'dashboard';
+type QuizScreen = 'start' | 'question' | 'feedback' | 'summary' | 'dashboard' | 'profile';
 type HistoryScreen = 'home' | 'lessons' | 'player';
-type QuizMode = 'none' | 'generative' | 'adaptive';
+type QuizMode = 'none' | 'generative' | 'adaptive' | 'pastpaper';
 type AdaptiveScreen = 'start' | 'question' | 'feedback' | 'summary';
 
 export function App() {
@@ -47,6 +51,7 @@ export function App() {
   const [quizMode, setQuizMode] = useState<QuizMode>('none');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [quizQuestions, setQuizQuestions] = useState<GenerateQuestionResponse[]>([]);
+  const [pastPaperQuestions, setPastPaperQuestions] = useState<PastPaperQuestion[]>([]);
   const [quizSetId, setQuizSetId] = useState<string | null>(null);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<GenerateQuestionResponse | null>(null);
@@ -57,6 +62,9 @@ export function App() {
   const [correctCount, setCorrectCount] = useState(0);
   const [quizSummary, setQuizSummary] = useState<QuizSetSummary | null>(null);
   const [savedQuizSets, setSavedQuizSets] = useState<QuizSetListItem[]>([]);
+  const [quizGenerating, setQuizGenerating] = useState(false);
+  const [currentGenerationTopic, setCurrentGenerationTopic] = useState('');
+  const [currentGenerationMode, setCurrentGenerationMode] = useState<'generative' | 'pastpaper' | 'adaptive'>('generative');
   // Adaptive state
   const [adaptiveScreen, setAdaptiveScreen] = useState<AdaptiveScreen>('start');
   const [adaptiveSessionId, setAdaptiveSessionId] = useState<string | null>(null);
@@ -176,38 +184,111 @@ export function App() {
   // =========================
   const handleQuizStart = async (topic: string, existingSetId?: string) => {
     if (!quizUser) return;
-    try {
-      const quizSet = await quizService.startQuizSet(quizUser, topic, existingSetId);
-      setSelectedTopic(quizSet.chapter_name);
-      setQuizSetId(quizSet.set_id);
-      setAttemptId(quizSet.attempt_id);
-      setQuizQuestions(quizSet.questions);
-      setCurrentQuestion(quizSet.questions[0]);
-      setCurrentQuestionIndex(0);
-      setQuestionNumber(1);
-      setCorrectCount(0);
-      setCurrentAnswer('');
-      setEvaluationResult(null);
-      setQuizSummary(null);
-      setQuizScreen('question');
-    } catch (err) {
-      console.error('Failed to start quiz', err);
+    
+    // Set loading state and current generation info
+    setQuizGenerating(true);
+    setCurrentGenerationTopic(topic);
+    setCurrentGenerationMode(quizMode === 'pastpaper' ? 'pastpaper' : 'generative');
+    
+    // Different logic for past paper vs generative quiz
+    if (quizMode === 'pastpaper') {
+      try {
+        const questions = await pastPaperService.getQuestions(topic);
+        setPastPaperQuestions(questions);
+        setQuizQuestions([]); // Clear regular quiz questions
+        setSelectedTopic(topic);
+        setQuestionNumber(1);
+        setCurrentQuestionIndex(0);
+        setCorrectCount(0);
+        setCurrentAnswer('');
+        setEvaluationResult(null);
+        setQuizSummary(null);
+        
+        if (questions.length > 0) {
+          // Convert past paper question to the format expected by QuizQuestion component
+          const firstQuestion = questions[0];
+          setCurrentQuestion({
+            question: firstQuestion.question,
+            correct_answer: firstQuestion.correct_answer,
+            key_phrase: firstQuestion.unique_part,
+            year: firstQuestion.year
+          });
+          setQuizScreen('question');
+        } else {
+          alert('No past paper questions available for this chapter.');
+        }
+      } catch (error) {
+        console.error('Failed to load past paper questions:', error);
+        alert('Failed to load past paper questions. Please try again.');
+      } finally {
+        setQuizGenerating(false);
+      }
+    } else {
+      // Original generative quiz logic
+      try {
+        const quizSet = await quizService.startQuizSet(quizUser, topic, existingSetId);
+        setSelectedTopic(quizSet.chapter_name);
+        setQuizSetId(quizSet.set_id);
+        setAttemptId(quizSet.attempt_id);
+        setQuizQuestions(quizSet.questions);
+        setPastPaperQuestions([]); // Clear past paper questions
+        setCurrentQuestion(quizSet.questions[0]);
+        setCurrentQuestionIndex(0);
+        setQuestionNumber(1);
+        setCorrectCount(0);
+        setCurrentAnswer('');
+        setEvaluationResult(null);
+        setQuizSummary(null);
+        setQuizScreen('question');
+      } catch (err) {
+        console.error('Failed to start quiz', err);
+        alert('Failed to generate quiz questions. Please try again.');
+      } finally {
+        setQuizGenerating(false);
+      }
+    }
+  };
+
+  // Handle canceling quiz generation
+  const handleCancelGeneration = () => {
+    setQuizGenerating(false);
+    setCurrentGenerationTopic('');
+    
+    // Return to appropriate screen based on mode
+    if (quizMode === 'adaptive') {
+      setAdaptiveScreen('start');
+    } else {
+      setQuizScreen('start');
     }
   };
 
   const handleQuizSubmit = async (answer: string) => {
-    if (!currentQuestion || !quizSetId || !attemptId || !quizUser) return;
+    if (!currentQuestion || !quizUser) return;
 
     setCurrentAnswer(answer);
 
     try {
-      const result = await quizService.submitQuizSetAnswer(
-        quizSetId,
-        attemptId,
-        quizUser,
-        currentQuestionIndex,
-        answer
-      );
+      let result;
+      
+      if (quizMode === 'pastpaper') {
+        // Use past paper evaluation
+        result = await pastPaperService.evaluateAnswer(
+          answer,
+          currentQuestion.correct_answer,
+          currentQuestion.question,
+          currentQuestion.year || ''
+        );
+      } else {
+        // Use regular quiz evaluation
+        if (!quizSetId || !attemptId) return;
+        result = await quizService.submitQuizSetAnswer(
+          quizSetId,
+          attemptId,
+          quizUser,
+          currentQuestionIndex,
+          answer
+        );
+      }
 
       setEvaluationResult(result);
       if (result.correct) setCorrectCount((prev) => prev + 1);
@@ -219,14 +300,31 @@ export function App() {
 
   const handleQuizNext = async () => {
     const nextIndex = currentQuestionIndex + 1;
-    if (nextIndex >= quizQuestions.length) {
+    
+    // Check quiz length based on quiz mode
+    const totalQuestions = quizMode === 'pastpaper' ? pastPaperQuestions.length : quizQuestions.length;
+    
+    if (nextIndex >= totalQuestions) {
       await handleQuizComplete();
       return;
     }
 
     setCurrentQuestionIndex(nextIndex);
     setQuestionNumber(nextIndex + 1);
-    setCurrentQuestion(quizQuestions[nextIndex]);
+    
+    // Set next question based on quiz mode
+    if (quizMode === 'pastpaper') {
+      const nextPastPaperQuestion = pastPaperQuestions[nextIndex];
+      setCurrentQuestion({
+        question: nextPastPaperQuestion.question,
+        correct_answer: nextPastPaperQuestion.correct_answer,
+        key_phrase: nextPastPaperQuestion.unique_part,
+        year: nextPastPaperQuestion.year
+      });
+    } else {
+      setCurrentQuestion(quizQuestions[nextIndex]);
+    }
+    
     setCurrentAnswer('');
     setEvaluationResult(null);
     setQuizScreen('question');
@@ -285,6 +383,15 @@ export function App() {
     handleQuizStart(chapterName, setId);
   };
 
+  const handleViewProfile = () => {
+    setQuizScreen('profile');
+  };
+
+  const handleProfileBack = () => {
+    setQuizScreen('start');
+    setQuizMode('none');
+  };
+
   // =========================
   // Adaptive Quiz Handlers
   // =========================
@@ -299,9 +406,25 @@ export function App() {
     setAdaptiveScreen('start');
   };
 
+  const handleSelectPastPaper = () => {
+    setQuizMode('pastpaper');
+    setQuizScreen('start');
+  };
+
+  const handlePastPaperBack = () => {
+    setQuizMode('none');
+    setQuizScreen('start');
+  };
+
   const handleAdaptiveStart = async (chapter: string) => {
     if (!quizUser) return;
+    
+    // Set unified loading state  
+    setQuizGenerating(true);
+    setCurrentGenerationTopic(chapter);
+    setCurrentGenerationMode('adaptive');
     setAdaptiveLoading(true);
+    
     try {
       const res = await adaptiveService.start(quizUser, chapter);
       setAdaptiveSessionId(res.session_id);
@@ -319,8 +442,10 @@ export function App() {
       setAdaptiveScreen('question');
     } catch (err) {
       console.error('Failed to start adaptive quiz', err);
+      alert('Failed to start adaptive quiz. Please try again.');
     } finally {
       setAdaptiveLoading(false);
+      setQuizGenerating(false);
     }
   };
 
@@ -446,8 +571,22 @@ export function App() {
   <>
     {quizUser == null ? (
       <UserAuth onAuthSuccess={handleQuizAuthSuccess} />
+    ) : quizScreen === 'profile' ? (
+      <UserProfilePage username={quizUser} onBack={handleProfileBack} />
+    ) : quizGenerating ? (
+      <QuizLoading 
+        mode={currentGenerationMode}
+        topic={currentGenerationTopic}
+        onCancel={handleCancelGeneration}
+      />
     ) : quizMode === 'none' ? (
-      <QuizModeSelect onSelectGenerative={handleSelectGenerative} onSelectAdaptive={handleSelectAdaptive} />
+      <QuizModeSelect 
+        onSelectGenerative={handleSelectGenerative} 
+        onSelectAdaptive={handleSelectAdaptive}
+        onSelectPastPaper={handleSelectPastPaper}
+        onViewProfile={handleViewProfile}
+        username={quizUser}
+      />
     ) : quizMode === 'generative' ? (
       <>
         {quizScreen === 'start' && (
@@ -473,6 +612,7 @@ export function App() {
             totalQuestions={quizQuestions.length || 10}
             onSubmit={handleQuizSubmit}
             onSkip={handleQuizSkip}
+            isPastPaper={false}
           />
         )}
 
@@ -492,6 +632,49 @@ export function App() {
             summary={quizSummary}
             correctCount={correctCount}
             totalQuestions={quizQuestions.length}
+            onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
+            onGoHome={handleQuizHome}
+            onStartNew={() => setQuizScreen('start')}
+          />
+        )}
+      </>
+    ) : quizMode === 'pastpaper' ? (
+      <>
+        {quizScreen === 'start' && (
+          <PastPaperQuizStart
+            onStart={handleQuizStart}
+            onBack={handlePastPaperBack}
+          />
+        )}
+
+        {/* Past Paper Quiz uses same QuizQuestion and QuizFeedback components */}
+        {quizScreen === 'question' && currentQuestion && (
+          <QuizQuestion
+            question={currentQuestion}
+            questionNumber={questionNumber}
+            totalQuestions={pastPaperQuestions.length || 10}
+            onSubmit={handleQuizSubmit}
+            onSkip={handleQuizSkip}
+            isPastPaper={true}
+          />
+        )}
+
+        {quizScreen === 'feedback' && evaluationResult && currentQuestion && (
+          <QuizFeedback
+            question={currentQuestion.question}
+            answer={currentAnswer}
+            result={evaluationResult}
+            onNext={handleQuizNext}
+            onGoHome={handleQuizHome}
+            isLastQuestion={questionNumber === pastPaperQuestions.length}
+          />
+        )}
+
+        {quizScreen === 'summary' && quizSummary && (
+          <QuizSummary
+            summary={quizSummary}
+            correctCount={correctCount}
+            totalQuestions={pastPaperQuestions.length}
             onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
             onGoHome={handleQuizHome}
             onStartNew={() => setQuizScreen('start')}

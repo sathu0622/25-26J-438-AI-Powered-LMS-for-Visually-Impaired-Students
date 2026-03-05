@@ -7,6 +7,7 @@ import pandas as pd
 import os
 import uvicorn
 from Quiz import quiz_routes
+from Quiz.quiz_routes import load_past_paper_data
 from UserManagement import user_routes
 import adaptive_routes
 
@@ -73,6 +74,10 @@ else:
     df_syl = None
     AVAILABLE_CHAPTERS = []
 
+# Load past paper data
+print(" Loading Past Paper Questions...")
+load_past_paper_data()
+
 # --- 3. STATE ---
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -84,6 +89,9 @@ quiz_routes.AVAILABLE_CHAPTERS = AVAILABLE_CHAPTERS
 quiz_routes.prefetch_cache = {}
 quiz_routes.question_history = {}
 quiz_routes.llm = llm
+
+# Share SBERT model with Adaptive module
+adaptive_routes.sbert_model = sbert_model
 
 # Mount routers
 app.include_router(quiz_routes.router)

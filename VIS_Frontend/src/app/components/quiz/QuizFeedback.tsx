@@ -81,9 +81,7 @@ export const QuizFeedback = ({
                   : "bg-red-50 border border-red-200"
               }`}
             >
-              <div className="flex justify-center mb-4">
-                {getIcon()}
-              </div>
+             
               <h2 className="text-4xl font-bold mb-2">{result.score}%</h2>
               <div className="flex items-center justify-center gap-2 mt-2">
                 {isCorrect ? (
@@ -119,20 +117,7 @@ export const QuizFeedback = ({
           </Card>
           {/* ================= RIGHT PANE ================= */}
           <div className="space-y-4">
-            {/* Audio Playback */}
-            <Card className="p-6 flex items-center justify-between">
-              <div>
-                <p className="text-sm font-semibold text-muted-foreground mb-1">AUDIO PLAYBACK</p>
-                <p className="text-xs text-muted-foreground">Ready to play</p>
-              </div>
-              <Button
-                variant="secondary"
-                onClick={() => speak(`You scored ${result.score} percent. ${result.feedback}`)}
-                className="font-semibold"
-              >
-                <Play className="mr-2 h-4 w-4" /> Play
-              </Button>
-            </Card>
+            
             {/* Your Answer */}
             <Card className="p-6 bg-white border border-gray-200 flex items-center justify-between">
               <div>

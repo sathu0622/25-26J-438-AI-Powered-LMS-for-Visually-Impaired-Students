@@ -9,10 +9,14 @@ from bson import ObjectId
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from pymongo import MongoClient
+from sentence_transformers import util
 from dotenv import load_dotenv
 
 
 # Lightweight 2PL adaptive quiz using a static item bank loaded from QuizDataset.csv
+
+# These will be set by main.py
+sbert_model = None
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ITEM_BANK_FILE = os.path.join(BASE_DIR, "QuizDataset.csv")
@@ -51,6 +55,7 @@ class AdaptiveItem(BaseModel):
     difficulty_label: str
     discrimination: float
     context: str
+    key_phrase: Optional[str] = ""
 
 
 _difficulty_map = {
@@ -79,6 +84,8 @@ def _load_item_bank() -> Dict[str, List[AdaptiveItem]]:
         chapter = str(row["Chapter"]).strip()
         difficulty_label = str(row.get("Difficulty", "medium")).strip()
         diff_val = _difficulty_map.get(difficulty_label.lower(), 0.0)
+        # Extract key phrase if available (could be same as correct answer or from a separate column)
+        key_phrase = str(row.get("KeyPhrase", row.get("CorrectAnswer", ""))).strip()
         item = AdaptiveItem(
             item_id=f"{chapter}::{idx}",
             chapter_name=chapter,
@@ -88,6 +95,7 @@ def _load_item_bank() -> Dict[str, List[AdaptiveItem]]:
             difficulty=diff_val,
             difficulty_label=difficulty_label,
             discrimination=1.0,
+            key_phrase=key_phrase,
         )
         bank.setdefault(chapter, []).append(item)
 
@@ -125,14 +133,70 @@ def _pick_next_item(chapter: str, level: str, asked: set[str], theta: float) -> 
     return remaining[0]
 
 
-def _score_answer(user_answer: str, item: AdaptiveItem) -> bool:
-    ua = user_answer.strip().lower()
-    ca = item.correct_answer.strip().lower()
-    if not ua:
-        return False
-    if ua == ca:
-        return True
-    return ca in ua or ua in ca
+def _evaluate_answer(user_answer: str, item: AdaptiveItem) -> dict:
+    """Evaluate answer using SBERT semantic similarity like quiz_routes.py"""
+    if not user_answer:
+        return {
+            "correct": False,
+            "score": 0,
+            "feedback": "Please type an answer!",
+        }
+
+    if sbert_model is None:
+        raise HTTPException(500, "SBERT model not initialized")
+
+    target = item.correct_answer if item.correct_answer and len(item.correct_answer) > 2 else "Refer to context"
+    key_phrase = item.key_phrase or ""
+
+    # Check key phrase first for exact match
+    if key_phrase and len(key_phrase) > 2:
+        if key_phrase.lower() in user_answer.lower():
+            return {
+                "correct": True,
+                "score": 100,
+                "feedback": "🎯 Excellent! You got it right!",
+            }
+
+    # Use SBERT semantic similarity
+    try:
+        emb1 = sbert_model.encode(user_answer, convert_to_tensor=True)
+        emb2 = sbert_model.encode(target, convert_to_tensor=True)
+        score = util.pytorch_cos_sim(emb1, emb2).item()
+        
+        if score > 0.60:
+            return {
+                "correct": True,
+                "score": int(score * 100),
+                "feedback": "Your Answer is Correct",
+            }
+        elif score > 0.50:
+            return {
+                "correct": True,  # Partially correct still counts as correct for adaptive quiz
+                "score": int(score * 100),
+                "feedback": "You are Partially Correct, You have missed some details",
+            }
+        else:
+            return {
+                "correct": False,
+                "score": int(score * 100),
+                "feedback": "Your Answer is Incorrect",
+            }
+    except Exception as e:
+        print(f"SBERT evaluation error: {e}")
+        # Fallback to simple comparison if SBERT fails
+        ua = user_answer.strip().lower()
+        ca = target.strip().lower()
+        if ua == ca:
+            return {
+                "correct": True,
+                "score": 100,
+                "feedback": "Correct (exact match)",
+            }
+        return {
+            "correct": False,
+            "score": 0,
+            "feedback": "Incorrect",
+        }
 
 
 @router.get("/chapters")
@@ -191,7 +255,8 @@ def adaptive_answer(req: AdaptiveAnswerRequest):
     if not item:
         raise HTTPException(400, "Item not found for chapter")
 
-    is_correct = _score_answer(req.user_answer, item)
+    evaluation = _evaluate_answer(req.user_answer, item)
+    is_correct = evaluation["correct"]
     new_theta = _update_theta(session.get("theta", 0.0), item.discrimination, item.difficulty, is_correct)
 
     asked_set.add(item.item_id)
@@ -224,6 +289,8 @@ def adaptive_answer(req: AdaptiveAnswerRequest):
 
     return {
         "correct": is_correct,
+        "score": evaluation["score"],
+        "feedback": evaluation["feedback"],
         "theta": new_theta,
         "level": current_level,
         "correct_answer": item.correct_answer,
@@ -240,8 +307,29 @@ def adaptive_finish(req: AdaptiveFinishRequest):
     except Exception:
         raise HTTPException(400, "Invalid session id")
 
+    # Calculate final summary before finishing
+    session = adaptive_sessions_col.find_one({"_id": session_obj_id, "username": req.username})
+    if not session:
+        raise HTTPException(404, "Session not found")
+    
+    # Store final summary for profile display
+    final_theta = session.get('theta', 0.0)
+    total_questions = len(session.get('asked', []))
+    final_level = session.get('current_level', 'easy')
+    
     adaptive_sessions_col.update_one(
         {"_id": session_obj_id, "username": req.username},
-        {"$set": {"active": False, "updated_at": datetime.utcnow()}},
+        {
+            "$set": {
+                "active": False, 
+                "updated_at": datetime.utcnow(),
+                "final_summary": {
+                    "final_theta": final_theta,
+                    "final_level": final_level,
+                    "total_questions": total_questions,
+                    "completed_at": datetime.utcnow()
+                }
+            }
+        },
     )
     return {"status": "ok"}

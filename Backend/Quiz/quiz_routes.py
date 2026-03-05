@@ -4,6 +4,7 @@ import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
+import pandas as pd
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
@@ -14,7 +15,9 @@ from dotenv import load_dotenv
 # These will be set by main.py
 sbert_model = None
 df_syl = None
+df_past_papers = None  # For past paper questions
 AVAILABLE_CHAPTERS = []
+PAST_PAPER_CHAPTERS = []  # For past paper chapters
 prefetch_cache = {}
 question_history = {}
 llm = None  # Injected Llama model
@@ -47,6 +50,15 @@ class AnswerSetRequest(BaseModel):
 
 class CompleteAttemptRequest(BaseModel):
     username: str
+
+class PastPaperChapterRequest(BaseModel):
+    chapter_name: str
+
+class PastPaperAnswerRequest(BaseModel):
+    user_answer: str
+    correct_answer: str
+    question: str
+    year: str
 
 # --- 4. Question genaration ---
 def run_ai_generation(chapter_name: str):
@@ -399,3 +411,140 @@ def list_quiz_sets(username: str):
         )
 
     return {"quiz_sets": payload}
+
+# === PAST PAPER QUIZ ENDPOINTS ===
+
+@router.get("/past-paper/chapters")
+def get_past_paper_chapters():
+    """Get available chapters from past paper questions"""
+    return {"chapters": PAST_PAPER_CHAPTERS}
+
+@router.post("/past-paper/questions")
+def get_past_paper_questions(req: PastPaperChapterRequest):
+    """Get all past paper questions for a specific chapter"""
+    if df_past_papers is None:
+        raise HTTPException(500, "Past paper data not loaded")
+    
+    # Filter questions by chapter
+    chapter_questions = df_past_papers[df_past_papers['Chapter'] == req.chapter_name]
+    
+    if chapter_questions.empty:
+        raise HTTPException(404, f"No past paper questions found for chapter: {req.chapter_name}")
+    
+    # Convert to list of dictionaries
+    questions = []
+    for _, row in chapter_questions.iterrows():
+        questions.append({
+            "question": row['Question'],
+            "correct_answer": row['CorrectAnswer'], 
+            "unique_part": row['UniquePart'],
+            "year": str(row['Year']),
+            "chapter": row['Chapter']
+        })
+    
+    return {"questions": questions}
+
+@router.post("/past-paper/evaluate")
+def evaluate_past_paper_answer(req: PastPaperAnswerRequest):
+    """Evaluate past paper answer using SBERT similarity matching"""
+    if sbert_model is None:
+        raise HTTPException(500, "SBERT model not initialized")
+    
+    # Clean and prepare texts for comparison
+    user_answer = req.user_answer.strip().lower()
+    correct_answer = req.correct_answer.strip().lower()
+    
+    if not user_answer:
+        return {
+            "score": 0,
+            "feedback": "No answer provided. Please provide an answer to continue.",
+            "correct": False,
+            "similarity_score": 0.0
+        }
+    
+    try:
+        # Generate embeddings
+        user_embedding = sbert_model.encode([user_answer])
+        correct_embedding = sbert_model.encode([correct_answer])
+        
+        # Calculate cosine similarity
+        similarity = util.cos_sim(user_embedding, correct_embedding)[0][0].item()
+        
+        # Convert similarity to percentage score (0-100)
+        score = max(0, min(100, int(similarity * 100)))
+        
+        # Generate feedback based on similarity score
+        if similarity >= 0.85:
+            feedback = "Excellent! Your answer demonstrates a comprehensive understanding of the topic."
+            correct = True
+        elif similarity >= 0.70:
+            feedback = "Good answer! You've captured the main concepts well."
+            correct = True
+        elif similarity >= 0.50:
+            feedback = "Fair attempt. Your answer partially addresses the question but could be more complete."
+            correct = False
+        elif similarity >= 0.30:
+            feedback = "The answer doesn't adequately address the question. Please review the topic and try again."
+            correct = False
+        else:
+            feedback = "The answer doesn't adequately address the question. Please review the topic and try again."
+            correct = False
+        
+        return {
+            "score": score,
+            "feedback": feedback,
+            "correct": correct,
+            "similarity_score": round(similarity, 4),
+            "correct_answer": req.correct_answer
+        }
+        
+    except Exception as e:
+        print(f"Error in past paper evaluation: {str(e)}")
+        return {
+            "score": 0,
+            "feedback": "Error occurred during evaluation. Please try again.",
+            "correct": False,
+            "similarity_score": 0.0
+        }
+
+def load_past_paper_data():
+    """Load past paper questions from CSV file"""
+    global df_past_papers, PAST_PAPER_CHAPTERS
+    
+    try:
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        past_paper_file = os.path.join(base_dir, "PastPaperQuestions.csv")
+        
+        if not os.path.exists(past_paper_file):
+            print(f"⚠️ Past paper file not found at: {past_paper_file}")
+            return
+        
+        # Try multiple encodings to handle different file formats
+        encodings = ['utf-8', 'utf-8-sig', 'latin-1', 'cp1252', 'iso-8859-1']
+        df_past_papers = None
+        
+        for encoding in encodings:
+            try:
+                print(f"🔍 Trying to load CSV with {encoding} encoding...")
+                df_past_papers = pd.read_csv(past_paper_file, encoding=encoding)
+                print(f"✅ Successfully loaded with {encoding} encoding")
+                break
+            except UnicodeDecodeError as e:
+                print(f"⚠️ Failed with {encoding}: {str(e)}")
+                continue
+            except Exception as e:
+                print(f"⚠️ Error with {encoding}: {str(e)}")
+                continue
+        
+        if df_past_papers is None:
+            raise Exception("Could not load CSV file with any supported encoding")
+            
+        PAST_PAPER_CHAPTERS = sorted(df_past_papers['Chapter'].unique().tolist())
+        
+        print(f"✅ Loaded {len(df_past_papers)} past paper questions from {len(PAST_PAPER_CHAPTERS)} chapters")
+        print(f"📚 Past Paper Chapters: {PAST_PAPER_CHAPTERS}")
+        
+    except Exception as e:
+        print(f"❌ Error loading past paper data: {str(e)}")
+        df_past_papers = None
+        PAST_PAPER_CHAPTERS = []

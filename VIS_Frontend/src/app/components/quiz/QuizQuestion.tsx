@@ -17,12 +17,13 @@ interface QuizQuestionProps {
     question: string;
     correct_answer: string;
     key_phrase: string;
+    year?: string; // Optional year for past paper questions
   };
  questionNumber: number;
   totalQuestions: number;
   onSubmit: (answer: string) => void;
   onSkip: () => void;
-
+  isPastPaper?: boolean; // Flag to indicate if this is a past paper question
 }
 
 export const QuizQuestion = ({
@@ -31,6 +32,7 @@ export const QuizQuestion = ({
   totalQuestions,
   onSubmit,
   onSkip,
+  isPastPaper = false,
 }: QuizQuestionProps) => {
   const [answer, setAnswer] = useState('');
   const [inputMode, setInputMode] = useState<'voice' | 'text'>('voice');
@@ -43,8 +45,13 @@ export const QuizQuestion = ({
     cancel();
     setHasReadQuestion(false);
     const timer = setTimeout(() => {
+      // Create the year announcement for past paper questions
+      const yearAnnouncement = isPastPaper && question.year 
+        ? `This question is from the year ${question.year}. ` 
+        : '';
+      
       speak(
-        `Question ${questionNumber} . ${question.question}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question.`,
+        `Question ${questionNumber}. ${yearAnnouncement}${question.question}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question.`,
         { interrupt: true }
       );
       setHasReadQuestion(true);
@@ -93,7 +100,12 @@ export const QuizQuestion = ({
 
   const handleReadQuestion = () => {
     cancel();
-    speak(`Question ${questionNumber}. ${question.question}`, { interrupt: true });
+    // Create the year announcement for past paper questions
+    const yearAnnouncement = isPastPaper && question.year 
+      ? `This question is from the year ${question.year}. ` 
+      : '';
+    
+    speak(`Question ${questionNumber}. ${yearAnnouncement}${question.question}`, { interrupt: true });
   };
 
   const handleVoiceToggle = () => {
