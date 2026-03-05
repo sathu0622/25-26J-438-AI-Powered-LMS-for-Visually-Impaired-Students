@@ -1,23 +1,29 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import ollama
 from sentence_transformers import SentenceTransformer
+from llama_cpp import Llama
+from dotenv import load_dotenv
 import pandas as pd
 import os
 import uvicorn
 from Quiz import quiz_routes
 from UserManagement import user_routes
+import adaptive_routes
 
 # --- CONFIGURATION ---
 
-OLLAMA_MODEL_NAME = "history-tutor" 
+HF_MODEL_REPO = "KavindyaD/history-tuter-gguf"  # Hugging face repo name
+HF_MODEL_FILENAME = "History_Tutor_Llama3.gguf"  # Model file name in the repo
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load env early so HF_TOKEN is available even when started from a different cwd
+load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 SBERT_PATH = os.path.join(
     BASE_DIR,
     "Model",
-    "sbert_history_evaluator_v4"
+    "sbert_sts_history_v18"
 )
 
 SYLLABUS_FILE = os.path.join(
@@ -25,20 +31,31 @@ SYLLABUS_FILE = os.path.join(
     "HistorySyllubusDataSet.csv"
 )
 
-print("\n🚀 Booting up History Tutor (Self-Correcting Edition)...")
-try:
-    ollama.list()
-    print("      ✅ Ollama Connected.")
-except:
-    print("      ❌ Error: Ollama is not running!")
-    exit()
+print("\n🚀 Booting up History Tutor")
 
-print(f"   -> Loading SBERT...")
-if os.path.exists(SBERT_PATH):
-    sbert_model = SentenceTransformer(SBERT_PATH)
-else:
-    sbert_model = SentenceTransformer('all-distilroberta-v1')
-print("      ✅ Evaluator Ready.")
+load_dotenv()  # load HF_TOKEN and other secrets from .env
+
+print("   -> Loading LLM from Hugging Face (GGUF)...")
+HF_TOKEN = os.getenv("HF_TOKEN")
+if not HF_TOKEN:
+    raise RuntimeError("HF_TOKEN env var is required to pull the model from Hugging Face.")
+
+llm = Llama.from_pretrained(
+    repo_id=HF_MODEL_REPO,
+    filename=HF_MODEL_FILENAME,
+    hf_token=HF_TOKEN,
+    n_ctx=4096,
+)
+print("      ✅ LLM Ready.")
+
+print(f"   -> Loading SBERT from {SBERT_PATH}...")
+if not os.path.exists(SBERT_PATH):
+    raise RuntimeError(
+        "SBERT model directory sbert_sts_history_v18 is missing. "
+        f"Expected at: {SBERT_PATH}"
+    )
+sbert_model = SentenceTransformer(SBERT_PATH)
+print("      ✅ Evaluator Ready (sbert_sts_history_v18).")
 
 print(" Loading Syllabus...")
 if os.path.exists(SYLLABUS_FILE):
@@ -66,10 +83,12 @@ quiz_routes.df_syl = df_syl
 quiz_routes.AVAILABLE_CHAPTERS = AVAILABLE_CHAPTERS
 quiz_routes.prefetch_cache = {}
 quiz_routes.question_history = {}
+quiz_routes.llm = llm
 
 # Mount routers
 app.include_router(quiz_routes.router)
 app.include_router(user_routes.router)
+app.include_router(adaptive_routes.router)
 
 if __name__ == "__main__":
     print("\n✅ Server running on http://127.0.0.1:8000")

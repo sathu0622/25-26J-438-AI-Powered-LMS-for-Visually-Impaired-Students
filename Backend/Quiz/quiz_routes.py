@@ -1,6 +1,5 @@
 import random
 import re
-import ollama
 import os
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -18,7 +17,7 @@ df_syl = None
 AVAILABLE_CHAPTERS = []
 prefetch_cache = {}
 question_history = {}
-OLLAMA_MODEL_NAME = "history-tutor"  # Default, can be overwritten by main.py
+llm = None  # Injected Llama model
 
 load_dotenv()
 client = MongoClient(os.getenv("MONGO_URL"))
@@ -84,11 +83,28 @@ Context: "{context[:1500]}"
 {avoid_instruction}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
 QUESTION:"""
 
+    if llm is None:
+        raise HTTPException(500, "Model not initialized")
+
     # retry logic
     for attempt in range(2):
         try:
-            response_obj = ollama.generate(model=OLLAMA_MODEL_NAME, prompt=prompt)
-            resp = response_obj['response']
+            chat_resp = llm.create_chat_completion(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a History Teacher. Read the context and generate exactly one QUESTION, one ANSWER, and one KEY_PHRASE in the specified format.",
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Context: \"{context[:1500]}\"\n{avoid_instruction}\nFormat:\nQUESTION: ...\nANSWER: ...\nKEY_PHRASE: ...",
+                    },
+                ],
+                max_tokens=256,
+                temperature=0.7,
+                top_p=0.9,
+            )
+            resp = chat_resp["choices"][0]["message"]["content"]
         except Exception as e:
             print(f"Generation Error: {e}")
             resp = ""
@@ -173,21 +189,21 @@ def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str):
     if score > 0.75:
         return {
             "score": int(score * 100),
-            "feedback": "✅ Your Answer is Correct",
+            "feedback": "Your Answer is Correct",
             "correct": True,
             "correct_answer": correct_answer,
         }
     if score > 0.60:
         return {
             "score": int(score * 100),
-            "feedback": "⚠️ You are Partially Correct, You have missed some details",
+            "feedback": "You are Partially Correct, You have missed some details",
             "correct": True,
             "correct_answer": correct_answer,
         }
 
     return {
         "score": int(score * 100),
-        "feedback": "❌ Your Answer is Incorrect",
+        "feedback": "Your Answer is Incorrect",
         "correct": False,
         "correct_answer": correct_answer,
     }

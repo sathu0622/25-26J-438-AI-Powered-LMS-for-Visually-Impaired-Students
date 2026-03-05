@@ -9,6 +9,11 @@ import { DocumentModule } from './components/document/DocumentModule';
 import { BrailleUpload } from './components/braille/BrailleUpload';
 import { BrailleEvaluation } from './components/braille/BrailleEvaluation';
 import { QuizStart } from './components/quiz/QuizStart';
+import { QuizModeSelect } from './components/quiz/QuizModeSelect';
+import { AdaptiveStart } from './components/quiz/AdaptiveStart';
+import { AdaptiveQuestion } from './components/quiz/AdaptiveQuestion';
+import { AdaptiveSummary } from './components/quiz/AdaptiveSummary';
+import { AdaptiveFeedback } from './components/quiz/AdaptiveFeedback.tsx';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
 import { QuizSummary } from './components/quiz/QuizSummary';
@@ -20,11 +25,14 @@ import { LessonPlayer } from './components/history/LessonPlayer';
 
 // ✅ NEW: Import quizService instead of local data
 import { quizService, QuizSetListItem, QuizSetSummary, GenerateQuestionResponse } from './services/quizService';
+import { adaptiveService, AdaptiveItem, AdaptiveAnswerResponse } from './services/adaptiveService';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback' | 'summary' | 'dashboard';
 type HistoryScreen = 'home' | 'lessons' | 'player';
+type QuizMode = 'none' | 'generative' | 'adaptive';
+type AdaptiveScreen = 'start' | 'question' | 'feedback' | 'summary';
 
 export function App() {
   const [currentModule, setCurrentModule] = useState<Module>('home');
@@ -36,6 +44,7 @@ export function App() {
   //  QUIZ STATE
   // =========================
   const [quizScreen, setQuizScreen] = useState<QuizScreen>('start');
+  const [quizMode, setQuizMode] = useState<QuizMode>('none');
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [quizQuestions, setQuizQuestions] = useState<GenerateQuestionResponse[]>([]);
   const [quizSetId, setQuizSetId] = useState<string | null>(null);
@@ -48,6 +57,21 @@ export function App() {
   const [correctCount, setCorrectCount] = useState(0);
   const [quizSummary, setQuizSummary] = useState<QuizSetSummary | null>(null);
   const [savedQuizSets, setSavedQuizSets] = useState<QuizSetListItem[]>([]);
+  // Adaptive state
+  const [adaptiveScreen, setAdaptiveScreen] = useState<AdaptiveScreen>('start');
+  const [adaptiveSessionId, setAdaptiveSessionId] = useState<string | null>(null);
+  const [adaptiveItem, setAdaptiveItem] = useState<AdaptiveItem | null>(null);
+  const [adaptiveTheta, setAdaptiveTheta] = useState<number>(0);
+  const [adaptiveCorrect, setAdaptiveCorrect] = useState<number>(0);
+  const [adaptiveTotal, setAdaptiveTotal] = useState<number>(0);
+  const [adaptiveFeedback, setAdaptiveFeedback] = useState<string>('');
+  const [adaptiveLoading, setAdaptiveLoading] = useState<boolean>(false);
+  const [adaptiveChapter, setAdaptiveChapter] = useState<string>('');
+  const [adaptiveResult, setAdaptiveResult] = useState<AdaptiveAnswerResponse | null>(null);
+  const [adaptiveLastQuestion, setAdaptiveLastQuestion] = useState<AdaptiveItem | null>(null);
+  const [adaptiveLastAnswer, setAdaptiveLastAnswer] = useState<string>('');
+  const [adaptiveNextItem, setAdaptiveNextItem] = useState<AdaptiveItem | null>(null);
+  const [adaptiveCompleted, setAdaptiveCompleted] = useState<boolean>(false);
   // User state for Quiz
   const [quizUser, setQuizUser] = useState<string | null>(() => {
     return localStorage.getItem('quizUser');
@@ -93,6 +117,8 @@ export function App() {
       setBrailleScreen('upload');
     } else if (target === 'quiz') {
       handleQuizHome();
+      setQuizMode('none');
+      setAdaptiveScreen('start');
       // Do NOT reset quizUser here; keep login persistent until logout
     } else if (target === 'history') {
       setHistoryScreen('home');
@@ -226,6 +252,7 @@ export function App() {
 
   function handleQuizHome() {
     setQuizScreen('start');
+    setQuizMode('none');
     setCurrentQuestion(null);
     setCurrentAnswer('');
     setEvaluationResult(null);
@@ -236,6 +263,18 @@ export function App() {
     setQuizSummary(null);
     setQuizSetId(null);
     setAttemptId(null);
+    setAdaptiveSessionId(null);
+    setAdaptiveItem(null);
+    setAdaptiveFeedback('');
+    setAdaptiveTheta(0);
+    setAdaptiveCorrect(0);
+    setAdaptiveTotal(0);
+    setAdaptiveScreen('start');
+    setAdaptiveResult(null);
+    setAdaptiveLastQuestion(null);
+    setAdaptiveLastAnswer('');
+    setAdaptiveNextItem(null);
+    setAdaptiveCompleted(false);
   }
 
   const handleShowDashboard = () => {
@@ -244,6 +283,100 @@ export function App() {
 
   const handleRetakeSet = (setId: string, chapterName: string) => {
     handleQuizStart(chapterName, setId);
+  };
+
+  // =========================
+  // Adaptive Quiz Handlers
+  // =========================
+
+  const handleSelectGenerative = () => {
+    setQuizMode('generative');
+    setQuizScreen('start');
+  };
+
+  const handleSelectAdaptive = () => {
+    setQuizMode('adaptive');
+    setAdaptiveScreen('start');
+  };
+
+  const handleAdaptiveStart = async (chapter: string) => {
+    if (!quizUser) return;
+    setAdaptiveLoading(true);
+    try {
+      const res = await adaptiveService.start(quizUser, chapter);
+      setAdaptiveSessionId(res.session_id);
+      setAdaptiveTheta(res.theta);
+      setAdaptiveItem(res.item);
+      setAdaptiveChapter(chapter);
+      setAdaptiveCorrect(0);
+      setAdaptiveTotal(0);
+      setAdaptiveFeedback('');
+      setAdaptiveResult(null);
+      setAdaptiveLastQuestion(null);
+      setAdaptiveLastAnswer('');
+      setAdaptiveNextItem(null);
+      setAdaptiveCompleted(false);
+      setAdaptiveScreen('question');
+    } catch (err) {
+      console.error('Failed to start adaptive quiz', err);
+    } finally {
+      setAdaptiveLoading(false);
+    }
+  };
+
+  const handleAdaptiveSubmit = async (answer: string) => {
+    if (!adaptiveItem || !adaptiveSessionId || !quizUser) return;
+    setAdaptiveLoading(true);
+    try {
+      setAdaptiveLastQuestion(adaptiveItem);
+      setAdaptiveLastAnswer(answer);
+      const res = await adaptiveService.answer(adaptiveSessionId, adaptiveItem.item_id, answer, quizUser);
+      setAdaptiveTheta(res.theta);
+      setAdaptiveCorrect((c) => c + (res.correct ? 1 : 0));
+      setAdaptiveTotal((t) => t + 1);
+      setAdaptiveFeedback(res.correct ? 'Correct!' : `Incorrect. Correct answer: ${res.correct_answer}`);
+      setAdaptiveResult(res);
+
+      if (res.done || !res.next_item) {
+        await adaptiveService.finish(adaptiveSessionId, quizUser);
+        setAdaptiveCompleted(true);
+        setAdaptiveNextItem(null);
+      } else {
+        setAdaptiveCompleted(false);
+        setAdaptiveNextItem(res.next_item);
+      }
+      setAdaptiveScreen('feedback');
+    } catch (err) {
+      console.error('Failed to submit adaptive answer', err);
+    } finally {
+      setAdaptiveLoading(false);
+    }
+  };
+
+  const handleAdaptiveNext = () => {
+    if (adaptiveCompleted || !adaptiveNextItem) {
+      setAdaptiveScreen('summary');
+      return;
+    }
+    setAdaptiveItem(adaptiveNextItem);
+    setAdaptiveFeedback('');
+    setAdaptiveResult(null);
+    setAdaptiveLastQuestion(null);
+    setAdaptiveLastAnswer('');
+    setAdaptiveNextItem(null);
+    setAdaptiveCompleted(false);
+    setAdaptiveScreen('question');
+  };
+
+  const handleAdaptiveFinish = async () => {
+    if (adaptiveSessionId && quizUser) {
+      try {
+        await adaptiveService.finish(adaptiveSessionId, quizUser);
+      } catch (err) {
+        console.error('Failed to finish adaptive session', err);
+      }
+    }
+    setAdaptiveScreen('summary');
   };
 
  // History Module Handlers
@@ -313,48 +446,97 @@ export function App() {
   <>
     {quizUser == null ? (
       <UserAuth onAuthSuccess={handleQuizAuthSuccess} />
-    ) : quizScreen === 'start' && (
-      <QuizStart onStart={handleQuizStart} onViewSaved={handleShowDashboard} hasSavedSets={savedQuizSets.length > 0} />
-    )}
+    ) : quizMode === 'none' ? (
+      <QuizModeSelect onSelectGenerative={handleSelectGenerative} onSelectAdaptive={handleSelectAdaptive} />
+    ) : quizMode === 'generative' ? (
+      <>
+        {quizScreen === 'start' && (
+          <QuizStart
+            onStart={handleQuizStart}
+            onViewSaved={handleShowDashboard}
+            hasSavedSets={savedQuizSets.length > 0}
+          />
+        )}
 
-    {quizUser && quizScreen === 'dashboard' && (
-      <QuizDashboard
-        sets={savedQuizSets}
-        onRetake={handleRetakeSet}
-        onBack={handleQuizHome}
-      />
-    )}
+        {quizScreen === 'dashboard' && (
+          <QuizDashboard
+            sets={savedQuizSets}
+            onRetake={handleRetakeSet}
+            onBack={handleQuizHome}
+          />
+        )}
 
-    {quizUser && quizScreen === 'question' && currentQuestion && (
-      <QuizQuestion
-        question={currentQuestion}
-        questionNumber={questionNumber}
-        totalQuestions={quizQuestions.length || 10}
-        onSubmit={handleQuizSubmit}
-        onSkip={handleQuizSkip}
-      />
-    )}
+        {quizScreen === 'question' && currentQuestion && (
+          <QuizQuestion
+            question={currentQuestion}
+            questionNumber={questionNumber}
+            totalQuestions={quizQuestions.length || 10}
+            onSubmit={handleQuizSubmit}
+            onSkip={handleQuizSkip}
+          />
+        )}
 
-    {quizUser && quizScreen === 'feedback' && evaluationResult && currentQuestion && (
-      <QuizFeedback
-        question={currentQuestion.question}
-        answer={currentAnswer}
-        result={evaluationResult}
-        onNext={handleQuizNext}
-        onGoHome={handleQuizHome}
-        isLastQuestion={questionNumber === quizQuestions.length}
-      />
-    )}
+        {quizScreen === 'feedback' && evaluationResult && currentQuestion && (
+          <QuizFeedback
+            question={currentQuestion.question}
+            answer={currentAnswer}
+            result={evaluationResult}
+            onNext={handleQuizNext}
+            onGoHome={handleQuizHome}
+            isLastQuestion={questionNumber === quizQuestions.length}
+          />
+        )}
 
-    {quizUser && quizScreen === 'summary' && quizSummary && (
-      <QuizSummary
-        summary={quizSummary}
-        correctCount={correctCount}
-        totalQuestions={quizQuestions.length}
-        onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
-        onGoHome={handleQuizHome}
-        onStartNew={() => setQuizScreen('start')}
-      />
+        {quizScreen === 'summary' && quizSummary && (
+          <QuizSummary
+            summary={quizSummary}
+            correctCount={correctCount}
+            totalQuestions={quizQuestions.length}
+            onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
+            onGoHome={handleQuizHome}
+            onStartNew={() => setQuizScreen('start')}
+          />
+        )}
+      </>
+    ) : (
+      <>
+        {adaptiveScreen === 'start' && (
+          <AdaptiveStart onStart={handleAdaptiveStart} />
+        )}
+        {adaptiveScreen === 'question' && adaptiveItem && (
+          <AdaptiveQuestion
+            item={adaptiveItem}
+            theta={adaptiveTheta}
+            answeredCount={adaptiveTotal}
+            onSubmit={handleAdaptiveSubmit}
+            onFinish={handleAdaptiveFinish}
+            feedback={adaptiveFeedback}
+            lastResult={adaptiveResult}
+            lastQuestion={adaptiveLastQuestion}
+            lastAnswer={adaptiveLastAnswer}
+            loading={adaptiveLoading}
+          />
+        )}
+        {adaptiveScreen === 'feedback' && adaptiveResult && adaptiveLastQuestion && (
+          <AdaptiveFeedback
+            question={adaptiveLastQuestion}
+            answer={adaptiveLastAnswer}
+            result={adaptiveResult}
+            onNext={handleAdaptiveNext}
+            onFinish={handleAdaptiveFinish}
+            isFinal={adaptiveCompleted || !adaptiveNextItem}
+          />
+        )}
+        {adaptiveScreen === 'summary' && (
+          <AdaptiveSummary
+            correctCount={adaptiveCorrect}
+            total={adaptiveTotal}
+            finalTheta={adaptiveTheta}
+            onRestart={() => adaptiveChapter ? handleAdaptiveStart(adaptiveChapter) : setAdaptiveScreen('start')}
+            onHome={handleQuizHome}
+          />
+        )}
+      </>
     )}
   </>
 )}
