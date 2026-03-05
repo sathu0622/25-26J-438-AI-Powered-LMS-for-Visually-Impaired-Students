@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, FileText, X, Info, Loader2 } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { api } from '../../services/api';
+import { brailleApi } from '../../services/api';
 
 interface BrailleUploadProps {
   onUpload: (data: { question: string; answer: string; fullText: string }) => void;
@@ -80,7 +80,7 @@ export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
       const formData = new FormData();
       formData.append('file', selectedFile);
 
-      const response = await api.postFormData<ConvertPdfResponse>(
+      const response = await brailleApi.postFormData<ConvertPdfResponse>(
         '/decode',
         formData
       );
