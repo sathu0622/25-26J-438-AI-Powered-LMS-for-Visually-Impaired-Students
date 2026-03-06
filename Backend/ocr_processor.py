@@ -18,13 +18,36 @@ def ocr_image_simple(image_path: str) -> str:
 
         img = cv2.imread(image_path)
         if img is None:
-            print("OpenCV failed. Trying PIL fallback...")
             pil_img = Image.open(image_path)
             img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2BGR)
 
-        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # Convert to grayscale
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-        text = pytesseract.image_to_string(img_rgb, lang="eng")
+        # Denoise
+        gray = cv2.fastNlMeansDenoising(gray, h=30)
+
+        # Increase contrast with CLAHE
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        gray = clahe.apply(gray)
+
+        # Adaptive thresholding (handles uneven lighting)
+        binary = cv2.adaptiveThreshold(
+            gray, 255,
+            cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
+            cv2.THRESH_BINARY,
+            31, 10
+        )
+
+        # Scale up small images (helps Tesseract a lot)
+        h, w = binary.shape
+        if w < 1800:
+            scale = 1800 / w
+            binary = cv2.resize(binary, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
+
+        # Tesseract config: treat as a full page, OEM 3 = best LSTM mode
+        config = "--oem 3 --psm 6"
+        text = pytesseract.image_to_string(binary, lang="eng", config=config)
 
         print(f"Extracted {len(text)} characters")
         return text.strip()
@@ -41,7 +64,7 @@ def ocr_pdf_simple(pdf_path: str) -> str:
     try:
         print(f"Processing PDF: {pdf_path}")
 
-        pages = convert_from_path(pdf_path, dpi=250)
+        pages = convert_from_path(pdf_path, dpi=300)
 
         all_text = []
 

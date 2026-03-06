@@ -40,7 +40,7 @@ def extract_with_azure(file_path: str) -> Dict[str, Any]:
                 paragraphs.append(p.content)
             full_text = "\n".join(paragraphs)
         
-        # Extract structured articles using EXACT Colab logic
+        # Extract structured articles 
         articles = extract_articles_exact_colab_logic(result)
         
         return {
