@@ -16,6 +16,10 @@ import { AdaptiveStart } from './components/quiz/AdaptiveStart';
 import { AdaptiveQuestion } from './components/quiz/AdaptiveQuestion';
 import { AdaptiveSummary } from './components/quiz/AdaptiveSummary';
 import { AdaptiveFeedback } from './components/quiz/AdaptiveFeedback.tsx';
+import { FreeTextStart } from './components/quiz/FreeTextStart';
+import { FreeTextQuestion } from './components/quiz/FreeTextQuestion';
+import { FreeTextFeedback } from './components/quiz/FreeTextFeedback';
+import { FreeTextSummary } from './components/quiz/FreeTextSummary';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
 import { QuizSummary } from './components/quiz/QuizSummary';
@@ -30,13 +34,15 @@ import { UserProfilePage } from './components/UserProfilePage';
 import { quizService, QuizSetListItem, QuizSetSummary, GenerateQuestionResponse } from './services/quizService';
 import { pastPaperService, PastPaperQuestion } from './services/pastPaperService';
 import { adaptiveService, AdaptiveItem, AdaptiveAnswerResponse } from './services/adaptiveService';
+import { freeTextService, FreeTextQuestion as FreeTextQuestionType, FreeTextAnswerResponse, FreeTextSummary as FreeTextSummaryType, FreeTextNextResponse } from './services/freeTextService';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback' | 'summary' | 'dashboard' | 'profile';
 type HistoryScreen = 'home' | 'lessons' | 'player';
-type QuizMode = 'none' | 'generative' | 'adaptive' | 'pastpaper';
+type QuizMode = 'none' | 'generative' | 'adaptive' | 'pastpaper' | 'freetext';
 type AdaptiveScreen = 'start' | 'question' | 'feedback' | 'summary';
+type FreeTextScreen = 'start' | 'question' | 'feedback' | 'summary';
 
 export function App() {
   const [currentModule, setCurrentModule] = useState<Module>('home');
@@ -80,6 +86,23 @@ export function App() {
   const [adaptiveLastAnswer, setAdaptiveLastAnswer] = useState<string>('');
   const [adaptiveNextItem, setAdaptiveNextItem] = useState<AdaptiveItem | null>(null);
   const [adaptiveCompleted, setAdaptiveCompleted] = useState<boolean>(false);
+  // Free-text quiz state
+  const [freeTextScreen, setFreeTextScreen] = useState<FreeTextScreen>('start');
+  const [freeTextSessionId, setFreeTextSessionId] = useState<string | null>(null);
+  const [freeTextAttemptId, setFreeTextAttemptId] = useState<string | null>(null);
+  const [freeTextQuestion, setFreeTextQuestion] = useState<FreeTextQuestionType | null>(null);
+  const [freeTextQuestionIndex, setFreeTextQuestionIndex] = useState<number>(0);
+  const [freeTextTotalQuestions, setFreeTextTotalQuestions] = useState<number>(0);
+  const [freeTextChapter, setFreeTextChapter] = useState<string>('');
+  const [freeTextLoading, setFreeTextLoading] = useState<boolean>(false);
+  const [freeTextLastResult, setFreeTextLastResult] = useState<FreeTextAnswerResponse | null>(null);
+  const [freeTextLastQuestion, setFreeTextLastQuestion] = useState<FreeTextQuestionType | null>(null);
+  const [freeTextLastAnswer, setFreeTextLastAnswer] = useState<string>('');
+  const [freeTextSummary, setFreeTextSummary] = useState<FreeTextSummaryType | null>(null);
+  const [freeTextAnswers, setFreeTextAnswers] = useState<FreeTextAnswerResponse[]>([]);
+  const [freeTextIsRetake, setFreeTextIsRetake] = useState<boolean>(false);
+  const [freeTextPendingNext, setFreeTextPendingNext] = useState<FreeTextNextResponse | null>(null);
+  const [freeTextLoadingNext, setFreeTextLoadingNext] = useState<boolean>(false);
   // User state for Quiz
   const [quizUser, setQuizUser] = useState<string | null>(() => {
     return localStorage.getItem('quizUser');
@@ -504,6 +527,166 @@ export function App() {
     setAdaptiveScreen('summary');
   };
 
+  // Free-Text Quiz Handlers
+  const handleSelectFreeText = () => {
+    setQuizMode('freetext');
+    setFreeTextScreen('start');
+  };
+
+  const handleFreeTextStart = async (chapter: string, sessionId?: string) => {
+    if (!quizUser) return;
+    
+    setFreeTextLoading(true);
+    setFreeTextChapter(chapter);
+    
+    try {
+      // Start or resume session
+      const res = await freeTextService.start(quizUser, chapter, sessionId);
+      setFreeTextSessionId(res.session_id);
+      setFreeTextAttemptId(res.attempt_id);
+      setFreeTextQuestion(res.current_question);
+      setFreeTextQuestionIndex(res.question_index);
+      setFreeTextTotalQuestions(res.total_questions);
+      setFreeTextIsRetake(res.is_retake);
+      setFreeTextLastResult(null);
+      setFreeTextLastQuestion(null);
+      setFreeTextLastAnswer('');
+      setFreeTextAnswers([]);
+      setFreeTextSummary(null);
+      setFreeTextPendingNext(null);
+      setFreeTextLoadingNext(false);
+      setFreeTextScreen('question');
+    } catch (err) {
+      console.error('Failed to start free-text quiz', err);
+      alert('Failed to start free-text quiz. Please try again.');
+    } finally {
+      setFreeTextLoading(false);
+    }
+  };
+
+  const handleFreeTextSubmit = async (answer: string) => {
+    if (!freeTextQuestion || !freeTextSessionId || !quizUser) return;
+    setFreeTextLoading(true);
+    
+    try {
+      // Save current question before submitting
+      setFreeTextLastQuestion(freeTextQuestion);
+      setFreeTextLastAnswer(answer);
+      
+      // Submit answer and get feedback
+      const res = await freeTextService.submitAnswer(freeTextSessionId, answer, quizUser);
+      setFreeTextLastResult(res);
+      setFreeTextAnswers(prev => [...prev, res]);
+      
+      // Show feedback screen immediately
+      setFreeTextScreen('feedback');
+      setFreeTextLoading(false);
+      
+      // Start loading next question in background
+      setFreeTextLoadingNext(true);
+      setFreeTextPendingNext(null);
+      
+      try {
+        const nextRes = await freeTextService.getNextQuestion(freeTextSessionId, quizUser);
+        setFreeTextPendingNext(nextRes);
+      } catch (err) {
+        console.error('Failed to pre-load next question', err);
+        // Not critical - will load when user clicks next
+      } finally {
+        setFreeTextLoadingNext(false);
+      }
+    } catch (err) {
+      console.error('Failed to submit answer', err);
+      setFreeTextLoading(false);
+    }
+  };
+
+  const handleFreeTextNextFromFeedback = async () => {
+    if (!freeTextSessionId || !quizUser) return;
+    
+    // Use pending next question if available
+    if (freeTextPendingNext) {
+      setFreeTextQuestion(freeTextPendingNext.current_question);
+      setFreeTextQuestionIndex(freeTextPendingNext.question_index);
+      setFreeTextTotalQuestions(freeTextPendingNext.total_questions);
+      setFreeTextIsRetake(freeTextPendingNext.is_retake);
+      setFreeTextPendingNext(null);
+      setFreeTextLastResult(null);
+      setFreeTextLastQuestion(null);
+      setFreeTextLastAnswer('');
+      setFreeTextScreen('question');
+      return;
+    }
+    
+    // Otherwise fetch next question now
+    setFreeTextLoading(true);
+    try {
+      const nextRes = await freeTextService.getNextQuestion(freeTextSessionId, quizUser);
+      setFreeTextQuestion(nextRes.current_question);
+      setFreeTextQuestionIndex(nextRes.question_index);
+      setFreeTextTotalQuestions(nextRes.total_questions);
+      setFreeTextIsRetake(nextRes.is_retake);
+      setFreeTextLastResult(null);
+      setFreeTextLastQuestion(null);
+      setFreeTextLastAnswer('');
+      setFreeTextScreen('question');
+    } catch (err) {
+      console.error('Failed to get next question', err);
+    } finally {
+      setFreeTextLoading(false);
+    }
+  };
+
+  const handleFreeTextFinish = async () => {
+    if (!freeTextSessionId || !quizUser) return;
+    setFreeTextLoading(true);
+    
+    try {
+      const res = await freeTextService.finish(freeTextSessionId, quizUser);
+      setFreeTextSummary(res.summary);
+      setFreeTextAnswers(res.answers);
+      setFreeTextScreen('summary');
+    } catch (err) {
+      console.error('Failed to finish quiz', err);
+    } finally {
+      setFreeTextLoading(false);
+    }
+  };
+
+  const handleFreeTextRestart = () => {
+    setFreeTextSessionId(null);
+    setFreeTextAttemptId(null);
+    setFreeTextQuestion(null);
+    setFreeTextSummary(null);
+    setFreeTextQuestionIndex(0);
+    setFreeTextTotalQuestions(0);
+    setFreeTextLastResult(null);
+    setFreeTextLastQuestion(null);
+    setFreeTextLastAnswer('');
+    setFreeTextAnswers([]);
+    setFreeTextIsRetake(false);
+    setFreeTextPendingNext(null);
+    setFreeTextLoadingNext(false);
+    setFreeTextScreen('start');
+  };
+
+  const handleFreeTextRetake = async () => {
+    if (!freeTextSessionId || !quizUser) return;
+    await handleFreeTextStart(freeTextChapter, freeTextSessionId);
+  };
+
+  const handleFreeTextBack = () => {
+    setQuizMode('none');
+    setFreeTextScreen('start');
+    setFreeTextSessionId(null);
+    setFreeTextAttemptId(null);
+    setFreeTextQuestion(null);
+    setFreeTextSummary(null);
+    setFreeTextAnswers([]);
+    setFreeTextPendingNext(null);
+    setFreeTextLoadingNext(false);
+  };
+
  // History Module Handlers
 
   const handleSelectGrade = (grade: number) => {
@@ -582,11 +765,60 @@ export function App() {
     ) : quizMode === 'none' ? (
       <QuizModeSelect 
         onSelectGenerative={handleSelectGenerative} 
+        onSelectFreeText={handleSelectFreeText}
         onSelectAdaptive={handleSelectAdaptive}
         onSelectPastPaper={handleSelectPastPaper}
         onViewProfile={handleViewProfile}
         username={quizUser}
       />
+    ) : quizMode === 'freetext' ? (
+      <>
+        {freeTextLoading && (
+          <QuizLoading 
+            mode="generative"
+            topic={freeTextChapter}
+            onCancel={() => setFreeTextLoading(false)}
+          />
+        )}
+        {!freeTextLoading && freeTextScreen === 'start' && (
+          <FreeTextStart
+            username={quizUser}
+            onStart={handleFreeTextStart}
+            onBack={handleFreeTextBack}
+          />
+        )}
+        {!freeTextLoading && freeTextScreen === 'question' && freeTextQuestion && (
+          <FreeTextQuestion
+            question={freeTextQuestion}
+            questionIndex={freeTextQuestionIndex}
+            onSubmit={handleFreeTextSubmit}
+            onFinish={handleFreeTextFinish}
+            loading={freeTextLoading}
+            isRetake={freeTextIsRetake}
+          />
+        )}
+        {freeTextScreen === 'feedback' && freeTextLastQuestion && freeTextLastResult && (
+          <FreeTextFeedback
+            question={freeTextLastQuestion}
+            userAnswer={freeTextLastAnswer}
+            result={freeTextLastResult}
+            questionNumber={freeTextQuestionIndex}
+            onNext={handleFreeTextNextFromFeedback}
+            onFinish={handleFreeTextFinish}
+            isLoadingNext={freeTextLoadingNext}
+          />
+        )}
+        {!freeTextLoading && freeTextScreen === 'summary' && freeTextSummary && (
+          <FreeTextSummary
+            summary={freeTextSummary}
+            answers={freeTextAnswers}
+            chapterName={freeTextChapter}
+            onRestart={handleFreeTextRestart}
+            onRetake={handleFreeTextRetake}
+            onHome={handleFreeTextBack}
+          />
+        )}
+      </>
     ) : quizMode === 'generative' ? (
       <>
         {quizScreen === 'start' && (

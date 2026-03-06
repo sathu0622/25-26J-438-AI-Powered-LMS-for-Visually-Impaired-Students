@@ -1,20 +1,21 @@
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
-import { Sparkles, Layers, User, FileText } from 'lucide-react';
+import { Sparkles, Layers, User, FileText, PenLine } from 'lucide-react';
 import { useTTS } from '../../contexts/TTSContext';
 
 interface QuizModeSelectProps {
   onSelectGenerative: () => void;
   onSelectAdaptive: () => void;
   onSelectPastPaper: () => void;
+  onSelectFreeText: () => void;
   onViewProfile: () => void;
   username?: string;
 }
 
-export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectPastPaper, onViewProfile, username }: QuizModeSelectProps) => {
+export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectPastPaper, onSelectFreeText, onViewProfile, username }: QuizModeSelectProps) => {
   const { speak, cancel } = useTTS();
-  const [focusedOption, setFocusedOption] = useState<number>(0); // 0: generative, 1: adaptive, 2: pastpaper, 3: profile
+  const [focusedOption, setFocusedOption] = useState<number>(0); // 0: generative, 1: freetext, 2: adaptive, 3: pastpaper, 4: profile
 
   useEffect(() => {
     // Cancel any previous speech and ensure we start fresh
@@ -28,13 +29,14 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
       const instructions = `
         Quiz Mode Selection Page loaded. Welcome ${username}!
         
-        You are currently on option 1 of 4: Generative Quiz.
+        You are currently on option 1 of 5: Generative MCQ Quiz.
         
         Available options:
-        1: Generative Quiz - AI creates unique questions from your study material
-        2: Adaptive Quiz - Questions adjust difficulty based on your performance  
-        3: Past Paper Quiz - Practice with real exam questions from previous years
-        4: View Profile - See your quiz history and statistics
+        1: Generative MCQ Quiz - AI creates multiple choice questions from your study material
+        2: Generative Free-Text Quiz - AI creates questions, you type answers evaluated by meaning
+        3: Adaptive Quiz - Questions adjust difficulty based on your performance  
+        4: Past Paper Quiz - Practice with real exam questions from previous years
+        5: View Profile - See your quiz history and statistics
         
         To navigate:
         Press Down arrow to move to next option
@@ -42,7 +44,7 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
         Press Enter or Space bar to select the current option
         Press A at any time to repeat these instructions
         
-        You are currently on Generative Quiz. Press Enter to start, or use arrow keys to explore other options.
+        You are currently on Generative MCQ Quiz. Press Enter to start, or use arrow keys to explore other options.
       `;
       
       // Force interrupt any ongoing speech
@@ -59,19 +61,11 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
       startAnnouncement();
     }, 500);
     
-    // Backup announcement in case the first one doesn't work
-    const timer3 = setTimeout(() => {
-      if (speak) {
-        cancel();
-        startAnnouncement();
-      }
-    }, 1000);
-
+    
     // Cleanup function
     return () => {
       clearTimeout(timer1);
       clearTimeout(timer2);
-      clearTimeout(timer3);
       cancel();
     };
   }, [speak, cancel, username]);
@@ -85,9 +79,11 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
         cancel();
         const instructions = `
           Quiz Mode Selection Help:
-          Option 1: Generative Quiz - Uses AI to create unique questions from study material
-          Option 2: Adaptive Quiz - Adjusts question difficulty based on your responses
-          Option 3: View Profile - Check your performance history and statistics
+          Option 1: Generative MCQ Quiz - Uses AI to create multiple choice questions from study material
+          Option 2: Generative Free-Text Quiz - AI creates questions, your answers are evaluated by meaning
+          Option 3: Adaptive Quiz - Adjusts question difficulty based on your responses
+          Option 4: Past Paper Quiz - Practice with real exam questions from previous years
+          Option 5: View Profile - Check your performance history and statistics
           
           Navigation:
           Up/Down arrows: Navigate between options
@@ -102,14 +98,14 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
       // Arrow key navigation with clear selection feedback
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        const newFocus = (focusedOption - 1 + 4) % 4;
+        const newFocus = (focusedOption - 1 + 5) % 5;
         setFocusedOption(newFocus);
         announceOptionSelection(newFocus, 'previous');
       }
 
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        const newFocus = (focusedOption + 1) % 4;
+        const newFocus = (focusedOption + 1) % 5;
         setFocusedOption(newFocus);
         announceOptionSelection(newFocus, 'next');
       }
@@ -117,7 +113,7 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
       // Enter or Space to select with confirmation
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        const optionNames = ['Generative Quiz', 'Adaptive Quiz', 'Past Paper Quiz', 'View Profile'];
+        const optionNames = ['Generative MCQ Quiz', 'Generative Free-Text Quiz', 'Adaptive Quiz', 'Past Paper Quiz', 'View Profile'];
         cancel();
         speak(`You selected ${optionNames[focusedOption]}. Starting now.`, { interrupt: false });
         handleSelection(focusedOption);
@@ -134,8 +130,8 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
   const announceOptionSelection = (optionIndex: number, direction: 'next' | 'previous' | 'focus') => {
     cancel(); // Cancel any previous announcement
     
-    const optionNames = ['Generative Quiz', 'Adaptive Quiz', 'Past Paper Quiz', 'View Profile'];
-    const optionNumbers = ['1', '2', '3', '4'];
+    const optionNames = ['Generative MCQ Quiz', 'Generative Free-Text Quiz', 'Adaptive Quiz', 'Past Paper Quiz', 'View Profile'];
+    const optionNumbers = ['1', '2', '3', '4', '5'];
     const currentOption = optionNames[optionIndex];
     const optionNumber = optionNumbers[optionIndex];
     
@@ -144,12 +140,13 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
     
     // Clear selection announcement
     const selectionAnnouncement = `
-      ${directionText} Option ${optionNumber} of 4 is now selected: ${currentOption}.
+      ${directionText} Option ${optionNumber} of 5 is now selected: ${currentOption}.
     `;
     
     // Detailed descriptions
     const descriptions = [
-      `You selected Generative Quiz. It uses artificial intelligence to create unique questions from your study chapters. Each quiz session will have different questions. Press Enter to start Generative Quiz.`,
+      `You selected Generative MCQ Quiz. It uses artificial intelligence to create multiple choice questions from your study chapters. Each quiz session will have different questions. Press Enter to start Generative MCQ Quiz.`,
+      `You selected Generative Free-Text Quiz. AI generates questions and you type your answers. Your responses are evaluated by meaning using semantic similarity, not exact match. Questions continue as long as you want. Press Enter to start Free-Text Quiz.`,
       `You selected Adaptive Quiz. It automatically adjusts question difficulty based on your performance. If you answer correctly, questions get harder. If you struggle, they get easier. Press Enter to start Adaptive Quiz.`,
       `You selected Past Paper Quiz. It provides real examination questions from previous years, with year announcements for each question. Your answers are evaluated using advanced similarity matching. Press Enter to start Past Paper Quiz.`,
       `You selected View Profile. It lets you know about your complete quiz history, performance statistics, and learning progress. Press Enter to view your profile.`
@@ -166,7 +163,8 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
   const handleSelection = (optionIndex: number) => {
     cancel();
     const selectionMessages = [
-      'Starting Generative Quiz mode. Loading AI question generator.',
+      'Starting Generative MCQ Quiz mode. Loading AI question generator.',
+      'Starting Generative Free-Text Quiz mode. Loading AI question generator with semantic evaluation.',
       'Starting Adaptive Quiz mode. Initializing personalized difficulty system.',
       'Starting Past Paper Quiz mode. Loading examination questions from previous years.',
       'Opening your profile. Loading performance data and quiz history.'
@@ -178,9 +176,10 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
     setTimeout(() => {
       switch(optionIndex) {
         case 0: onSelectGenerative(); break;
-        case 1: onSelectAdaptive(); break;
-        case 2: onSelectPastPaper(); break;
-        case 3: onViewProfile(); break;
+        case 1: onSelectFreeText(); break;
+        case 2: onSelectAdaptive(); break;
+        case 3: onSelectPastPaper(); break;
+        case 4: onViewProfile(); break;
       }
     }, 1500);
   };
@@ -211,9 +210,10 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
       </div>
       
       {/* Quiz Options */}
-      <section className="grid gap-4 md:grid-cols-3" id="quiz-options" role="region" aria-labelledby="quiz-modes-heading">
+      <section className="grid gap-4 md:grid-cols-2" id="quiz-options" role="region" aria-labelledby="quiz-modes-heading">
         <h2 id="quiz-modes-heading" className="sr-only">Available Quiz Modes</h2>
         
+        {/* Option 1: Generative MCQ Quiz */}
         <Card 
           className={`p-6 space-y-4 ${focusedOption === 0 ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
           role="option"
@@ -227,29 +227,30 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
         >
           <div className="flex items-center gap-3">
             <Sparkles className="h-6 w-6 text-primary" aria-hidden="true" />
-            <h3 id="generative-title" className="text-xl font-semibold">Generative Quiz</h3>
+            <h3 id="generative-title" className="text-xl font-semibold">Generative MCQ</h3>
           </div>
           <p id="generative-desc" className="text-sm text-muted-foreground">
-            AI-generated questions from selected chapters. Perfect for diverse practice with unique questions each time.
+            AI-generated multiple choice questions from selected chapters. Perfect for quick practice.
           </p>
           <Button 
             onClick={() => handleSelection(0)} 
             className="w-full"
-            aria-label="Start Generative Quiz - AI-generated questions"
+            aria-label="Start Generative MCQ Quiz"
             onFocus={() => {
               cancel();
-              speak('Generative Quiz start button focused. This is option 1 of 4. Press Enter or Space to begin AI-generated quiz, or use arrow keys to explore other options.', { interrupt: true });
+              speak('Generative MCQ Quiz start button focused. This is option 1 of 5. Press Enter or Space to begin.', { interrupt: true });
             }}
           >
-            Start Generative
+            Start MCQ Quiz
           </Button>
         </Card>
         
+        {/* Option 2: Generative Free-Text Quiz */}
         <Card 
-          className={`p-6 space-y-4 ${focusedOption === 1 ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+          className={`p-6 space-y-4 ${focusedOption === 1 ? 'ring-2 ring-green-500 bg-green-50' : ''}`}
           role="option"
-          aria-labelledby="adaptive-title"
-          aria-describedby="adaptive-desc"
+          aria-labelledby="freetext-title"
+          aria-describedby="freetext-desc"
           tabIndex={0}
           onFocus={() => {
             setFocusedOption(1);
@@ -257,31 +258,31 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
           }}
         >
           <div className="flex items-center gap-3">
-            <Layers className="h-6 w-6 text-primary" aria-hidden="true" />
-            <h3 id="adaptive-title" className="text-xl font-semibold">Adaptive Quiz</h3>
+            <PenLine className="h-6 w-6 text-green-600" aria-hidden="true" />
+            <h3 id="freetext-title" className="text-xl font-semibold">Free-Text Quiz</h3>
           </div>
-          <p id="adaptive-desc" className="text-sm text-muted-foreground">
-            Personalized difficulty that adapts to your performance. Questions become easier or harder based on your answers.
+          <p id="freetext-desc" className="text-sm text-muted-foreground">
+            AI-generated questions with free-form answers. Evaluated by meaning, not exact match. Continue as long as you want.
           </p>
           <Button 
-            variant="outline" 
             onClick={() => handleSelection(1)} 
-            className="w-full"
-            aria-label="Start Adaptive Quiz - Personalized difficulty adjustment"
+            className="w-full bg-green-600 hover:bg-green-700"
+            aria-label="Start Free-Text Quiz"
             onFocus={() => {
               cancel();
-              speak('Adaptive Quiz start button focused. This is option 2 of 4. Press Enter or Space to begin personalized difficulty quiz, or use arrow keys to explore other options.', { interrupt: true });
+              speak('Free-Text Quiz start button focused. This is option 2 of 5. Press Enter or Space to begin.', { interrupt: true });
             }}
           >
-            Start Adaptive
+            Start Free-Text
           </Button>
         </Card>
         
+        {/* Option 3: Adaptive Quiz */}
         <Card 
-          className={`p-6 space-y-4 ${focusedOption === 2 ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+          className={`p-6 space-y-4 ${focusedOption === 2 ? 'ring-2 ring-purple-500 bg-purple-50' : ''}`}
           role="option"
-          aria-labelledby="pastpaper-title"
-          aria-describedby="pastpaper-desc"
+          aria-labelledby="adaptive-title"
+          aria-describedby="adaptive-desc"
           tabIndex={0}
           onFocus={() => {
             setFocusedOption(2);
@@ -289,7 +290,40 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
           }}
         >
           <div className="flex items-center gap-3">
-            <FileText className="h-6 w-6 text-primary" aria-hidden="true" />
+            <Layers className="h-6 w-6 text-purple-600" aria-hidden="true" />
+            <h3 id="adaptive-title" className="text-xl font-semibold">Adaptive Quiz</h3>
+          </div>
+          <p id="adaptive-desc" className="text-sm text-muted-foreground">
+            Personalized difficulty that adapts to your performance. Questions become easier or harder based on your answers.
+          </p>
+          <Button 
+            variant="outline" 
+            onClick={() => handleSelection(2)} 
+            className="w-full"
+            aria-label="Start Adaptive Quiz"
+            onFocus={() => {
+              cancel();
+              speak('Adaptive Quiz start button focused. This is option 3 of 5. Press Enter or Space to begin.', { interrupt: true });
+            }}
+          >
+            Start Adaptive
+          </Button>
+        </Card>
+        
+        {/* Option 4: Past Paper Quiz */}
+        <Card 
+          className={`p-6 space-y-4 ${focusedOption === 3 ? 'ring-2 ring-orange-500 bg-orange-50' : ''}`}
+          role="option"
+          aria-labelledby="pastpaper-title"
+          aria-describedby="pastpaper-desc"
+          tabIndex={0}
+          onFocus={() => {
+            setFocusedOption(3);
+            announceOptionSelection(3, 'focus');
+          }}
+        >
+          <div className="flex items-center gap-3">
+            <FileText className="h-6 w-6 text-orange-600" aria-hidden="true" />
             <h3 id="pastpaper-title" className="text-xl font-semibold">Past Paper Quiz</h3>
           </div>
           <p id="pastpaper-desc" className="text-sm text-muted-foreground">
@@ -297,12 +331,12 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
           </p>
           <Button 
             variant="outline" 
-            onClick={() => handleSelection(2)} 
+            onClick={() => handleSelection(3)} 
             className="w-full"
-            aria-label="Start Past Paper Quiz - Real exam questions with year announcements"
+            aria-label="Start Past Paper Quiz"
             onFocus={() => {
               cancel();
-              speak('Past Paper Quiz start button focused. This is option 3 of 4. Press Enter or Space to begin practicing with real exam questions from previous years, or use arrow keys to explore other options.', { interrupt: true });
+              speak('Past Paper Quiz start button focused. This is option 4 of 5. Press Enter or Space to begin.', { interrupt: true });
             }}
           >
             Start Past Papers
@@ -314,14 +348,14 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
       <section role="region" aria-labelledby="profile-section-heading">
         <h2 id="profile-section-heading" className="sr-only">Profile and Performance</h2>
         <Card 
-          className={`p-6 ${focusedOption === 3 ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+          className={`p-6 ${focusedOption === 4 ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
           role="option"
           aria-labelledby="profile-title"
           aria-describedby="profile-desc"
           tabIndex={0}
           onFocus={() => {
-            setFocusedOption(3);
-            announceOptionSelection(3, 'focus');
+            setFocusedOption(4);
+            announceOptionSelection(4, 'focus');
           }}
         >
           <div className="flex items-center justify-between">
@@ -336,11 +370,11 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
             </div>
             <Button 
               variant="secondary" 
-              onClick={() => handleSelection(3)}
-              aria-label="View Profile - See quiz history and performance statistics"
+              onClick={() => handleSelection(4)}
+              aria-label="View Profile"
               onFocus={() => {
                 cancel();
-                speak('View Profile button focused. This is option 4 of 4. Press Enter or Space to access your performance history and statistics, or use arrow keys to explore other options.', { interrupt: true });
+                speak('View Profile button focused. This is option 5 of 5. Press Enter or Space to access your profile.', { interrupt: true });
               }}
             >
               View Profile

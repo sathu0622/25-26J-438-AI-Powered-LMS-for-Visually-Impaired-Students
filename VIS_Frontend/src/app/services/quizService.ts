@@ -5,9 +5,12 @@ export interface ChapterResponse {
 }
 
 export interface GenerateQuestionResponse {
+  year: string;
   question: string;
   correct_answer: string;
   key_phrase: string;
+  options?: string[];      // MCQ options (4 choices)
+  correct_index?: number;  // Index of correct answer in options array
 }
 
 export interface EvaluateAnswerResponse {

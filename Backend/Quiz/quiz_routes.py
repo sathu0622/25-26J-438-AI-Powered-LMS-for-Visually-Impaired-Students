@@ -82,13 +82,16 @@ def run_ai_generation(chapter_name: str):
     #  Gives the AI an example to copy)
     prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 You are a History Teacher. 
-Task: Read the context and generate 1 Question, 1 Answer, and 1 Key Phrase.
+Task: Read the context and generate 1 Question, 1 Answer, 1 Key Phrase, and 3 Distractors for MCQ.
 Constraint: Use the format below exactly.
 
 Example:
 QUESTION: Who was the first President of the USA?
 ANSWER: George Washington.
 KEY_PHRASE: George Washington
+DISTRACTOR_1: Thomas Jefferson
+DISTRACTOR_2: Benjamin Franklin
+DISTRACTOR_3: John Adams
 
 Your Turn:<|eot_id|><|start_header_id|>user<|end_header_id|>
 Context: "{context[:1500]}"
@@ -105,14 +108,23 @@ QUESTION:"""
                 messages=[
                     {
                         "role": "system",
-                        "content": "You are a History Teacher. Read the context and generate exactly one QUESTION, one ANSWER, and one KEY_PHRASE in the specified format.",
+                        "content": """You are a History Teacher. Read the context and generate exactly one MCQ question.
+Generate:
+- QUESTION: A clear history question
+- ANSWER: The correct answer
+- KEY_PHRASE: A key phrase from the answer
+- DISTRACTOR_1: A plausible but incorrect answer (similar to correct answer)
+- DISTRACTOR_2: Another plausible but incorrect answer 
+- DISTRACTOR_3: Another plausible but incorrect answer
+
+The distractors should be realistic and related to the topic, making the MCQ challenging but fair.""",
                     },
                     {
                         "role": "user",
-                        "content": f"Context: \"{context[:1500]}\"\n{avoid_instruction}\nFormat:\nQUESTION: ...\nANSWER: ...\nKEY_PHRASE: ...",
+                        "content": f"Context: \"{context[:1500]}\"\n{avoid_instruction}\nFormat:\nQUESTION: ...\nANSWER: ...\nKEY_PHRASE: ...\nDISTRACTOR_1: ...\nDISTRACTOR_2: ...\nDISTRACTOR_3: ...",
                     },
                 ],
-                max_tokens=256,
+                max_tokens=350,
                 temperature=0.7,
                 top_p=0.9,
             )
@@ -124,13 +136,21 @@ QUESTION:"""
         # --- PARSING LOGIC ---
         clean_resp = resp.replace("OUTPUT", "").replace("###", "").strip()
         clean_resp = clean_resp.replace("Answer:", "ANSWER:").replace("Key_Phrase:", "KEY_PHRASE:")
+        clean_resp = clean_resp.replace("Distractor_1:", "DISTRACTOR_1:").replace("Distractor_2:", "DISTRACTOR_2:").replace("Distractor_3:", "DISTRACTOR_3:")
+        
         q_match = re.search(r"QUESTION:?\s*(.*?)(?=\n*ANSWER:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
         a_match = re.search(r"ANSWER:?\s*(.*?)(?=\n*KEY_PHRASE:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
-        k_match = re.search(r"KEY_PHRASE:?\s*(.*?)(?=$)", clean_resp, re.IGNORECASE | re.DOTALL)
+        k_match = re.search(r"KEY_PHRASE:?\s*(.*?)(?=\n*DISTRACTOR_1:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
+        d1_match = re.search(r"DISTRACTOR_1:?\s*(.*?)(?=\n*DISTRACTOR_2:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
+        d2_match = re.search(r"DISTRACTOR_2:?\s*(.*?)(?=\n*DISTRACTOR_3:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
+        d3_match = re.search(r"DISTRACTOR_3:?\s*(.*?)(?=$)", clean_resp, re.IGNORECASE | re.DOTALL)
 
         q = q_match.group(1).strip() if q_match else ""
         a = a_match.group(1).strip() if a_match else ""
         k = k_match.group(1).strip() if k_match else ""
+        d1 = d1_match.group(1).strip() if d1_match else ""
+        d2 = d2_match.group(1).strip() if d2_match else ""
+        d3 = d3_match.group(1).strip() if d3_match else ""
 
         # 3. Validation: Did we get a question?
         if len(q) > 5:
@@ -138,15 +158,42 @@ QUESTION:"""
                 # Fallback: Use first sentence from context
                 context_text = str(context)
                 a = context_text.split('.')[0].strip() + '.' if '.' in context_text else context_text.strip()
+            
+            # Build options array with correct answer and distractors
+            distractors = [d for d in [d1, d2, d3] if d and len(d) > 2]
+            
+            # Ensure we have 3 distractors, generate fallbacks if needed
+            while len(distractors) < 3:
+                distractors.append(f"Option {len(distractors) + 2}")
+            
+            # Shuffle options and track correct answer position
+            options = [a] + distractors[:3]
+            random.shuffle(options)
+            correct_index = options.index(a)
+            
             if history_key not in question_history: question_history[history_key] = []
             question_history[history_key].append(q)
-            return {"question": q, "correct_answer": a, "key_phrase": k}
+            return {
+                "question": q, 
+                "correct_answer": a, 
+                "key_phrase": k,
+                "options": options,
+                "correct_index": correct_index
+            }
         print(f"      ⚠️ Attempt {attempt+1} failed (Empty Question). Retrying...")
 
     # Fallback: Use context as answer if all attempts fail
     context_text = str(context)
     fallback_answer = context_text.split('.')[0].strip() + '.' if '.' in context_text else context_text.strip()
-    return {"question": resp if resp else "No question generated.", "correct_answer": fallback_answer, "key_phrase": ""}
+    fallback_options = [fallback_answer, "Option 2", "Option 3", "Option 4"]
+    random.shuffle(fallback_options)
+    return {
+        "question": resp if resp else "No question generated.", 
+        "correct_answer": fallback_answer, 
+        "key_phrase": "",
+        "options": fallback_options,
+        "correct_index": fallback_options.index(fallback_answer)
+    }
 
 
 def generate_question_batch(chapter_name: str, total: int = 10) -> List[Dict[str, str]]:
@@ -174,48 +221,107 @@ def generate_question_batch(chapter_name: str, total: int = 10) -> List[Dict[str
     return questions
 
 
-def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str):
+def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str, is_mcq: bool = True):
+    """
+    Evaluate user's answer against the correct answer.
+    
+    For MCQ: Uses exact matching (binary: correct/incorrect)
+    For Free-text: Uses SBERT semantic similarity with thresholds
+    """
     if not user_answer:
         return {
             "score": 0,
-            "feedback": "Please type an answer!",
+            "feedback": "Please select or type an answer!",
             "correct": False,
             "correct_answer": correct_answer or "Refer to context",
         }
 
-    target = correct_answer if correct_answer and len(correct_answer) > 2 else "Refer to context"
+    # Normalize both answers for comparison
+    user_clean = user_answer.strip().lower()
+    correct_clean = correct_answer.strip().lower() if correct_answer else ""
 
-    if key_phrase and len(key_phrase) > 2:
-        if key_phrase.lower() in user_answer.lower():
+    # === MCQ EVALUATION (Exact Match) ===
+    if is_mcq:
+        # Direct exact match
+        if user_clean == correct_clean:
             return {
                 "score": 100,
-                "feedback": "🎯 Excellent! You got it right!",
+                "feedback": "Correct! Well done!",
+                "correct": True,
+                "correct_answer": correct_answer,
+            }
+        
+        # Check if key phrase matches (fallback for slight variations)
+        if key_phrase and len(key_phrase) > 2:
+            if key_phrase.lower().strip() == user_clean:
+                return {
+                    "score": 100,
+                    "feedback": "Correct! Well done!",
+                    "correct": True,
+                    "correct_answer": correct_answer,
+                }
+        
+        # MCQ is binary - no partial credit
+        return {
+            "score": 0,
+            "feedback": "Incorrect. The correct answer was: " + correct_answer,
+            "correct": False,
+            "correct_answer": correct_answer,
+        }
+
+    # === FREE-TEXT EVALUATION (SBERT Semantic Similarity) ===
+    target = correct_answer if correct_answer and len(correct_answer) > 2 else "Refer to context"
+
+    # Quick win: exact match
+    if user_clean == correct_clean:
+        return {
+            "score": 100,
+            "feedback": "Perfect! Exact match!",
+            "correct": True,
+            "correct_answer": correct_answer,
+        }
+
+    # Key phrase check (fast path)
+    if key_phrase and len(key_phrase) > 2:
+        if key_phrase.lower() in user_clean:
+            return {
+                "score": 100,
+                "feedback": "Excellent! You got it right!",
                 "correct": True,
                 "correct_answer": correct_answer,
             }
 
+    # SBERT semantic similarity
     emb1 = sbert_model.encode(user_answer, convert_to_tensor=True)
     emb2 = sbert_model.encode(target, convert_to_tensor=True)
-    score = util.pytorch_cos_sim(emb1, emb2).item()
+    similarity = util.pytorch_cos_sim(emb1, emb2).item()
 
-    if score > 0.75:
+    # Thresholds for free-text evaluation
+    if similarity >= 0.85:
         return {
-            "score": int(score * 100),
-            "feedback": "Your Answer is Correct",
+            "score": 100,
+            "feedback": "Excellent! Your answer is correct.",
             "correct": True,
             "correct_answer": correct_answer,
         }
-    if score > 0.60:
+    if similarity >= 0.70:
         return {
-            "score": int(score * 100),
-            "feedback": "You are Partially Correct, You have missed some details",
+            "score": int(similarity * 100),
+            "feedback": "Good answer! You captured the main idea.",
             "correct": True,
+            "correct_answer": correct_answer,
+        }
+    if similarity >= 0.55:
+        return {
+            "score": int(similarity * 100),
+            "feedback": "Partially correct. Some details are missing.",
+            "correct": False,
             "correct_answer": correct_answer,
         }
 
     return {
-        "score": int(score * 100),
-        "feedback": "Your Answer is Incorrect",
+        "score": int(similarity * 100),
+        "feedback": "Incorrect. Please review and try again.",
         "correct": False,
         "correct_answer": correct_answer,
     }
@@ -254,7 +360,7 @@ def generate_question(req: ChapterRequest):
 @router.post("/evaluate_answer")
 def evaluate_answer(req: AnswerRequest, background_tasks: BackgroundTasks):
     background_tasks.add_task(prefetch_next_question, req.chapter_name)
-    return evaluate_response(req.user_answer, req.correct_answer, req.key_phrase)
+    return evaluate_response(req.user_answer, req.correct_answer, req.key_phrase, is_mcq=True)
 
 
 @router.post("/quiz_sets/start")
@@ -316,6 +422,7 @@ def answer_quiz_set(set_id: str, attempt_id: str, req: AnswerSetRequest):
         req.user_answer,
         target_question.get("correct_answer", ""),
         target_question.get("key_phrase", ""),
+        is_mcq=True,  # Quiz sets use MCQ format
     )
 
     answer_entry = {
@@ -411,6 +518,327 @@ def list_quiz_sets(username: str):
         )
 
     return {"quiz_sets": payload}
+
+
+# === GENERATIVE FREE-TEXT QUIZ ENDPOINTS ===
+# Questions generated one-by-one, evaluated with SBERT, saved for retake
+
+freetext_sessions_col = db["freetext_sessions"]
+
+
+class FreeTextStartRequest(BaseModel):
+    username: str
+    chapter_name: str
+    session_id: Optional[str] = None  # For retake
+
+
+class FreeTextAnswerRequest(BaseModel):
+    username: str
+    session_id: str
+    user_answer: str
+
+
+class FreeTextFinishRequest(BaseModel):
+    username: str
+    session_id: str
+
+
+@router.get("/freetext/chapters")
+def get_freetext_chapters():
+    """Get available chapters for free-text quiz"""
+    return {"chapters": AVAILABLE_CHAPTERS}
+
+
+@router.post("/freetext/start")
+def start_freetext_session(req: FreeTextStartRequest):
+    """Start a new free-text quiz session or resume existing one"""
+    
+    # If session_id provided, resume existing session
+    if req.session_id:
+        try:
+            session_oid = ObjectId(req.session_id)
+        except Exception:
+            raise HTTPException(400, "Invalid session ID")
+        
+        session = freetext_sessions_col.find_one({"_id": session_oid, "username": req.username})
+        if not session:
+            raise HTTPException(404, "Session not found")
+        
+        # For retake, create a new attempt
+        attempt_id = str(ObjectId())
+        attempt_entry = {
+            "attempt_id": attempt_id,
+            "started_at": datetime.utcnow(),
+            "answers": [],
+            "completed_at": None,
+            "summary": None,
+        }
+        
+        freetext_sessions_col.update_one(
+            {"_id": session_oid},
+            {"$push": {"attempts": attempt_entry}}
+        )
+        
+        # Return first question for retake
+        questions = session.get("questions", [])
+        first_question = questions[0] if questions else None
+        
+        return {
+            "session_id": str(session_oid),
+            "attempt_id": attempt_id,
+            "chapter_name": session.get("chapter_name", ""),
+            "question_index": 0,
+            "current_question": first_question,
+            "total_questions": len(questions),
+            "is_retake": True,
+        }
+    
+    # Create new session
+    first_question = run_ai_generation(req.chapter_name)
+    if not first_question:
+        raise HTTPException(500, "Failed to generate first question")
+    
+    # Remove MCQ options for free-text mode
+    question_data = {
+        "question": first_question["question"],
+        "correct_answer": first_question["correct_answer"],
+        "key_phrase": first_question.get("key_phrase", ""),
+    }
+    
+    attempt_id = str(ObjectId())
+    session_doc = {
+        "username": req.username,
+        "chapter_name": req.chapter_name,
+        "questions": [question_data],
+        "created_at": datetime.utcnow(),
+        "updated_at": datetime.utcnow(),
+        "attempts": [{
+            "attempt_id": attempt_id,
+            "started_at": datetime.utcnow(),
+            "answers": [],
+            "completed_at": None,
+            "summary": None,
+        }],
+    }
+    
+    result = freetext_sessions_col.insert_one(session_doc)
+    session_id = str(result.inserted_id)
+    
+    return {
+        "session_id": session_id,
+        "attempt_id": attempt_id,
+        "chapter_name": req.chapter_name,
+        "question_index": 0,
+        "current_question": question_data,
+        "total_questions": 1,
+        "is_retake": False,
+    }
+
+
+@router.post("/freetext/answer")
+def submit_freetext_answer(req: FreeTextAnswerRequest):
+    """Submit answer and get next question"""
+    try:
+        session_oid = ObjectId(req.session_id)
+    except Exception:
+        raise HTTPException(400, "Invalid session ID")
+    
+    session = freetext_sessions_col.find_one({"_id": session_oid, "username": req.username})
+    if not session:
+        raise HTTPException(404, "Session not found")
+    
+    # Get current attempt (latest)
+    attempts = session.get("attempts", [])
+    if not attempts:
+        raise HTTPException(400, "No active attempt")
+    
+    current_attempt = attempts[-1]
+    if current_attempt.get("completed_at"):
+        raise HTTPException(400, "Attempt already completed")
+    
+    attempt_id = current_attempt["attempt_id"]
+    answers = current_attempt.get("answers", [])
+    question_index = len(answers)
+    questions = session.get("questions", [])
+    
+    # Get current question
+    if question_index >= len(questions):
+        raise HTTPException(400, "No more questions available")
+    
+    current_question = questions[question_index]
+    
+    # Evaluate with SBERT (free-text mode)
+    evaluation = evaluate_response(
+        req.user_answer,
+        current_question.get("correct_answer", ""),
+        current_question.get("key_phrase", ""),
+        is_mcq=False,  # Use SBERT evaluation
+    )
+    
+    # Save answer
+    answer_entry = {
+        "question_index": question_index,
+        "question": current_question.get("question", ""),
+        "user_answer": req.user_answer,
+        "correct_answer": current_question.get("correct_answer", ""),
+        "score": evaluation["score"],
+        "correct": evaluation["correct"],
+        "feedback": evaluation["feedback"],
+        "answered_at": datetime.utcnow(),
+    }
+    
+    freetext_sessions_col.update_one(
+        {"_id": session_oid, "attempts.attempt_id": attempt_id},
+        {"$push": {"attempts.$.answers": answer_entry}}
+    )
+    
+    return {
+        "question_index": question_index,
+        "score": evaluation["score"],
+        "correct": evaluation["correct"],
+        "feedback": evaluation["feedback"],
+        "correct_answer": current_question.get("correct_answer", ""),
+        "user_answer": req.user_answer,
+    }
+
+
+@router.post("/freetext/next")
+def get_next_freetext_question(req: FreeTextAnswerRequest):
+    """Generate and return next question"""
+    try:
+        session_oid = ObjectId(req.session_id)
+    except Exception:
+        raise HTTPException(400, "Invalid session ID")
+    
+    session = freetext_sessions_col.find_one({"_id": session_oid, "username": req.username})
+    if not session:
+        raise HTTPException(404, "Session not found")
+    
+    chapter_name = session.get("chapter_name", "")
+    questions = session.get("questions", [])
+    
+    # Get current attempt
+    attempts = session.get("attempts", [])
+    if not attempts:
+        raise HTTPException(400, "No active attempt")
+    
+    current_attempt = attempts[-1]
+    answers = current_attempt.get("answers", [])
+    next_index = len(answers)
+    
+    # Check if this is a retake - use existing questions
+    is_retake = next_index < len(questions)
+    
+    if is_retake:
+        # Return existing question for retake
+        next_question = questions[next_index]
+    else:
+        # Generate new question
+        new_question = run_ai_generation(chapter_name)
+        if not new_question:
+            raise HTTPException(500, "Failed to generate question")
+        
+        next_question = {
+            "question": new_question["question"],
+            "correct_answer": new_question["correct_answer"],
+            "key_phrase": new_question.get("key_phrase", ""),
+        }
+        
+        # Save new question to session
+        freetext_sessions_col.update_one(
+            {"_id": session_oid},
+            {
+                "$push": {"questions": next_question},
+                "$set": {"updated_at": datetime.utcnow()}
+            }
+        )
+    
+    return {
+        "question_index": next_index,
+        "current_question": next_question,
+        "total_questions": len(questions) + (0 if is_retake else 1),
+        "is_retake": is_retake,
+    }
+
+
+@router.post("/freetext/finish")
+def finish_freetext_session(req: FreeTextFinishRequest):
+    """Finish the free-text quiz session and save summary"""
+    try:
+        session_oid = ObjectId(req.session_id)
+    except Exception:
+        raise HTTPException(400, "Invalid session ID")
+    
+    session = freetext_sessions_col.find_one({"_id": session_oid, "username": req.username})
+    if not session:
+        raise HTTPException(404, "Session not found")
+    
+    # Get current attempt
+    attempts = session.get("attempts", [])
+    if not attempts:
+        raise HTTPException(400, "No active attempt")
+    
+    current_attempt = attempts[-1]
+    attempt_id = current_attempt["attempt_id"]
+    answers = current_attempt.get("answers", [])
+    
+    # Calculate summary
+    total_questions = len(answers)
+    correct_count = sum(1 for ans in answers if ans.get("correct"))
+    total_score = sum(ans.get("score", 0) for ans in answers)
+    average_score = int(total_score / total_questions) if total_questions > 0 else 0
+    
+    summary = {
+        "correct_count": correct_count,
+        "total_questions": total_questions,
+        "average_score": average_score,
+    }
+    
+    # Update attempt with summary
+    freetext_sessions_col.update_one(
+        {"_id": session_oid, "attempts.attempt_id": attempt_id},
+        {
+            "$set": {
+                "attempts.$.summary": summary,
+                "attempts.$.completed_at": datetime.utcnow(),
+            }
+        }
+    )
+    
+    return {
+        "session_id": req.session_id,
+        "attempt_id": attempt_id,
+        "summary": summary,
+        "answers": answers,
+    }
+
+
+@router.get("/freetext/sessions/{username}")
+def list_freetext_sessions(username: str):
+    """List all free-text quiz sessions for a user"""
+    docs = list(freetext_sessions_col.find({"username": username}).sort("created_at", -1))
+    payload = []
+    
+    for doc in docs:
+        attempts = doc.get("attempts", [])
+        completed_attempts = [a for a in attempts if a.get("completed_at")]
+        latest = completed_attempts[-1] if completed_attempts else None
+        
+        payload.append({
+            "session_id": str(doc.get("_id")),
+            "chapter_name": doc.get("chapter_name", ""),
+            "created_at": to_iso(doc.get("created_at")),
+            "questions_count": len(doc.get("questions", [])),
+            "attempts_count": len(completed_attempts),
+            "latest_attempt": {
+                "attempt_id": latest.get("attempt_id"),
+                "summary": latest.get("summary"),
+                "completed_at": to_iso(latest.get("completed_at")),
+            } if latest else None,
+        })
+    
+    return {"sessions": payload}
+
 
 # === PAST PAPER QUIZ ENDPOINTS ===
 
