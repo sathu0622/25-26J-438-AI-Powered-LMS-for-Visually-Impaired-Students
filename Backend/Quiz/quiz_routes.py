@@ -221,12 +221,84 @@ def generate_question_batch(chapter_name: str, total: int = 10) -> List[Dict[str
     return questions
 
 
+# ========== ROMAN NUMERAL / ORDINAL NORMALIZATION ==========
+# Maps for converting between different numeral formats
+ROMAN_TO_ARABIC = {
+    'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5',
+    'vi': '6', 'vii': '7', 'viii': '8', 'ix': '9', 'x': '10',
+    'xi': '11', 'xii': '12', 'xiii': '13', 'xiv': '14', 'xv': '15',
+    'xvi': '16', 'xvii': '17', 'xviii': '18', 'xix': '19', 'xx': '20',
+}
+
+# Ordinal words to arabic numbers
+ORDINAL_TO_ARABIC = {
+    'first': '1', 'second': '2', 'third': '3', 'fourth': '4', 'fifth': '5',
+    'sixth': '6', 'seventh': '7', 'eighth': '8', 'ninth': '9', 'tenth': '10',
+    'eleventh': '11', 'twelfth': '12', 'thirteenth': '13', 'fourteenth': '14', 'fifteenth': '15',
+    '1st': '1', '2nd': '2', '3rd': '3', '4th': '4', '5th': '5',
+    '6th': '6', '7th': '7', '8th': '8', '9th': '9', '10th': '10',
+}
+
+# Cardinal words to arabic numbers
+CARDINAL_TO_ARABIC = {
+    'one': '1', 'two': '2', 'three': '3', 'four': '4', 'five': '5',
+    'six': '6', 'seven': '7', 'eight': '8', 'nine': '9', 'ten': '10',
+    'eleven': '11', 'twelve': '12', 'thirteen': '13', 'fourteen': '14', 'fifteen': '15',
+}
+
+def normalize_numerals(text: str) -> str:
+    """
+    Normalize Roman numerals, ordinals, and cardinal numbers to Arabic numerals.
+    Examples:
+        "Mihindu V" -> "mihindu 5"
+        "Mihindu fifth" -> "mihindu 5"
+        "Mihindu five" -> "mihindu 5"
+        "Parakramabahu II" -> "parakramabahu 2"
+        "King Parakramabahu the Great" -> "king parakramabahu the great"
+    """
+    if not text:
+        return ""
+    
+    normalized = text.lower().strip()
+    
+    # Remove common prefixes/suffixes that don't affect meaning
+    normalized = re.sub(r'\bking\s+', '', normalized)  # "King Mihindu V" -> "Mihindu V"
+    normalized = re.sub(r'\bthe\s+great\b', '', normalized)  # "Parakramabahu the Great" -> "Parakramabahu"
+    normalized = re.sub(r'\bthe\s+second\b', '2', normalized)  # "the second" -> "2"
+    normalized = re.sub(r'\bthe\s+first\b', '1', normalized)  # "the first" -> "1"
+    
+    # Replace Roman numerals (must be at word boundaries, typically after a name)
+    # Match Roman numerals at the end of words or standalone
+    for roman, arabic in sorted(ROMAN_TO_ARABIC.items(), key=lambda x: -len(x[0])):
+        # Match Roman numeral at end of string or followed by space/punctuation
+        pattern = rf'\b{roman}\b'
+        normalized = re.sub(pattern, arabic, normalized, flags=re.IGNORECASE)
+    
+    # Replace ordinals (first, second, 1st, 2nd, etc.)
+    for ordinal, arabic in sorted(ORDINAL_TO_ARABIC.items(), key=lambda x: -len(x[0])):
+        pattern = rf'\b{ordinal}\b'
+        normalized = re.sub(pattern, arabic, normalized, flags=re.IGNORECASE)
+    
+    # Replace cardinal words (one, two, three, etc.)
+    for cardinal, arabic in sorted(CARDINAL_TO_ARABIC.items(), key=lambda x: -len(x[0])):
+        pattern = rf'\b{cardinal}\b'
+        normalized = re.sub(pattern, arabic, normalized, flags=re.IGNORECASE)
+    
+    # Clean up extra spaces
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    
+    return normalized
+
+
 def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str, is_mcq: bool = True):
     """
     Evaluate user's answer against the correct answer.
     
     For MCQ: Uses exact matching (binary: correct/incorrect)
     For Free-text: Uses SBERT semantic similarity with thresholds
+    
+    Handles Roman numerals and ordinals:
+    "Mihindu V" == "Mihindu 5" == "Mihindu fifth" == "Mihindu five"
     """
     if not user_answer:
         return {
@@ -239,11 +311,25 @@ def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str, is
     # Normalize both answers for comparison
     user_clean = user_answer.strip().lower()
     correct_clean = correct_answer.strip().lower() if correct_answer else ""
+    
+    # Additional normalization for Roman numerals and ordinals
+    user_normalized = normalize_numerals(user_clean)
+    correct_normalized = normalize_numerals(correct_clean)
+    key_normalized = normalize_numerals(key_phrase.lower()) if key_phrase else ""
 
     # === MCQ EVALUATION (Exact Match) ===
     if is_mcq:
-        # Direct exact match
+        # Direct exact match (basic)
         if user_clean == correct_clean:
+            return {
+                "score": 100,
+                "feedback": "Correct! Well done!",
+                "correct": True,
+                "correct_answer": correct_answer,
+            }
+        
+        # Normalized match (handles Roman numerals, ordinals)
+        if user_normalized == correct_normalized:
             return {
                 "score": 100,
                 "feedback": "Correct! Well done!",
@@ -253,7 +339,7 @@ def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str, is
         
         # Check if key phrase matches (fallback for slight variations)
         if key_phrase and len(key_phrase) > 2:
-            if key_phrase.lower().strip() == user_clean:
+            if key_phrase.lower().strip() == user_clean or key_normalized == user_normalized:
                 return {
                     "score": 100,
                     "feedback": "Correct! Well done!",
@@ -272,7 +358,7 @@ def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str, is
     # === FREE-TEXT EVALUATION (SBERT Semantic Similarity) ===
     target = correct_answer if correct_answer and len(correct_answer) > 2 else "Refer to context"
 
-    # Quick win: exact match
+    # Quick win: exact match (basic)
     if user_clean == correct_clean:
         return {
             "score": 100,
@@ -280,10 +366,19 @@ def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str, is
             "correct": True,
             "correct_answer": correct_answer,
         }
+    
+    # Quick win: normalized match (handles Roman numerals)
+    if user_normalized == correct_normalized:
+        return {
+            "score": 100,
+            "feedback": "Perfect! Exact match!",
+            "correct": True,
+            "correct_answer": correct_answer,
+        }
 
-    # Key phrase check (fast path)
+    # Key phrase check (fast path) - check both regular and normalized
     if key_phrase and len(key_phrase) > 2:
-        if key_phrase.lower() in user_clean:
+        if key_phrase.lower() in user_clean or key_normalized in user_normalized:
             return {
                 "score": 100,
                 "feedback": "Excellent! You got it right!",
@@ -291,9 +386,10 @@ def evaluate_response(user_answer: str, correct_answer: str, key_phrase: str, is
                 "correct_answer": correct_answer,
             }
 
-    # SBERT semantic similarity
-    emb1 = sbert_model.encode(user_answer, convert_to_tensor=True)
-    emb2 = sbert_model.encode(target, convert_to_tensor=True)
+    # SBERT semantic similarity (use normalized versions for better matching)
+    # Normalizing helps SBERT compare "Mihindu V" with "Mihindu 5" correctly
+    emb1 = sbert_model.encode(user_normalized, convert_to_tensor=True)
+    emb2 = sbert_model.encode(normalize_numerals(target.lower()), convert_to_tensor=True)
     similarity = util.pytorch_cos_sim(emb1, emb2).item()
 
     # Thresholds for free-text evaluation
@@ -882,6 +978,11 @@ def evaluate_past_paper_answer(req: PastPaperAnswerRequest):
     user_answer = req.user_answer.strip().lower()
     correct_answer = req.correct_answer.strip().lower()
     
+    # Normalize Roman numerals, ordinals, and cardinal numbers
+    # "Mihindu V" == "Mihindu 5" == "Mihindu fifth" == "Mihindu five"
+    user_normalized = normalize_numerals(user_answer)
+    correct_normalized = normalize_numerals(correct_answer)
+    
     if not user_answer:
         return {
             "score": 0,
@@ -890,10 +991,20 @@ def evaluate_past_paper_answer(req: PastPaperAnswerRequest):
             "similarity_score": 0.0
         }
     
+    # Quick win: exact match after normalization
+    if user_normalized == correct_normalized:
+        return {
+            "score": 100,
+            "feedback": "Perfect! Exact match!",
+            "correct": True,
+            "similarity_score": 1.0,
+            "correct_answer": req.correct_answer
+        }
+    
     try:
-        # Generate embeddings
-        user_embedding = sbert_model.encode([user_answer])
-        correct_embedding = sbert_model.encode([correct_answer])
+        # Generate embeddings using normalized versions for better matching
+        user_embedding = sbert_model.encode([user_normalized])
+        correct_embedding = sbert_model.encode([correct_normalized])
         
         # Calculate cosine similarity
         similarity = util.cos_sim(user_embedding, correct_embedding)[0][0].item()

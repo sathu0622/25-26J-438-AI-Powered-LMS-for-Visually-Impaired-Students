@@ -1,0 +1,46 @@
+{
+  "_comment": "Custom Sinhala vocabulary for Speech-to-Text recognition. Edit this file to add new words.",
+  "_instructions": "For each word, add common misrecognitions as an array. The STT will correct these to the key.",
+  
+  "corrections": {
+    "mihindu": ["me hindu", "mi hindu", "mee hindu", "mehindu", "me indu", "mi indu", "mahinda", "me hind u", "mindu" ,"hindu"],
+    "mahinda": ["ma hinda", "mahindha", "ma hindi", "me hinda"],
+    "anuradhapura": ["anuradapura", "anura dapura", "anura dhapura", "anooradhapura", "anura the pura", "anurada pura"],
+    "polonnaruwa": ["polonaruwa", "polan naruwa", "polo naruwa", "pollonnaruwa", "pollonaruwa", "polon naruwa"],
+    "sigiriya": ["sigiri", "sigirya", "sigiri ya", "see giriya", "seegiriya", "sigi riya", "sea giriya"],
+    "dutugemunu": ["dutugamunu", "dutu gemunu", "duttu gemunu", "dutagemunu", "dutuge munu", "doo too gemunu"],
+    "parakramabahu": ["parakrama bahu", "prakramabahu", "parakrama", "parakrambahu", "para karma bahu" ,"bahon", "bahu"],
+    "vijayabahu": ["vijaya bahu", "wijayabahu", "vijayabaahu", "we jaya bahu"],
+    "devanampiyatissa": ["devanampiya tissa", "devanam piyatissa", "devanampiya", "devanam piya tissa", "deva nam piya tissa"],
+    "kasyapa": ["kashyapa", "kasyap", "kashyap", "cassapa", "kaasyapa", "cash yapa"],
+    "nissankamalla": ["nissanka malla", "nishanka malla", "nissanka", "ni sanka malla"],
+    "valagamba": ["walagamba", "wala gamba", "valagambahu", "wala gambahu", "vala gamba"],
+    "pandukabhaya": ["panduka bhaya", "pandu kabhaya", "pandukabaya", "pandu ka bhaya"],
+    "mahasen": ["maha sen", "mahasena", "maha sena", "ma ha sen"],
+    "elara": ["ellara", "elala", "ela ra", "eelara", "a lara"],
+    "ruwanweliseya": ["ruwanweli", "ruwan weli", "ruwanwelisaya", "ruvanveli", "ruwanweli seya", "roovan weli"],
+    "jetavanarama": ["jetavana", "jetawana", "jeta vanarama", "jetavana rama", "jetta wanna"],
+    "abhayagiri": ["abhaya giri", "abhayagiriya", "abaya giri", "a by a giri"],
+    "thuparama": ["thupa rama", "thuparamaya", "toopa rama", "thoo para ma"],
+    "lovamahapaya": ["lova maha paya", "loha mahapaya", "lova mahapaya", "lohamahapaya"],
+    "isurumuniya": ["isuru muniya", "isurumuni", "isurumuiya", "isuru muni"],
+    "mahavamsa": ["maha vamsa", "mahawamsa", "maha wamsa", "mahavansa", "ma ha wam sa"],
+    "dipavamsa": ["dipa vamsa", "deepa vamsa", "dipawamsa", "deepavamsa", "deepawamsa"],
+    "mihintale": ["mi hintale", "mihinthale", "mee hintale", "me hintale", "mihin tale"],
+    "dambulla": ["dambula", "dam bulla", "damboola", "dambola", "dam bula"],
+    "kandy": ["candy", "candi", "kandie", "kandi"],
+    "galle": ["gal", "gal le", "gaul", "galley"],
+    "jaffna": ["yalpana", "japana", "jafna", "yalpanam", "jaff na"]
+  },
+  
+  "phraseHints": [
+    "Mihindu", "Mahinda", "Anuradhapura", "Polonnaruwa", "Sigiriya",
+    "Dutugemunu", "Parakramabahu", "Vijayabahu", "Devanampiyatissa",
+    "Kasyapa", "Kashyapa", "Nissankamalla", "Valagamba", "Pandukabhaya",
+    "Mahasen", "Elara", "Ruwanweliseya", "Jetavanarama", "Abhayagiri",
+    "Thuparama", "Lovamahapaya", "Isurumuniya", "Mahavamsa", "Dipavamsa",
+    "Mihintale", "Dambulla", "Kandy", "Galle", "Jaffna",
+    "Mihindu V", "Mihindu the fifth", "Parakramabahu II", "Vijayabahu I",
+    "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"
+  ]
+}
