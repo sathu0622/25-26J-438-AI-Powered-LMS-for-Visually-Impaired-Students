@@ -88,9 +88,10 @@ class ChapterService:
         chapter_data = df[df['chapter'] == chapter_name]
         
         topics = []
-        for idx, row in chapter_data.iterrows():
+        # Use enumerate to create sequential indices instead of pandas indices
+        for topic_idx, (_, row) in enumerate(chapter_data.iterrows()):
             topic = {
-                'id': idx,
+                'id': topic_idx,  # Use sequential index
                 'topic_name': str(row.get('Grade/Topic', '')),
                 'chapter': str(chapter_name),
                 'grade': grade

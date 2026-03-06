@@ -56,11 +56,18 @@ async def get_chapter_audio(grade: int, chapter_idx: int, topic_idx: int):
         Generated audio file for the topic with atmospheric sound effects
     """
     try:
+        print(f"📚 Requested audio for: grade={grade}, chapter={chapter_idx}, topic={topic_idx}")
+        
         # Get the topic data
         topic = chapter_service.get_topic_by_id(grade, chapter_idx, topic_idx)
         
         if not topic:
-            raise HTTPException(status_code=404, detail="Topic not found")
+            # Get available topics for debugging
+            topics = chapter_service.get_topics_by_chapter(grade, chapter_idx)
+            available_count = len(topics)
+            error_msg = f"Topic {topic_idx} not found in grade {grade}, chapter {chapter_idx}. Available topics: 0-{available_count-1}"
+            print(f"❌ {error_msg}")
+            raise HTTPException(status_code=404, detail=error_msg)
         
         # Use simplified_text if available, otherwise original_text
         text_to_speak = topic.get("simplified_text") or topic.get("original_text", "")
@@ -73,6 +80,7 @@ async def get_chapter_audio(grade: int, chapter_idx: int, topic_idx: int):
         sound_effects = topic.get("sound_effects", "")
         
         print(f"🎭 Generating audio with emotion='{emotion}', sound_effects='{sound_effects}'")
+        print(f"📝 Text length: {len(text_to_speak)} characters")
         
         # Generate unique output path
         import uuid
@@ -87,6 +95,8 @@ async def get_chapter_audio(grade: int, chapter_idx: int, topic_idx: int):
             sound_effects=sound_effects
         )
         
+        print(f"✅ Audio generated successfully: {audio_path}")
+        
         return FileResponse(
             path=audio_path,
             media_type="audio/wav",
@@ -96,5 +106,7 @@ async def get_chapter_audio(grade: int, chapter_idx: int, topic_idx: int):
     except HTTPException:
         raise
     except Exception as e:
-        print(f"Error generating chapter audio: {e}")
-        raise HTTPException(status_code=500, detail=f"Error generating audio: {str(e)}")
+        print(f"❌ Error generating chapter audio: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to generate audio: {str(e)}")
