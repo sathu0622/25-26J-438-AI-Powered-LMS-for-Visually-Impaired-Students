@@ -7,12 +7,12 @@
 const env = (import.meta as any).env;
 
 const VITE_API_URL_DOCUMENT =
-  env?.VITE_API_URL_DOCUMENT || env?.VITE_API_URL || 'http://localhost:8000';
+  env?.VITE_API_URL_DOCUMENT || env?.VITE_API_URL || 'http://localhost:8003';
 const VITE_API_URL_BRAILLE =
-  env?.VITE_API_URL_BRAILLE || 'http://localhost:8000';
+  env?.VITE_API_URL_BRAILLE || 'http://localhost:8003';
 const VITE_API_URL_HISTORY =
-  env?.VITE_API_URL_HISTORY || 'http://localhost:8000';
-const VITE_API_URL_QUIZ = env?.VITE_API_URL_QUIZ || 'http://localhost:8000';
+  env?.VITE_API_URL_HISTORY || 'http://localhost:8003';
+const VITE_API_URL_QUIZ = env?.VITE_API_URL_QUIZ || 'http://localhost:8003';
 
 export const apiBaseUrls = {
   document: VITE_API_URL_DOCUMENT,
@@ -20,6 +20,9 @@ export const apiBaseUrls = {
   history: VITE_API_URL_HISTORY,
   quiz: VITE_API_URL_QUIZ,
 };
+
+// Export API_BASE_URL for easy access (points to history service)
+export const API_BASE_URL = VITE_API_URL_HISTORY;
 
 export interface ApiClient {
   baseURL: string;

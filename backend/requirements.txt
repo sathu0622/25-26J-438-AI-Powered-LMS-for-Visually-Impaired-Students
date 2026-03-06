@@ -4,3 +4,4 @@ pandas
 gtts
 torch
 torchaudio
+python-dotenv

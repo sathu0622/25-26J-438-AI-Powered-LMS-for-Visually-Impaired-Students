@@ -29,13 +29,25 @@ Place your CSV datasets in the `data/` folder:
 Copy your trained TTS model to:
 - `app/models/AI_History_Teacher_System.pth`
 
-### 4. Run the Server
+### 4. Configure Environment (Optional)
+
+Copy `.env.example` to `.env` and customize if needed:
+```bash
+cp .env.example .env
+```
+
+Default configuration:
+- `HOST=127.0.0.1` - Server host
+- `PORT=8003` - Server port
+- `RELOAD=false` - Enable auto-reload on file changes
+
+### 5. Run the Server
 
 ```bash
 python main.py
 ```
 
-Server starts at: `http://localhost:8000`
+Server starts at: `http://localhost:8003`
 
 ## API Endpoints
 
@@ -93,7 +105,7 @@ backend/
 The server automatically reloads on file changes when run with `python main.py`.
 
 ### Access API Documentation
-When server is running, visit: `http://localhost:8000/docs`
+When server is running, visit: `http://localhost:8003/docs`
 
 ## Next Steps
 

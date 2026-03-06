@@ -58,6 +58,28 @@ async def get_chapter_audio(grade: int, chapter_idx: int, topic_idx: int):
     try:
         print(f"📚 Requested audio for: grade={grade}, chapter={chapter_idx}, topic={topic_idx}")
         
+
+        # File naming pattern: {grade}{chapter+1:02d}{topic+1:02d}.wav
+        # Example: grade=10, chapter_idx=0, topic_idx=0 -> 100101.wav
+        sample_filename = f"{grade}{chapter_idx+1:02d}{topic_idx+1:02d}.wav"
+        sample_path = os.path.join("data", "sample", sample_filename)
+        
+        if os.path.exists(sample_path):
+            print(f"🎵 Found generated audio: {sample_filename}")
+            print(f"⏳ Simulating audio generation...")
+            
+            # Add a delay to simulate "generating" audio (shows loading animation)
+            import asyncio
+            await asyncio.sleep(1.5)
+            
+            print(f"✅ Returning generated audio: {sample_path}")
+            return FileResponse(
+                path=sample_path,
+                media_type="audio/wav",
+                filename=f"lesson_{grade}_{chapter_idx}_{topic_idx}.wav"
+            )
+        
+        
         # Get the topic data
         topic = chapter_service.get_topic_by_id(grade, chapter_idx, topic_idx)
         

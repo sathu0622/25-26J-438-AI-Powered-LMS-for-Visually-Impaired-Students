@@ -3,6 +3,7 @@ import { ArrowLeft, BookOpen, Clock } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { API_BASE_URL } from '../../services/api';
 
 interface Chapter {
   id: number;
@@ -28,7 +29,7 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
     const fetchChapters = async () => {
       try {
         setLoading(true);
-        const response = await fetch(`http://localhost:8000/api/chapters/${grade}`);
+        const response = await fetch(`${API_BASE_URL}/api/chapters/${grade}`);
         
         if (!response.ok) {
           throw new Error(`Failed to fetch chapters: ${response.statusText}`);

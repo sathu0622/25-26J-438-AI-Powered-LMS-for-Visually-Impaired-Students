@@ -16,6 +16,7 @@ import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Slider } from '../ui/slider';
 import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { API_BASE_URL } from '../../services/api';
 
 interface LessonPlayerProps {
   topicName: string;
@@ -82,7 +83,7 @@ export const LessonPlayer = ({
 
       // Call backend to generate audio using the TTS model
       const response = await fetch(
-        `http://localhost:8000/api/audio/chapter/${grade}/${chapterIdx}/${topicIdx}`,
+        `${API_BASE_URL}/api/audio/chapter/${grade}/${chapterIdx}/${topicIdx}`,
         {
           method: 'GET',
           headers: {

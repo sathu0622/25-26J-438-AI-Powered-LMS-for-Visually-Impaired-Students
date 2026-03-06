@@ -3,6 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import socket
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from app.routes.lessons import router as lessons_router
 from app.routes.chapters import router as chapters_router
@@ -49,7 +53,7 @@ def _find_available_port(host: str, starting_port: int, max_attempts: int = 20) 
 
 if __name__ == "__main__":
     host = os.getenv("HOST", "127.0.0.1")
-    requested_port = int(os.getenv("PORT", "8000"))
+    requested_port = int(os.getenv("PORT", "8003"))
     reload_enabled = os.getenv("RELOAD", "false").lower() == "true"
 
     selected_port = _find_available_port(host, requested_port)

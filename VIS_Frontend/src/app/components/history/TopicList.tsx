@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, BookOpen, Play } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
-
+import { safeSpeak, safeCancel } from '../../utils/mockSpeech'; import { API_BASE_URL } from '../../services/api';
 interface Topic {
   id: number;
   topic_name: string;
@@ -36,7 +35,7 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
       try {
         setLoading(true);
         const response = await fetch(
-          `http://localhost:8000/api/chapters/${grade}/${chapterId}/topics`
+          `${API_BASE_URL}/api/chapters/${grade}/${chapterId}/topics`
         );
         
         if (!response.ok) {
