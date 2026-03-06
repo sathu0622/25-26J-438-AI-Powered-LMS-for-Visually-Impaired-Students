@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
-import { Sparkles, Layers, User, FileText, PenLine } from 'lucide-react';
+import { Sparkles, Layers, User, FileText, PenLine, LogOut } from 'lucide-react';
 import { useTTS } from '../../contexts/TTSContext';
 
 interface QuizModeSelectProps {
@@ -10,10 +10,11 @@ interface QuizModeSelectProps {
   onSelectPastPaper: () => void;
   onSelectFreeText: () => void;
   onViewProfile: () => void;
+  onLogout?: () => void;
   username?: string;
 }
 
-export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectPastPaper, onSelectFreeText, onViewProfile, username }: QuizModeSelectProps) => {
+export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectPastPaper, onSelectFreeText, onViewProfile, onLogout, username }: QuizModeSelectProps) => {
   const { speak, cancel } = useTTS();
   const [focusedOption, setFocusedOption] = useState<number>(0); // 0: generative, 1: freetext, 2: adaptive, 3: pastpaper, 4: profile
 
@@ -36,7 +37,7 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
         2: Generative Free-Text Quiz - AI creates questions, you type answers evaluated by meaning
         3: Adaptive Quiz - Questions adjust difficulty based on your performance  
         4: Past Paper Quiz - Practice with real exam questions from previous years
-        5: View Profile - See your quiz history and statistics
+        5: Quiz History - Know your quiz history and statistics
         
         To navigate:
         Press Down arrow to move to next option
@@ -83,7 +84,7 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
           Option 2: Generative Free-Text Quiz - AI creates questions, your answers are evaluated by meaning
           Option 3: Adaptive Quiz - Adjusts question difficulty based on your responses
           Option 4: Past Paper Quiz - Practice with real exam questions from previous years
-          Option 5: View Profile - Check your performance history and statistics
+          Option 5: Quiz History - Know your quiz history and statistics
           
           Navigation:
           Up/Down arrows: Navigate between options
@@ -113,7 +114,7 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
       // Enter or Space to select with confirmation
       if (e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        const optionNames = ['Generative MCQ Quiz', 'Generative Free-Text Quiz', 'Adaptive Quiz', 'Past Paper Quiz', 'View Profile'];
+        const optionNames = ['Generative MCQ Quiz', 'Generative Free-Text Quiz', 'Adaptive Quiz', 'Past Paper Quiz', 'Quiz History'];
         cancel();
         speak(`You selected ${optionNames[focusedOption]}. Starting now.`, { interrupt: false });
         handleSelection(focusedOption);
@@ -130,7 +131,7 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
   const announceOptionSelection = (optionIndex: number, direction: 'next' | 'previous' | 'focus') => {
     cancel(); // Cancel any previous announcement
     
-    const optionNames = ['Generative MCQ Quiz', 'Generative Free-Text Quiz', 'Adaptive Quiz', 'Past Paper Quiz', 'View Profile'];
+    const optionNames = ['Generative MCQ Quiz', 'Generative Free-Text Quiz', 'Adaptive Quiz', 'Past Paper Quiz', 'Quiz History'];
     const optionNumbers = ['1', '2', '3', '4', '5'];
     const currentOption = optionNames[optionIndex];
     const optionNumber = optionNumbers[optionIndex];
@@ -149,7 +150,7 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
       `You selected Generative Free-Text Quiz. AI generates questions and you type your answers. Your responses are evaluated by meaning using semantic similarity, not exact match. Questions continue as long as you want. Press Enter to start Free-Text Quiz.`,
       `You selected Adaptive Quiz. It automatically adjusts question difficulty based on your performance. If you answer correctly, questions get harder. If you struggle, they get easier. Press Enter to start Adaptive Quiz.`,
       `You selected Past Paper Quiz. It provides real examination questions from previous years, with year announcements for each question. Your answers are evaluated using advanced similarity matching. Press Enter to start Past Paper Quiz.`,
-      `You selected View Profile. It lets you know about your complete quiz history, performance statistics, and learning progress. Press Enter to view your profile.`
+      `You selected Quiz History. It lets you know about your complete quiz history, performance statistics, and learning progress. Press Enter to view your quiz history.`
     ];
     
     speak(selectionAnnouncement, { interrupt: true });
@@ -362,26 +363,53 @@ export const QuizModeSelect = ({ onSelectGenerative, onSelectAdaptive, onSelectP
             <div className="flex items-center gap-3">
               <User className="h-6 w-6 text-secondary-foreground" aria-hidden="true" />
               <div>
-                <h3 id="profile-title" className="text-lg font-semibold">Your Profile</h3>
+                <h3 id="profile-title" className="text-lg font-semibold">Your Quiz History</h3>
                 <p id="profile-desc" className="text-sm text-muted-foreground">
-                  View detailed quiz history, performance statistics, and learning progress
+                  Know detailed quiz history, performance statistics, and learning progress
                 </p>
               </div>
             </div>
             <Button 
               variant="secondary" 
               onClick={() => handleSelection(4)}
-              aria-label="View Profile"
+              aria-label="Quiz History"
               onFocus={() => {
                 cancel();
-                speak('View Profile button focused. This is option 5 of 5. Press Enter or Space to access your profile.', { interrupt: true });
+                speak('Quiz History button focused. This is option 5 of 5. Press Enter or Space to access your profile.', { interrupt: true });
               }}
             >
-              View Profile
+              Quiz History
             </Button>
           </div>
         </Card>
       </section>
+
+      {/* Logout Section */}
+      {onLogout && (
+        <section className="mt-8 pt-6 border-t border-gray-200" role="region" aria-label="Account actions">
+          <div className="flex justify-center">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                if (window.confirm('Are you sure you want to logout?')) {
+                  cancel();
+                  speak('Logging out. Goodbye!', { interrupt: true });
+                  setTimeout(() => onLogout(), 500);
+                }
+              }}
+              className="text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors gap-2"
+              aria-label="Logout from quiz system"
+              onFocus={() => {
+                cancel();
+                speak('Logout button focused. Press Enter to sign out of the quiz system.', { interrupt: true });
+              }}
+            >
+              <LogOut className="h-4 w-4" aria-hidden="true" />
+              Sign Out
+            </Button>
+          </div>
+        </section>
+      )}
     </main>
   );
 };

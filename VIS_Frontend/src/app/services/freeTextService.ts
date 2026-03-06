@@ -1,4 +1,6 @@
-import { api } from './api';
+import { api, isAbortError, AbortedRequestError } from './api';
+
+export { isAbortError, AbortedRequestError };
 
 export interface FreeTextQuestion {
   question: string;
@@ -69,13 +71,14 @@ export const freeTextService = {
 
   /**
    * Start a new free-text quiz session or resume existing one
+   * @param signal - Optional AbortSignal for cancellation
    */
-  async start(username: string, chapter_name: string, session_id?: string): Promise<FreeTextStartResponse> {
+  async start(username: string, chapter_name: string, session_id?: string, signal?: AbortSignal): Promise<FreeTextStartResponse> {
     return api.post<FreeTextStartResponse>('/freetext/start', {
       username,
       chapter_name,
       session_id,
-    });
+    }, signal);
   },
 
   /**
@@ -95,16 +98,18 @@ export const freeTextService = {
 
   /**
    * Get next question (generates new one or returns existing for retake)
+   * @param signal - Optional AbortSignal for cancellation
    */
   async getNextQuestion(
     session_id: string,
-    username: string
+    username: string,
+    signal?: AbortSignal
   ): Promise<FreeTextNextResponse> {
     return api.post<FreeTextNextResponse>('/freetext/next', {
       session_id,
       user_answer: '', // Required by endpoint but not used
       username,
-    });
+    }, signal);
   },
 
   /**

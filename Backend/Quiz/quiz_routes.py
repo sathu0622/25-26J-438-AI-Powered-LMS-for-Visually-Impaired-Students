@@ -1,6 +1,7 @@
 import random
 import re
 import os
+import threading
 from datetime import datetime
 from typing import Dict, List, Optional
 
@@ -21,6 +22,10 @@ PAST_PAPER_CHAPTERS = []  # For past paper chapters
 prefetch_cache = {}
 question_history = {}
 llm = None  # Injected Llama model
+
+# Thread safety for LLM generation (prevents concurrent access issues)
+_llm_lock = threading.Lock()
+_llm_generation_active = False
 
 load_dotenv()
 client = MongoClient(os.getenv("MONGO_URL"))
@@ -60,55 +65,135 @@ class PastPaperAnswerRequest(BaseModel):
     question: str
     year: str
 
+
+def _clean_option_text(text: str) -> str:
+    """
+    Clean up LLM artifacts from parsed option text.
+    Removes common patterns like 'Answer:', 'Difficulty:', etc.
+    """
+    if not text:
+        return ""
+    
+    cleaned = text.strip()
+    
+    # Remove common LLM artifacts (case-insensitive)
+    artifacts = [
+        r'^answer:\s*', r'^correct\s*answer:\s*', r'^key\s*phrase:\s*',
+        r'^system[_\s]*answer:\s*', r'^difficulty:\s*\w*\s*', r'^distractor[_\s]*\d*:\s*',
+        r'^option[_\s]*\d*:\s*', r'^choice[_\s]*\d*:\s*',
+        r'^\d+\.\s*', r'^[a-d]\)\s*', r'^[a-d]\.\s*',
+        r'^\*+\s*', r'^-+\s*',
+    ]
+    
+    # Run iteratively until no more changes (handles nested artifacts like "Option A: Answer: ...")
+    prev = ""
+    while prev != cleaned:
+        prev = cleaned
+        for pattern in artifacts:
+            cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE).strip()
+    
+    # Remove trailing artifacts
+    trailing_artifacts = [
+        r'\s*difficulty:\s*\w*\s*$', r'\s*\(correct\)\s*$',
+        r'\s*\[correct\]\s*$', r'\s*correct\s*$',
+    ]
+    
+    for pattern in trailing_artifacts:
+        cleaned = re.sub(pattern, '', cleaned, flags=re.IGNORECASE).strip()
+    
+    # Remove any remaining colons at the start
+    cleaned = re.sub(r'^:\s*', '', cleaned).strip()
+    
+    return cleaned
+
+
+def _generate_fallback_question(chapter_name: str, context: str) -> dict:
+    """
+    Generate a fallback question from context when LLM fails.
+    Uses simple text extraction to create a basic question.
+    """
+    # Extract first meaningful sentence as the answer
+    sentences = [s.strip() for s in context.split('.') if len(s.strip()) > 20]
+    if not sentences:
+        sentences = [context[:100]]
+    
+    answer_sentence = sentences[0] if sentences else "This historical event occurred."
+    
+    # Create a simple question about the topic
+    question = f"Based on the chapter '{chapter_name}', what is a key fact from this context?"
+    
+    # Use parts of context as distractors
+    distractors = []
+    for i, sent in enumerate(sentences[1:4]):
+        if len(sent) > 10:
+            distractors.append(sent[:50] + "..." if len(sent) > 50 else sent)
+    
+    # Fill in missing distractors
+    while len(distractors) < 3:
+        distractors.append(f"Alternative fact {len(distractors) + 1}")
+    
+    options = [answer_sentence] + distractors[:3]
+    random.shuffle(options)
+    
+    return {
+        "question": question,
+        "correct_answer": answer_sentence,
+        "key_phrase": answer_sentence[:30] if answer_sentence else "",
+        "options": options,
+        "correct_index": options.index(answer_sentence),
+        "is_fallback": True,  # Flag to indicate this is a fallback question
+    }
+
+
 # --- 4. Question genaration ---
 def run_ai_generation(chapter_name: str):
+    """
+    Generate a question using LLM with robust error handling.
+    Uses a thread lock to prevent concurrent LLM access which can cause crashes.
+    Falls back to context-based questions if LLM fails.
+    """
+    global _llm_generation_active
+    
     print(f"   Generating question for: {chapter_name}...")
     
     subset = df_syl[df_syl['Chapter_Clean'] == chapter_name]
-    if subset.empty: return None
+    if subset.empty:
+        return None
 
     all_indices = subset.index.tolist()
     idx = random.choice(all_indices)
-    context = df_syl.loc[idx]['Context']
+    context = str(df_syl.loc[idx]['Context'])
 
-    # Anti-Duplicate
-    history_key = (chapter_name, idx)
-    previous_qs = question_history.get(history_key, [])
-    avoid_instruction = ""
-    if previous_qs:
-        avoid_list = "; ".join(previous_qs[-3:])
-        avoid_instruction = f"Do not ask about: {avoid_list}."
-
-    #  Gives the AI an example to copy)
-    prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-You are a History Teacher. 
-Task: Read the context and generate 1 Question, 1 Answer, 1 Key Phrase, and 3 Distractors for MCQ.
-Constraint: Use the format below exactly.
-
-Example:
-QUESTION: Who was the first President of the USA?
-ANSWER: George Washington.
-KEY_PHRASE: George Washington
-DISTRACTOR_1: Thomas Jefferson
-DISTRACTOR_2: Benjamin Franklin
-DISTRACTOR_3: John Adams
-
-Your Turn:<|eot_id|><|start_header_id|>user<|end_header_id|>
-Context: "{context[:1500]}"
-{avoid_instruction}<|eot_id|><|start_header_id|>assistant<|end_header_id|>
-QUESTION:"""
-
+    # Check if LLM is available
     if llm is None:
-        raise HTTPException(500, "Model not initialized")
+        print("   ⚠️ LLM not initialized, using fallback question")
+        return _generate_fallback_question(chapter_name, context)
 
-    # retry logic
-    for attempt in range(2):
-        try:
-            chat_resp = llm.create_chat_completion(
-                messages=[
-                    {
-                        "role": "system",
-                        "content": """You are a History Teacher. Read the context and generate exactly one MCQ question.
+    # Try to acquire lock with timeout to prevent deadlocks
+    lock_acquired = _llm_lock.acquire(timeout=60)
+    if not lock_acquired:
+        print("   ⚠️ LLM busy (lock timeout), using fallback question")
+        return _generate_fallback_question(chapter_name, context)
+    
+    try:
+        _llm_generation_active = True
+        
+        # Anti-Duplicate
+        history_key = (chapter_name, idx)
+        previous_qs = question_history.get(history_key, [])
+        avoid_instruction = ""
+        if previous_qs:
+            avoid_list = "; ".join(previous_qs[-3:])
+            avoid_instruction = f"Do not ask about: {avoid_list}."
+
+        # retry logic with robust error handling
+        for attempt in range(2):
+            try:
+                chat_resp = llm.create_chat_completion(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": """You are a History Teacher. Read the context and generate exactly one MCQ question.
 Generate:
 - QUESTION: A clear history question
 - ANSWER: The correct answer
@@ -118,82 +203,94 @@ Generate:
 - DISTRACTOR_3: Another plausible but incorrect answer
 
 The distractors should be realistic and related to the topic, making the MCQ challenging but fair.""",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Context: \"{context[:1500]}\"\n{avoid_instruction}\nFormat:\nQUESTION: ...\nANSWER: ...\nKEY_PHRASE: ...\nDISTRACTOR_1: ...\nDISTRACTOR_2: ...\nDISTRACTOR_3: ...",
-                    },
-                ],
-                max_tokens=350,
-                temperature=0.7,
-                top_p=0.9,
-            )
-            resp = chat_resp["choices"][0]["message"]["content"]
-        except Exception as e:
-            print(f"Generation Error: {e}")
-            resp = ""
+                        },
+                        {
+                            "role": "user",
+                            "content": f"Context: \"{context[:1500]}\"\n{avoid_instruction}\nFormat:\nQUESTION: ...\nANSWER: ...\nKEY_PHRASE: ...\nDISTRACTOR_1: ...\nDISTRACTOR_2: ...\nDISTRACTOR_3: ...",
+                        },
+                    ],
+                    max_tokens=350,
+                    temperature=0.7,
+                    top_p=0.9,
+                )
+                resp = chat_resp["choices"][0]["message"]["content"]
+                
+            except Exception as e:
+                error_str = str(e).lower()
+                print(f"   Generation Error (attempt {attempt + 1}): {e}")
+                
+                # Check for critical errors that indicate LLM corruption
+                if "access violation" in error_str or "segfault" in error_str:
+                    print("   ⚠️ LLM critical error detected, using fallback")
+                    return _generate_fallback_question(chapter_name, context)
+                
+                resp = ""
+                continue
 
-        # --- PARSING LOGIC ---
-        clean_resp = resp.replace("OUTPUT", "").replace("###", "").strip()
-        clean_resp = clean_resp.replace("Answer:", "ANSWER:").replace("Key_Phrase:", "KEY_PHRASE:")
-        clean_resp = clean_resp.replace("Distractor_1:", "DISTRACTOR_1:").replace("Distractor_2:", "DISTRACTOR_2:").replace("Distractor_3:", "DISTRACTOR_3:")
+            # --- PARSING LOGIC ---
+            clean_resp = resp.replace("OUTPUT", "").replace("###", "").strip()
+            clean_resp = clean_resp.replace("Answer:", "ANSWER:").replace("Key_Phrase:", "KEY_PHRASE:")
+            clean_resp = clean_resp.replace("Distractor_1:", "DISTRACTOR_1:").replace("Distractor_2:", "DISTRACTOR_2:").replace("Distractor_3:", "DISTRACTOR_3:")
+            
+            q_match = re.search(r"QUESTION:?\s*(.*?)(?=\n*ANSWER:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
+            a_match = re.search(r"ANSWER:?\s*(.*?)(?=\n*KEY_PHRASE:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
+            k_match = re.search(r"KEY_PHRASE:?\s*(.*?)(?=\n*DISTRACTOR_1:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
+            d1_match = re.search(r"DISTRACTOR_1:?\s*(.*?)(?=\n*DISTRACTOR_2:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
+            d2_match = re.search(r"DISTRACTOR_2:?\s*(.*?)(?=\n*DISTRACTOR_3:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
+            d3_match = re.search(r"DISTRACTOR_3:?\s*(.*?)(?=$)", clean_resp, re.IGNORECASE | re.DOTALL)
+
+            q = q_match.group(1).strip() if q_match else ""
+            a = _clean_option_text(a_match.group(1).strip()) if a_match else ""
+            k = k_match.group(1).strip() if k_match else ""
+            d1 = _clean_option_text(d1_match.group(1).strip()) if d1_match else ""
+            d2 = _clean_option_text(d2_match.group(1).strip()) if d2_match else ""
+            d3 = _clean_option_text(d3_match.group(1).strip()) if d3_match else ""
+
+            # Validation: Did we get a question?
+            if len(q) > 5:
+                if not a:
+                    # Fallback: Use first sentence from context
+                    a = context.split('.')[0].strip() + '.' if '.' in context else context.strip()
+                
+                # Build options array with correct answer and distractors
+                distractors = [d for d in [d1, d2, d3] if d and len(d) > 2]
+                
+                # Ensure we have 3 distractors, generate fallbacks if needed
+                while len(distractors) < 3:
+                    distractors.append(f"Option {len(distractors) + 2}")
+                
+                # Shuffle options and track correct answer position
+                options = [a] + distractors[:3]
+                random.shuffle(options)
+                correct_index = options.index(a)
+                
+                if history_key not in question_history:
+                    question_history[history_key] = []
+                question_history[history_key].append(q)
+                
+                return {
+                    "question": q, 
+                    "correct_answer": a, 
+                    "key_phrase": k,
+                    "options": options,
+                    "correct_index": correct_index
+                }
+            
+            print(f"      ⚠️ Attempt {attempt + 1} failed (Empty Question). Retrying...")
+
+        # All attempts failed, use fallback
+        print("   ⚠️ All LLM attempts failed, using fallback question")
+        return _generate_fallback_question(chapter_name, context)
         
-        q_match = re.search(r"QUESTION:?\s*(.*?)(?=\n*ANSWER:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
-        a_match = re.search(r"ANSWER:?\s*(.*?)(?=\n*KEY_PHRASE:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
-        k_match = re.search(r"KEY_PHRASE:?\s*(.*?)(?=\n*DISTRACTOR_1:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
-        d1_match = re.search(r"DISTRACTOR_1:?\s*(.*?)(?=\n*DISTRACTOR_2:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
-        d2_match = re.search(r"DISTRACTOR_2:?\s*(.*?)(?=\n*DISTRACTOR_3:|$)", clean_resp, re.IGNORECASE | re.DOTALL)
-        d3_match = re.search(r"DISTRACTOR_3:?\s*(.*?)(?=$)", clean_resp, re.IGNORECASE | re.DOTALL)
-
-        q = q_match.group(1).strip() if q_match else ""
-        a = a_match.group(1).strip() if a_match else ""
-        k = k_match.group(1).strip() if k_match else ""
-        d1 = d1_match.group(1).strip() if d1_match else ""
-        d2 = d2_match.group(1).strip() if d2_match else ""
-        d3 = d3_match.group(1).strip() if d3_match else ""
-
-        # 3. Validation: Did we get a question?
-        if len(q) > 5:
-            if not a:
-                # Fallback: Use first sentence from context
-                context_text = str(context)
-                a = context_text.split('.')[0].strip() + '.' if '.' in context_text else context_text.strip()
-            
-            # Build options array with correct answer and distractors
-            distractors = [d for d in [d1, d2, d3] if d and len(d) > 2]
-            
-            # Ensure we have 3 distractors, generate fallbacks if needed
-            while len(distractors) < 3:
-                distractors.append(f"Option {len(distractors) + 2}")
-            
-            # Shuffle options and track correct answer position
-            options = [a] + distractors[:3]
-            random.shuffle(options)
-            correct_index = options.index(a)
-            
-            if history_key not in question_history: question_history[history_key] = []
-            question_history[history_key].append(q)
-            return {
-                "question": q, 
-                "correct_answer": a, 
-                "key_phrase": k,
-                "options": options,
-                "correct_index": correct_index
-            }
-        print(f"      ⚠️ Attempt {attempt+1} failed (Empty Question). Retrying...")
-
-    # Fallback: Use context as answer if all attempts fail
-    context_text = str(context)
-    fallback_answer = context_text.split('.')[0].strip() + '.' if '.' in context_text else context_text.strip()
-    fallback_options = [fallback_answer, "Option 2", "Option 3", "Option 4"]
-    random.shuffle(fallback_options)
-    return {
-        "question": resp if resp else "No question generated.", 
-        "correct_answer": fallback_answer, 
-        "key_phrase": "",
-        "options": fallback_options,
-        "correct_index": fallback_options.index(fallback_answer)
-    }
+    except Exception as e:
+        # Catch any unexpected errors and return fallback
+        print(f"   ⚠️ Unexpected error in generation: {e}")
+        return _generate_fallback_question(chapter_name, context)
+        
+    finally:
+        # Always release lock and reset state
+        _llm_generation_active = False
+        _llm_lock.release()
 
 
 def generate_question_batch(chapter_name: str, total: int = 10) -> List[Dict[str, str]]:

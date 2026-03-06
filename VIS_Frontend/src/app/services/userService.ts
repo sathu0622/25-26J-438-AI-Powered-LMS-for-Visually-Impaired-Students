@@ -11,8 +11,9 @@ export interface QuizHistory {
   score: number;
   total_questions: number;
   completed_at: string;
-  quiz_type: 'Generative' | 'Adaptive';
+  quiz_type: 'Generative' | 'Adaptive' | 'PastPaper';
   correct_answers?: number;
+  correct_count?: number;
   theta?: number;
   final_level?: string;
 }
@@ -22,11 +23,13 @@ export interface UserProfile {
   total_quizzes: number;
   generative_quizzes: number;
   adaptive_quizzes: number;
+  past_paper_quizzes: number;
   average_score: number;
   recent_activity: QuizHistory[];
   quiz_history: {
     generative: QuizHistory[];
     adaptive: QuizHistory[];
+    past_paper: QuizHistory[];
   };
 }
 
@@ -35,6 +38,7 @@ export interface UserStats {
   total_quizzes: number;
   generative_quizzes: number;
   adaptive_quizzes: number;
+  past_paper_quizzes: number;
 }
 
 class UserService {

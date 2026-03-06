@@ -24,6 +24,29 @@ export interface PastPaperEvaluateResponse {
   correct_answer: string;
 }
 
+export interface PastPaperQuestionResult {
+  question: string;
+  user_answer: string;
+  correct_answer: string;
+  score: number;
+  correct: boolean;
+  year: string;
+}
+
+export interface SavePastPaperResultRequest {
+  username: string;
+  chapter_name: string;
+  questions: PastPaperQuestionResult[];
+  total_score: number;
+  correct_count: number;
+  total_questions: number;
+}
+
+export interface SavePastPaperResultResponse {
+  message: string;
+  session_id: string;
+}
+
 export const pastPaperService = {
   // Get all chapters from past paper data
   async getChapters(): Promise<string[]> {
@@ -55,6 +78,16 @@ export const pastPaperService = {
         question,
         year,
       }
+    );
+  },
+
+  // Save past paper quiz result to database
+  async saveResult(
+    request: SavePastPaperResultRequest
+  ): Promise<SavePastPaperResultResponse> {
+    return api.post<SavePastPaperResultResponse>(
+      '/past-paper/save-result',
+      request
     );
   },
 };

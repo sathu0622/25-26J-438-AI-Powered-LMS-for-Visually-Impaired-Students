@@ -25,6 +25,7 @@ interface QuizQuestionProps {
   totalQuestions: number;
   onSubmit: (answer: string) => void;
   onSkip: () => void;
+  onBack?: () => void;
   isPastPaper?: boolean; // Flag to indicate if this is a past paper question
 }
 
@@ -34,6 +35,7 @@ export const QuizQuestion = ({
   totalQuestions,
   onSubmit,
   onSkip,
+  onBack,
   isPastPaper = false,
 }: QuizQuestionProps) => {
   const [answer, setAnswer] = useState('');
@@ -65,12 +67,12 @@ export const QuizQuestion = ({
           .map((opt, idx) => `${optionLabels[idx]}: ${opt}`)
           .join('. ');
         speak(
-          `Question ${questionNumber}. ${yearAnnouncement}${question.question}. This is a multiple choice question. ${optionsText}. Press A, B, C, or D to select your answer. Press Q to repeat question. Press S to skip.`,
+          `Question ${questionNumber}. ${yearAnnouncement}${question.question}. This is a multiple choice question. ${optionsText}. Press A, B, C, or D to select your answer. Press Q to repeat question. Press S to skip. Press Backspace to go back.`,
           { interrupt: true }
         );
       } else {
         speak(
-          `Question ${questionNumber}. ${yearAnnouncement}${question.question}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question.`,
+          `Question ${questionNumber}. ${yearAnnouncement}${question.question}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question, Press Backspace to go back.`,
           { interrupt: true }
         );
       }
@@ -125,11 +127,17 @@ export const QuizQuestion = ({
         e.preventDefault();
         handleReadQuestion();
       }
+
+      // Backspace or B key to go back
+      if ((e.key === 'Backspace' || e.key === 'b' || e.key === 'B') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        if (onBack) onBack();
+      }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showVoiceModal, answer, selectedOption, isMCQ]);
+  }, [showVoiceModal, answer, selectedOption, isMCQ, onBack]);
 
   const handleReadQuestion = () => {
     cancel();
@@ -193,8 +201,8 @@ export const QuizQuestion = ({
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">
             {isMCQ 
-              ? 'Press A/B/C/D to select • Q to repeat • S to skip'
-              : 'Press Q to repeat • Space to record • S to skip'
+              ? 'Press A/B/C/D to select • Q to repeat • S to skip • B to go back'
+              : 'Press Q to repeat • Space to record • S to skip • B to go back'
             }
           </span>
           <span>

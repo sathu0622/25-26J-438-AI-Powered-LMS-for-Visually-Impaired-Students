@@ -12,6 +12,7 @@ interface FreeTextFeedbackProps {
   questionNumber: number;
   onNext: () => void;
   onFinish: () => void;
+  onBack?: () => void;
   isLoadingNext?: boolean;
 }
 
@@ -22,6 +23,7 @@ export const FreeTextFeedback = ({
   questionNumber,
   onNext,
   onFinish,
+  onBack,
   isLoadingNext = false,
 }: FreeTextFeedbackProps) => {
   const { speak, cancel } = useTTS();
@@ -38,7 +40,7 @@ export const FreeTextFeedback = ({
       Your answer: ${userAnswer || 'No answer provided'}.
       Correct answer: ${result.correct_answer}.
       ${result.feedback}.
-      Press N for next question or F to finish the quiz.
+      Press N for next question, F to finish the quiz, or Backspace to go back.
     `;
     speak(feedbackText, { interrupt: true });
     return () => cancel();
@@ -58,11 +60,21 @@ export const FreeTextFeedback = ({
         e.preventDefault();
         onFinish();
       }
+
+      // Backspace or B to go back
+      if (e.key === 'Backspace' || key === 'b') {
+        e.preventDefault();
+        if (onBack) {
+          onBack();
+        } else {
+          onFinish();
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onNext, onFinish, isLoadingNext]);
+  }, [onNext, onFinish, onBack, isLoadingNext]);
 
   const getIcon = () => {
     if (isCorrect) return <CheckCircle2 className="h-12 w-12 text-green-500" />;

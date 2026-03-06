@@ -12,6 +12,7 @@ interface FreeTextQuestionProps {
   questionIndex: number;
   onSubmit: (answer: string) => void;
   onFinish: () => void;
+  onBack?: () => void;
   loading?: boolean;
   isRetake?: boolean;
 }
@@ -21,6 +22,7 @@ export const FreeTextQuestion = ({
   questionIndex,
   onSubmit,
   onFinish,
+  onBack,
   loading,
   isRetake,
 }: FreeTextQuestionProps) => {
@@ -37,7 +39,7 @@ export const FreeTextQuestion = ({
     const timer = setTimeout(() => {
       const retakeNote = isRetake ? 'This is a retake session. ' : '';
       speak(
-        `${retakeNote}Free-text question ${questionNumber}. ${question.question}. Type or record your answer. Press Space or Enter to record, Q to repeat question, F to finish session.`,
+        `${retakeNote}Free-text question ${questionNumber}. ${question.question}. Type or record your answer. Press Space or Enter to record, Q to repeat question, F to finish session, Backspace to go back.`,
         { interrupt: true }
       );
     }, 400);
@@ -81,11 +83,17 @@ export const FreeTextQuestion = ({
         e.preventDefault();
         onFinish();
       }
+
+      // Backspace or B to go back
+      if ((e.key === 'Backspace' || e.key === 'b' || e.key === 'B') && !isTyping) {
+        e.preventDefault();
+        if (onBack) onBack();
+      }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [answer, showVoiceModal, onFinish]);
+  }, [answer, showVoiceModal, onFinish, onBack]);
 
   const handleReadQuestion = () => {
     cancel();
@@ -128,6 +136,7 @@ export const FreeTextQuestion = ({
           <span className="inline-flex items-center gap-1"><Volume2 className="h-4 w-4" />Press Q to repeat</span>
           <span className="inline-flex items-center gap-1"><Mic className="h-4 w-4" />Press R to record</span>
           <span className="inline-flex items-center gap-1"><Flag className="h-4 w-4" />Press F to finish</span>
+          <span className="inline-flex items-center gap-1">Press B to go back</span>
         </div>
       </div>
 

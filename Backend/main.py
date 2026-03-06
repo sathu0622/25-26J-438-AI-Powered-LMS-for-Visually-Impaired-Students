@@ -90,8 +90,9 @@ quiz_routes.prefetch_cache = {}
 quiz_routes.question_history = {}
 quiz_routes.llm = llm
 
-# Share SBERT model with Adaptive module
+# Share SBERT model and LLM with Adaptive module
 adaptive_routes.sbert_model = sbert_model
+adaptive_routes.llm = llm  # For generating smart MCQ distractors
 
 # Mount routers
 app.include_router(quiz_routes.router)

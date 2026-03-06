@@ -4,7 +4,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Progress } from './ui/progress';
-import { Calendar, Trophy, Target, TrendingUp, Clock, ArrowLeft } from 'lucide-react';
+import { Calendar, Trophy, Target, TrendingUp, Clock, ArrowLeft, BookOpen } from 'lucide-react';
 import { useTTS } from '../contexts/TTSContext';
 import { userService, UserProfile, QuizHistory } from '../services/userService';
 
@@ -21,7 +21,7 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
   const [selectedTab, setSelectedTab] = useState(0);
   const [focusedCard, setFocusedCard] = useState<number>(-1); // For overview cards navigation
 
-  const tabs = ['overview', 'generative', 'adaptive', 'recent'];
+  const tabs = ['overview', 'generative', 'adaptive', 'pastpaper', 'recent'];
 
   useEffect(() => {
     loadUserProfile();
@@ -96,14 +96,14 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
       if (selectedTab === 0) {
         if (e.key === 'ArrowUp') {
           e.preventDefault();
-          const newCard = focusedCard <= 0 ? 3 : focusedCard - 1;
+          const newCard = focusedCard <= 0 ? 4 : focusedCard - 1;
           setFocusedCard(newCard);
           announceOverviewCard(newCard);
         }
 
         if (e.key === 'ArrowDown') {
           e.preventDefault();
-          const newCard = focusedCard >= 3 ? 0 : focusedCard + 1;
+          const newCard = focusedCard >= 4 ? 0 : focusedCard + 1;
           setFocusedCard(newCard);
           announceOverviewCard(newCard);
         }
@@ -122,10 +122,11 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
     if (!profile) return;
     cancel(); // Cancel any previous announcement
     const cards = [
-      `Total Quizzes card selected: You have completed ${profile.total_quizzes} ${profile.total_quizzes === 1 ? 'quiz' : 'quizzes'} in total. This includes both generative and adaptive quiz types.`,
+      `Total Quizzes card selected: You have completed ${profile.total_quizzes} ${profile.total_quizzes === 1 ? 'quiz' : 'quizzes'} in total. This includes generative, adaptive, and past paper quiz types.`,
       `Average Score card selected: Your overall performance average is ${profile.average_score} percent. ${profile.average_score >= 80 ? 'Excellent work! You are performing very well.' : profile.average_score >= 60 ? 'Good progress! Keep practicing to improve further.' : 'Keep learning! Your scores will improve with more practice.'}`,
       `Generative Quizzes card selected: You have completed ${profile.generative_quizzes} generative ${profile.generative_quizzes === 1 ? 'quiz' : 'quizzes'}. Generative quizzes use AI to create questions from your selected chapters.`,
-      `Adaptive Quizzes card selected: You have completed ${profile.adaptive_quizzes} adaptive ${profile.adaptive_quizzes === 1 ? 'quiz' : 'quizzes'}. Adaptive quizzes automatically adjust difficulty based on your performance to provide personalized learning.`
+      `Adaptive Quizzes card selected: You have completed ${profile.adaptive_quizzes} adaptive ${profile.adaptive_quizzes === 1 ? 'quiz' : 'quizzes'}. Adaptive quizzes automatically adjust difficulty based on your performance to provide personalized learning.`,
+      `Past Paper Quizzes card selected: You have completed ${profile.past_paper_quizzes} past paper ${profile.past_paper_quizzes === 1 ? 'quiz' : 'quizzes'}. Past paper quizzes test you on real exam questions from previous years organized by chapter.`
     ];
     speak(cards[cardIndex], { interrupt: true });
   };
@@ -144,7 +145,7 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
             Overview tab selected. Performance Summary:
             Your overall average score is ${profile.average_score} percent.
             You have completed ${profile.total_quizzes} total quizzes.
-            Quiz distribution: ${profile.generative_quizzes} generative quizzes and ${profile.adaptive_quizzes} adaptive quizzes.
+            Quiz distribution: ${profile.generative_quizzes} generative quizzes, ${profile.adaptive_quizzes} adaptive quizzes, and ${profile.past_paper_quizzes} past paper quizzes.
             ${profile.recent_activity.length > 0 
               ? `Your last quiz was completed on ${formatDate(profile.recent_activity[0].completed_at)} with a score of ${profile.recent_activity[0].score} percent.`
               : 'No recent quiz activity found.'
@@ -174,7 +175,19 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
             }
           `;
           break;
-        case 3: // Recent
+        case 3: // Past Paper
+          const pastPaperCount = profile.quiz_history.past_paper?.length || 0;
+          const chapterStats = getPastPaperChapterStats();
+          announcement = `
+            Past Paper Quizzes tab selected.
+            You have completed ${pastPaperCount} past paper ${pastPaperCount === 1 ? 'quiz' : 'quizzes'}.
+            ${pastPaperCount > 0 
+              ? `Performance is organized by ${chapterStats.length} ${chapterStats.length === 1 ? 'chapter' : 'chapters'}. ${chapterStats.length > 0 ? `Best performing chapter: ${chapterStats[0].chapter} with ${chapterStats[0].averageScore} percent average.` : ''} Use Tab to navigate through chapter performance details.`
+              : 'No past paper quizzes completed yet. Try a past paper quiz to test yourself on real exam questions.'
+            }
+          `;
+          break;
+        case 4: // Recent
           const recentCount = profile.recent_activity.length;
           announcement = `
             Recent Activity tab selected.
@@ -194,6 +207,34 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
       cancel();
     };
   }, [selectedTab, profile, loading, tabs, speak, cancel]);
+
+  // Helper function to get past paper stats organized by chapter
+  const getPastPaperChapterStats = () => {
+    if (!profile || !profile.quiz_history.past_paper) return [];
+    
+    const chapterMap: { [chapter: string]: { total: number; score: number; count: number; quizzes: QuizHistory[] } } = {};
+    
+    profile.quiz_history.past_paper.forEach(quiz => {
+      const chapter = quiz.chapter_name;
+      if (!chapterMap[chapter]) {
+        chapterMap[chapter] = { total: 0, score: 0, count: 0, quizzes: [] };
+      }
+      chapterMap[chapter].total += quiz.total_questions;
+      chapterMap[chapter].score += quiz.score;
+      chapterMap[chapter].count += 1;
+      chapterMap[chapter].quizzes.push(quiz);
+    });
+    
+    return Object.entries(chapterMap)
+      .map(([chapter, data]) => ({
+        chapter,
+        totalQuizzes: data.count,
+        totalQuestions: data.total,
+        averageScore: Math.round(data.score / data.count),
+        quizzes: data.quizzes.sort((a, b) => new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime())
+      }))
+      .sort((a, b) => b.averageScore - a.averageScore);
+  };
 
   const handleBackNavigation = () => {
     // Cancel any ongoing speech before navigating back
@@ -421,7 +462,7 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
 
       {/* Profile Overview Cards */}
       <section 
-        className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6" 
+        className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6" 
         id="main-content"
         role="region" 
         aria-labelledby="overview-heading"
@@ -497,6 +538,23 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
           </div>
           <div id="adaptive-quizzes-heading" className="text-sm text-muted-foreground">Adaptive Quizzes</div>
         </Card>
+        
+        <Card 
+          className={`p-6 text-center ${focusedCard === 4 ? 'ring-2 ring-blue-500' : ''}`}
+          role="region"
+          aria-labelledby="past-paper-quizzes-heading"
+          tabIndex={0}
+          onFocus={() => {
+            cancel(); // Cancel any previous speech
+            speak(`Past Paper Quizzes card focused. You have completed ${profile.past_paper_quizzes} past paper ${profile.past_paper_quizzes === 1 ? 'quiz' : 'quizzes'}. Past paper quizzes test you on real exam questions from previous years. ${profile.past_paper_quizzes > 0 ? 'Check the Past Paper tab to see your performance organized by chapter.' : 'Try a past paper quiz to practice with real exam questions.'}`, { interrupt: true });
+          }}
+        >
+          <BookOpen className="h-8 w-8 text-orange-500 mx-auto mb-2" aria-hidden="true" />
+          <div className="text-2xl font-bold" aria-label={`${profile.past_paper_quizzes} past paper quizzes completed`}>
+            {profile.past_paper_quizzes}
+          </div>
+          <div id="past-paper-quizzes-heading" className="text-sm text-muted-foreground">Past Paper Quizzes</div>
+        </Card>
       </section>
 
       {/* Detailed Tabs */}
@@ -508,7 +566,7 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
           className="w-full"
           orientation="horizontal"
         >
-          <TabsList className="grid w-full grid-cols-4" role="tablist" aria-label="Profile data categories">
+          <TabsList className="grid w-full grid-cols-5" role="tablist" aria-label="Profile data categories">
             <TabsTrigger 
               value="overview" 
               role="tab" 
@@ -523,7 +581,7 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
               aria-selected={selectedTab === 1}
               aria-controls="generative-panel"
             >
-              Generative Quizzes
+              Generative
             </TabsTrigger>
             <TabsTrigger 
               value="adaptive" 
@@ -531,15 +589,23 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
               aria-selected={selectedTab === 2}
               aria-controls="adaptive-panel"
             >
-              Adaptive Quizzes
+              Adaptive
+            </TabsTrigger>
+            <TabsTrigger 
+              value="pastpaper" 
+              role="tab" 
+              aria-selected={selectedTab === 3}
+              aria-controls="pastpaper-panel"
+            >
+              Past Paper
             </TabsTrigger>
             <TabsTrigger 
               value="recent" 
               role="tab" 
-              aria-selected={selectedTab === 3}
+              aria-selected={selectedTab === 4}
               aria-controls="recent-panel"
             >
-              Recent Activity
+              Recent
             </TabsTrigger>
           </TabsList>
 
@@ -638,6 +704,90 @@ export const UserProfilePage = ({ username, onBack }: UserProfilePageProps) => {
             <Card className="p-6">
               <h3 className="text-xl font-semibold mb-4">Adaptive Quiz History</h3>
               <QuizHistoryTable quizzes={profile.quiz_history.adaptive} type="adaptive" />
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="pastpaper" className="mt-6" role="tabpanel" id="pastpaper-panel" aria-labelledby="pastpaper-tab">
+            <Card className="p-6">
+              <h3 className="text-xl font-semibold mb-4 flex items-center">
+                <BookOpen className="mr-2 h-5 w-5" aria-hidden="true" />
+                Past Paper Quiz Performance by Chapter
+              </h3>
+              {getPastPaperChapterStats().length === 0 ? (
+                <div className="text-muted-foreground text-center py-8" role="status" aria-live="polite">
+                  No past paper quizzes completed yet. Complete a past paper quiz to see your performance here.
+                </div>
+              ) : (
+                <div className="space-y-6" role="list" aria-label="Chapter performance list">
+                  {getPastPaperChapterStats().map((chapterStat, index) => (
+                    <Card 
+                      key={chapterStat.chapter} 
+                      className="p-4 border-l-4 border-l-orange-500"
+                      role="listitem"
+                      tabIndex={0}
+                      onFocus={() => {
+                        cancel();
+                        const performanceLevel = chapterStat.averageScore >= 80 ? 'excellent' : chapterStat.averageScore >= 60 ? 'good' : 'needs improvement';
+                        speak(`${chapterStat.chapter} performance summary. You have completed ${chapterStat.totalQuizzes} ${chapterStat.totalQuizzes === 1 ? 'quiz' : 'quizzes'} in this chapter. Average score: ${chapterStat.averageScore} percent, which is ${performanceLevel}. Total questions answered: ${chapterStat.totalQuestions}.`, { interrupt: true });
+                      }}
+                    >
+                      <div className="flex justify-between items-start mb-3">
+                        <div>
+                          <h4 className="font-semibold text-lg">{chapterStat.chapter}</h4>
+                          <p className="text-sm text-muted-foreground">
+                            {chapterStat.totalQuizzes} {chapterStat.totalQuizzes === 1 ? 'quiz' : 'quizzes'} completed
+                          </p>
+                        </div>
+                        <Badge 
+                          variant={getScoreBadgeVariant(chapterStat.averageScore)} 
+                          className="text-lg px-3 py-1"
+                          aria-label={`Average score: ${chapterStat.averageScore} percent`}
+                        >
+                          {chapterStat.averageScore}%
+                        </Badge>
+                      </div>
+                      
+                      <div className="mb-3">
+                        <Progress value={chapterStat.averageScore} className="h-2" />
+                      </div>
+                      
+                      <div className="text-sm text-muted-foreground mb-3">
+                        Total questions: {chapterStat.totalQuestions}
+                      </div>
+                      
+                      {/* Show individual quiz attempts for this chapter */}
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-sm font-medium text-blue-600 hover:text-blue-800">
+                          View individual quiz attempts ({chapterStat.quizzes.length})
+                        </summary>
+                        <div className="mt-3 space-y-2 pl-4 border-l-2 border-gray-200">
+                          {chapterStat.quizzes.map((quiz, qIndex) => (
+                            <div 
+                              key={qIndex} 
+                              className="flex justify-between items-center py-2 text-sm"
+                              tabIndex={0}
+                              onFocus={() => {
+                                cancel();
+                                speak(`Quiz attempt ${qIndex + 1}. Completed ${formatDate(quiz.completed_at)}. Score: ${quiz.score} percent. ${quiz.correct_count || 0} correct out of ${quiz.total_questions} questions.`, { interrupt: true });
+                              }}
+                            >
+                              <div>
+                                <span className="text-muted-foreground">{formatDate(quiz.completed_at)}</span>
+                                <span className="ml-2">
+                                  {quiz.correct_count || 0}/{quiz.total_questions} correct
+                                </span>
+                              </div>
+                              <Badge variant={getScoreBadgeVariant(quiz.score)} className="ml-2">
+                                {quiz.score}%
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </Card>
           </TabsContent>
 

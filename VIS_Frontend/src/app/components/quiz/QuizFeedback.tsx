@@ -16,6 +16,7 @@ interface QuizFeedbackProps {
   };
   onNext: () => void;
   onGoHome: () => void;
+  onBack?: () => void;
   isLastQuestion?: boolean;
 }
 
@@ -26,10 +27,43 @@ export const QuizFeedback = ({
   result,
   onNext,
   onGoHome,
+  onBack,
   isLastQuestion = false,
 }: QuizFeedbackProps & { onGoHome: () => void }) => {
   const { speak, cancel } = useTTS();
   const isCorrect = result.score>=60;
+
+  // Keyboard shortcuts: N for next, Backspace/B for back
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      
+      // N or Enter or Space for next
+      if (key === 'n' || key === 'enter' || key === ' ') {
+        e.preventDefault();
+        onNext();
+      }
+      
+      // Backspace or B for back
+      if (e.key === 'Backspace' || key === 'b') {
+        e.preventDefault();
+        if (onBack) {
+          onBack();
+        } else {
+          onGoHome();
+        }
+      }
+      
+      // H for home
+      if (key === 'h') {
+        e.preventDefault();
+        onGoHome();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onNext, onGoHome, onBack]);
 
   // 🔊 Automatically speak feedback, given answer, and model answer in sequence on load
   useEffect(() => {

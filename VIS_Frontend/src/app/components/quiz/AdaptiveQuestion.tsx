@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Volume2, Mic, Send, Flag, Play, Loader2, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Volume2, Mic, Send, Flag, Play, Loader2, CheckCircle2, XCircle, AlertCircle, Check } from 'lucide-react';
 import { AdaptiveItem, AdaptiveAnswerResponse } from '../../services/adaptiveService';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -11,6 +11,7 @@ interface AdaptiveQuestionProps {
   item: AdaptiveItem;
   onSubmit: (answer: string) => void;
   onFinish: () => void;
+  onBack?: () => void;
   feedback?: string;
   theta: number;
   loading?: boolean;
@@ -24,6 +25,7 @@ export const AdaptiveQuestion = ({
   item,
   onSubmit,
   onFinish,
+  onBack,
   feedback,
   theta,
   loading,
@@ -33,19 +35,37 @@ export const AdaptiveQuestion = ({
   lastAnswer,
 }: AdaptiveQuestionProps) => {
   const [answer, setAnswer] = useState('');
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
   const [inputMode, setInputMode] = useState<'voice' | 'text'>('voice');
   const [showVoiceModal, setShowVoiceModal] = useState(false);
   const { speak, cancel } = useTTS();
 
   const questionNumber = useMemo(() => answeredCount + 1, [answeredCount]);
+  
+  // Check if this is an MCQ question
+  const isMCQ = item.options && item.options.length > 0;
+  const optionLabels = ['A', 'B', 'C', 'D'];
 
   useEffect(() => {
     cancel();
+    setSelectedOption(null);
+    setAnswer('');
     const timer = setTimeout(() => {
-      speak(
-        `Adaptive question ${questionNumber}. Difficulty ${item.difficulty_label}. ${item.question}. Press Space or Enter to record or submit, Q to repeat, R to record, and F to finish the session.`,
-        { interrupt: true }
-      );
+      if (isMCQ && item.options) {
+        // Read MCQ options
+        const optionsText = item.options
+          .map((opt, idx) => `${optionLabels[idx]}: ${opt}`)
+          .join('. ');
+        speak(
+          `Adaptive question ${questionNumber}. Difficulty ${item.difficulty_label}. ${item.question}. This is a multiple choice question. ${optionsText}. Press A, B, C, or D to select. Press Q to repeat. Press F to finish. Press Backspace to go back.`,
+          { interrupt: true }
+        );
+      } else {
+        speak(
+          `Adaptive question ${questionNumber}. Difficulty ${item.difficulty_label}. ${item.question}. Press Space or Enter to record or submit, Q to repeat, R to record, F to finish, and Backspace to go back.`,
+          { interrupt: true }
+        );
+      }
     }, 400);
 
     return () => {
@@ -59,16 +79,29 @@ export const AdaptiveQuestion = ({
       const targetTag = (e.target as HTMLElement)?.tagName;
       const isTyping = targetTag === 'TEXTAREA' || targetTag === 'INPUT';
 
+      // MCQ option selection (A, B, C, D)
+      if (isMCQ && item.options && !isTyping) {
+        const key = e.key.toUpperCase();
+        const optionIndex = optionLabels.indexOf(key);
+        if (optionIndex !== -1 && optionIndex < item.options.length) {
+          e.preventDefault();
+          handleOptionSelect(optionIndex);
+          return;
+        }
+      }
+
       if ((e.key === ' ' || e.key === 'Enter') && !isTyping) {
         e.preventDefault();
-        if (answer.trim() && !showVoiceModal) {
+        if (isMCQ && selectedOption !== null) {
           handleSubmit();
-        } else {
+        } else if (answer.trim() && !showVoiceModal) {
+          handleSubmit();
+        } else if (!isMCQ) {
           handleVoiceToggle();
         }
       }
 
-      if ((e.key === 'r' || e.key === 'R') && !isTyping) {
+      if ((e.key === 'r' || e.key === 'R') && !isTyping && !isMCQ) {
         e.preventDefault();
         handleVoiceToggle();
       }
@@ -82,19 +115,39 @@ export const AdaptiveQuestion = ({
         e.preventDefault();
         onFinish();
       }
+
+      // Backspace or B key to go back
+      if ((e.key === 'Backspace' || e.key === 'b' || e.key === 'B') && !isTyping) {
+        e.preventDefault();
+        if (onBack) onBack();
+      }
     };
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [answer, showVoiceModal, onFinish]);
+  }, [answer, showVoiceModal, onFinish, onBack, selectedOption, isMCQ]);
 
   useEffect(() => {
     if (lastResult && lastQuestion) {
       const correctness = lastResult.correct ? 'correct' : 'incorrect';
       const correctAnswerText = lastResult.correct_answer ? `Correct answer: ${lastResult.correct_answer}.` : '';
-      const confidenceText = lastResult.probability ? `Confidence ${Math.round(lastResult.probability * 100)} percent.` : '';
       const yourAnswerText = lastAnswer ? `Your answer: ${lastAnswer}.` : 'No answer captured.';
-      speak(`Previous question feedback. You were ${correctness}. ${yourAnswerText} ${correctAnswerText} ${confidenceText}`, { interrupt: true });
+      
+      // Check for difficulty level transition
+      const difficultyOrder = ['easy', 'medium', 'hard'];
+      const prevDifficulty = lastQuestion.difficulty_label?.toLowerCase() || 'medium';
+      const currDifficulty = item.difficulty_label?.toLowerCase() || 'medium';
+      const prevIndex = difficultyOrder.indexOf(prevDifficulty);
+      const currIndex = difficultyOrder.indexOf(currDifficulty);
+      
+      let difficultyMessage = '';
+      if (currIndex > prevIndex) {
+        difficultyMessage = `Congratulations! You advanced to ${item.difficulty_label} difficulty level.`;
+      } else if (currIndex < prevIndex) {
+        difficultyMessage = `The system adjusted to ${item.difficulty_label} difficulty to help you learn better.`;
+      }
+      
+      speak(`Previous question feedback. You were ${correctness}. ${yourAnswerText} ${correctAnswerText} ${difficultyMessage}`, { interrupt: true });
     } else if (feedback) {
       speak(`Feedback: ${feedback}`, { interrupt: true });
     }
@@ -103,7 +156,21 @@ export const AdaptiveQuestion = ({
 
   const handleReadQuestion = () => {
     cancel();
-    speak(`Question ${questionNumber}. ${item.question}`);
+    if (isMCQ && item.options) {
+      const optionsText = item.options
+        .map((opt, idx) => `${optionLabels[idx]}: ${opt}`)
+        .join('. ');
+      speak(`Question ${questionNumber}. ${item.question}. Options: ${optionsText}`, { interrupt: true });
+    } else {
+      speak(`Question ${questionNumber}. ${item.question}`);
+    }
+  };
+
+  const handleOptionSelect = (index: number) => {
+    if (!item.options) return;
+    setSelectedOption(index);
+    const selectedText = item.options[index];
+    speak(`Selected ${optionLabels[index]}: ${selectedText}. Press Enter to submit.`, { interrupt: true });
   };
 
   const handleVoiceToggle = () => {
@@ -118,10 +185,19 @@ export const AdaptiveQuestion = ({
   };
 
   const handleSubmit = () => {
-    if (!answer.trim() || loading) return;
-    onSubmit(answer.trim());
-    setAnswer('');
-    setShowVoiceModal(false);
+    if (loading) return;
+    
+    if (isMCQ && selectedOption !== null && item.options) {
+      // For MCQ, submit the selected option text
+      onSubmit(item.options[selectedOption]);
+      setSelectedOption(null);
+      setAnswer('');
+      setShowVoiceModal(false);
+    } else if (answer.trim()) {
+      onSubmit(answer.trim());
+      setAnswer('');
+      setShowVoiceModal(false);
+    }
   };
 
   return (
@@ -139,8 +215,13 @@ export const AdaptiveQuestion = ({
         </div>
         <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
           <span className="inline-flex items-center gap-1"><Volume2 className="h-4 w-4" />Press Q to repeat</span>
-          <span className="inline-flex items-center gap-1"><Mic className="h-4 w-4" />Press R to record</span>
+          {isMCQ ? (
+            <span className="inline-flex items-center gap-1">Press A/B/C/D to select</span>
+          ) : (
+            <span className="inline-flex items-center gap-1"><Mic className="h-4 w-4" />Press R to record</span>
+          )}
           <span className="inline-flex items-center gap-1"><Flag className="h-4 w-4" />Press F to finish</span>
+          <span className="inline-flex items-center gap-1">Press B to go back</span>
         </div>
       </div>
 
@@ -149,9 +230,6 @@ export const AdaptiveQuestion = ({
           <div className="flex-1 space-y-2">
             <p className="text-xs uppercase tracking-wide text-primary font-semibold">Difficulty: {item.difficulty_label}</p>
             <h2 id="adaptive-question-heading" className="text-xl font-semibold leading-relaxed">{item.question}</h2>
-            {item.context && (
-              <p className="text-sm text-muted-foreground">Context: {item.context}</p>
-            )}
           </div>
           <div className="flex flex-col items-end gap-2 text-sm text-muted-foreground">
             <Button
@@ -162,45 +240,87 @@ export const AdaptiveQuestion = ({
             >
               <Volume2 className="h-5 w-5" />
             </Button>
-            <div className="text-right">Ability θ: {theta.toFixed(2)}</div>
+            
           </div>
         </div>
       </Card>
 
-      <div className="flex justify-center gap-2">
-        <Button
-          onClick={() => setInputMode('voice')}
-          variant={inputMode === 'voice' ? 'default' : 'outline'}
-          size="sm"
-        >
-          <Mic className="mr-2 h-4 w-4" />
-          Voice
-        </Button>
-        <Button
-          onClick={() => setInputMode('text')}
-          variant={inputMode === 'text' ? 'default' : 'outline'}
-          size="sm"
-        >
-          Text
-        </Button>
-      </div>
+      {/* MCQ Options */}
+      {isMCQ && item.options ? (
+        <Card className="p-6">
+          <div className="space-y-3">
+            <label className="text-sm font-medium">Select your answer:</label>
+            <div className="space-y-3">
+              {item.options.map((option, index) => (
+                <Button
+                  key={index}
+                  onClick={() => handleOptionSelect(index)}
+                  variant={selectedOption === index ? 'default' : 'outline'}
+                  className={`w-full justify-start min-h-[56px] text-left p-4 ${
+                    selectedOption === index 
+                      ? 'ring-2 ring-primary ring-offset-2' 
+                      : ''
+                  }`}
+                  aria-label={`Option ${optionLabels[index]}: ${option}`}
+                >
+                  <span className="flex items-center gap-3 w-full">
+                    <span className={`flex h-8 w-8 items-center justify-center rounded-full border-2 font-semibold ${
+                      selectedOption === index 
+                        ? 'bg-primary-foreground text-primary border-primary-foreground' 
+                        : 'border-muted-foreground'
+                    }`}>
+                      {optionLabels[index]}
+                    </span>
+                    <span className="flex-1 text-base">{option}</span>
+                    {selectedOption === index && (
+                      <Check className="h-5 w-5 text-primary-foreground" />
+                    )}
+                  </span>
+                </Button>
+              ))}
+            </div>
+          </div>
+        </Card>
+      ) : (
+        <>
+          {/* Input Mode Toggle for non-MCQ */}
+          <div className="flex justify-center gap-2">
+            <Button
+              onClick={() => setInputMode('voice')}
+              variant={inputMode === 'voice' ? 'default' : 'outline'}
+              size="sm"
+            >
+              <Mic className="mr-2 h-4 w-4" />
+              Voice
+            </Button>
+            <Button
+              onClick={() => setInputMode('text')}
+              variant={inputMode === 'text' ? 'default' : 'outline'}
+              size="sm"
+            >
+              Text
+            </Button>
+          </div>
 
-      <Card className="p-6 space-y-4">
-        <label htmlFor="adaptive-answer" className="text-sm font-medium">Your answer</label>
-        <Textarea
-          id="adaptive-answer"
-          value={answer}
-          onChange={(e) => {
-            setAnswer(e.target.value);
-            setInputMode('text');
-          }}
-          placeholder={inputMode === 'voice' ? 'Tap microphone and speak your answer…' : 'Type your answer here…'}
-          className="min-h-[140px] text-base"
-        />
-      </Card>
+          <Card className="p-6 space-y-4">
+            <label htmlFor="adaptive-answer" className="text-sm font-medium">Your answer</label>
+            <Textarea
+              id="adaptive-answer"
+              value={answer}
+              onChange={(e) => {
+                setAnswer(e.target.value);
+                setInputMode('text');
+              }}
+              placeholder={inputMode === 'voice' ? 'Tap microphone and speak your answer…' : 'Type your answer here…'}
+              className="min-h-[140px] text-base"
+            />
+          </Card>
+        </>
+      )}
 
+      {/* Action Buttons */}
       <div className="grid gap-3 sm:grid-cols-3">
-        {inputMode === 'voice' && (
+        {!isMCQ && inputMode === 'voice' && (
           <Button
             onClick={handleVoiceToggle}
             variant="outline"
@@ -214,7 +334,7 @@ export const AdaptiveQuestion = ({
         )}
         <Button
           onClick={handleSubmit}
-          disabled={!answer.trim() || Boolean(loading)}
+          disabled={isMCQ ? selectedOption === null || Boolean(loading) : !answer.trim() || Boolean(loading)}
           size="lg"
           className="min-h-[56px]"
         >
@@ -254,9 +374,30 @@ export const AdaptiveQuestion = ({
               <p className="text-sm text-muted-foreground">Previous question: {lastQuestion.question}</p>
               <p className="text-sm">Your answer: {lastAnswer || 'No answer captured.'}</p>
               <p className="text-sm">Correct answer: {lastResult?.correct_answer || 'Not provided.'}</p>
-              {lastResult?.probability !== undefined && (
-                <p className="text-xs text-muted-foreground">Model confidence: {Math.round(lastResult.probability * 100)}%</p>
-              )}
+              
+              {/* Difficulty level transition */}
+              {(() => {
+                const difficultyOrder = ['easy', 'medium', 'hard'];
+                const prevDifficulty = lastQuestion.difficulty_label?.toLowerCase() || 'medium';
+                const currDifficulty = item.difficulty_label?.toLowerCase() || 'medium';
+                const prevIndex = difficultyOrder.indexOf(prevDifficulty);
+                const currIndex = difficultyOrder.indexOf(currDifficulty);
+                
+                if (currIndex > prevIndex) {
+                  return (
+                    <div className="mt-2 p-2 rounded-lg text-sm font-medium bg-green-100 text-green-700 border border-green-300">
+                      🎉 Advancing to {item.difficulty_label} difficulty!
+                    </div>
+                  );
+                } else if (currIndex < prevIndex) {
+                  return (
+                    <div className="mt-2 p-2 rounded-lg text-sm font-medium bg-yellow-100 text-yellow-700 border border-yellow-300">
+                      Adjusted to {item.difficulty_label} difficulty to help you learn better.
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
             <Button
               variant="ghost"
@@ -265,9 +406,23 @@ export const AdaptiveQuestion = ({
               onClick={() => {
                 const correctness = lastResult?.correct ? 'correct' : 'incorrect';
                 const correctAnswerText = lastResult?.correct_answer ? `Correct answer: ${lastResult.correct_answer}.` : '';
-                const confidenceText = lastResult?.probability ? `Confidence ${Math.round(lastResult.probability * 100)} percent.` : '';
                 const yourAnswerText = lastAnswer ? `Your answer: ${lastAnswer}.` : 'No answer captured.';
-                speak(`Previous question feedback. You were ${correctness}. ${yourAnswerText} ${correctAnswerText} ${confidenceText}`, { interrupt: true });
+                
+                // Check for difficulty level transition
+                const difficultyOrder = ['easy', 'medium', 'hard'];
+                const prevDifficulty = lastQuestion.difficulty_label?.toLowerCase() || 'medium';
+                const currDifficulty = item.difficulty_label?.toLowerCase() || 'medium';
+                const prevIndex = difficultyOrder.indexOf(prevDifficulty);
+                const currIndex = difficultyOrder.indexOf(currDifficulty);
+                
+                let difficultyMessage = '';
+                if (currIndex > prevIndex) {
+                  difficultyMessage = `You advanced to ${item.difficulty_label} difficulty level!`;
+                } else if (currIndex < prevIndex) {
+                  difficultyMessage = `Adjusted to ${item.difficulty_label} difficulty to help you learn.`;
+                }
+                
+                speak(`Previous question feedback. You were ${correctness}. ${yourAnswerText} ${correctAnswerText} ${difficultyMessage}`, { interrupt: true });
               }}
             >
               <Play className="h-4 w-4" />
@@ -276,13 +431,16 @@ export const AdaptiveQuestion = ({
         </Card>
       )}
 
-      <VoiceRecorder
-        isOpen={showVoiceModal}
-        onClose={() => setShowVoiceModal(false)}
-        onSubmit={handleVoiceSubmit}
-        title="Record your answer"
-        context={item.question}
-      />
+      {/* Voice Recorder Modal (only for non-MCQ) */}
+      {!isMCQ && (
+        <VoiceRecorder
+          isOpen={showVoiceModal}
+          onClose={() => setShowVoiceModal(false)}
+          onSubmit={handleVoiceSubmit}
+          title="Record your answer"
+          context={item.question}
+        />
+      )}
     </div>
   );
 };

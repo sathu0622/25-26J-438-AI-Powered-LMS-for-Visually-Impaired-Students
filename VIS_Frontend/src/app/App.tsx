@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTTS } from './contexts/TTSContext';
 import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
@@ -32,9 +32,9 @@ import { UserProfilePage } from './components/UserProfilePage';
 
 // ✅ NEW: Import quizService instead of local data
 import { quizService, QuizSetListItem, QuizSetSummary, GenerateQuestionResponse } from './services/quizService';
-import { pastPaperService, PastPaperQuestion } from './services/pastPaperService';
+import { pastPaperService, PastPaperQuestion, PastPaperQuestionResult, PastPaperEvaluateResponse } from './services/pastPaperService';
 import { adaptiveService, AdaptiveItem, AdaptiveAnswerResponse } from './services/adaptiveService';
-import { freeTextService, FreeTextQuestion as FreeTextQuestionType, FreeTextAnswerResponse, FreeTextSummary as FreeTextSummaryType, FreeTextNextResponse } from './services/freeTextService';
+import { freeTextService, isAbortError, FreeTextQuestion as FreeTextQuestionType, FreeTextAnswerResponse, FreeTextSummary as FreeTextSummaryType, FreeTextNextResponse } from './services/freeTextService';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 type BrailleScreen = 'upload' | 'evaluation';
@@ -58,6 +58,8 @@ export function App() {
   const [selectedTopic, setSelectedTopic] = useState<string>('');
   const [quizQuestions, setQuizQuestions] = useState<GenerateQuestionResponse[]>([]);
   const [pastPaperQuestions, setPastPaperQuestions] = useState<PastPaperQuestion[]>([]);
+  const [pastPaperAnswers, setPastPaperAnswers] = useState<PastPaperQuestionResult[]>([]);
+  const [pastPaperChapter, setPastPaperChapter] = useState<string>('');
   const [quizSetId, setQuizSetId] = useState<string | null>(null);
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<GenerateQuestionResponse | null>(null);
@@ -103,6 +105,8 @@ export function App() {
   const [freeTextIsRetake, setFreeTextIsRetake] = useState<boolean>(false);
   const [freeTextPendingNext, setFreeTextPendingNext] = useState<FreeTextNextResponse | null>(null);
   const [freeTextLoadingNext, setFreeTextLoadingNext] = useState<boolean>(false);
+  // AbortController for cancelling in-flight free-text requests
+  const freeTextAbortController = useRef<AbortController | null>(null);
   // User state for Quiz
   const [quizUser, setQuizUser] = useState<string | null>(() => {
     return localStorage.getItem('quizUser');
@@ -218,6 +222,8 @@ export function App() {
       try {
         const questions = await pastPaperService.getQuestions(topic);
         setPastPaperQuestions(questions);
+        setPastPaperAnswers([]); // Reset past paper answers tracking
+        setPastPaperChapter(topic); // Track the chapter name
         setQuizQuestions([]); // Clear regular quiz questions
         setSelectedTopic(topic);
         setQuestionNumber(1);
@@ -301,6 +307,17 @@ export function App() {
           currentQuestion.question,
           currentQuestion.year || ''
         );
+        
+        // Track the answer for saving later
+        const questionResult: PastPaperQuestionResult = {
+          question: currentQuestion.question,
+          user_answer: answer,
+          correct_answer: currentQuestion.correct_answer,
+          score: result.score,
+          correct: result.correct,
+          year: currentQuestion.year || ''
+        };
+        setPastPaperAnswers(prev => [...prev, questionResult]);
       } else {
         // Use regular quiz evaluation
         if (!quizSetId || !attemptId) return;
@@ -358,7 +375,52 @@ export function App() {
   };
 
   const handleQuizComplete = async () => {
-    if (!quizSetId || !attemptId || !quizUser) return;
+    if (!quizUser) return;
+    
+    // Handle past paper quiz completion
+    if (quizMode === 'pastpaper') {
+      try {
+        // Calculate total score from all answers
+        const totalScore = pastPaperAnswers.length > 0
+          ? pastPaperAnswers.reduce((sum, a) => sum + a.score, 0) / pastPaperAnswers.length
+          : 0;
+        const correctCountFinal = pastPaperAnswers.filter(a => a.correct).length;
+        
+        // Save the past paper quiz result
+        await pastPaperService.saveResult({
+          username: quizUser,
+          chapter_name: pastPaperChapter,
+          questions: pastPaperAnswers,
+          total_score: Math.round(totalScore * 10) / 10,
+          correct_count: correctCountFinal,
+          total_questions: pastPaperQuestions.length
+        });
+        
+        // Create a summary for display
+        setQuizSummary({
+          total_questions: pastPaperQuestions.length,
+          correct_count: correctCountFinal,
+          average_score: Math.round(totalScore * 10) / 10
+        });
+        setQuizScreen('summary');
+      } catch (err) {
+        console.error('Failed to save past paper quiz result', err);
+        // Still show summary even if save fails
+        const totalScore = pastPaperAnswers.length > 0
+          ? pastPaperAnswers.reduce((sum, a) => sum + a.score, 0) / pastPaperAnswers.length
+          : 0;
+        setQuizSummary({
+          total_questions: pastPaperQuestions.length,
+          correct_count: pastPaperAnswers.filter(a => a.correct).length,
+          average_score: Math.round(totalScore * 10) / 10
+        });
+        setQuizScreen('summary');
+      }
+      return;
+    }
+    
+    // Handle generative quiz completion
+    if (!quizSetId || !attemptId) return;
     try {
       const completion = await quizService.completeQuizAttempt(quizSetId, attemptId, quizUser);
       setQuizSummary(completion.summary);
@@ -396,6 +458,10 @@ export function App() {
     setAdaptiveLastAnswer('');
     setAdaptiveNextItem(null);
     setAdaptiveCompleted(false);
+    // Clear past paper state
+    setPastPaperAnswers([]);
+    setPastPaperChapter('');
+    setPastPaperQuestions([]);
   }
 
   const handleShowDashboard = () => {
@@ -536,12 +602,21 @@ export function App() {
   const handleFreeTextStart = async (chapter: string, sessionId?: string) => {
     if (!quizUser) return;
     
+    // Cancel any previous in-flight request
+    if (freeTextAbortController.current) {
+      freeTextAbortController.current.abort();
+    }
+    
+    // Create new AbortController for this request
+    const controller = new AbortController();
+    freeTextAbortController.current = controller;
+    
     setFreeTextLoading(true);
     setFreeTextChapter(chapter);
     
     try {
       // Start or resume session
-      const res = await freeTextService.start(quizUser, chapter, sessionId);
+      const res = await freeTextService.start(quizUser, chapter, sessionId, controller.signal);
       setFreeTextSessionId(res.session_id);
       setFreeTextAttemptId(res.attempt_id);
       setFreeTextQuestion(res.current_question);
@@ -557,10 +632,19 @@ export function App() {
       setFreeTextLoadingNext(false);
       setFreeTextScreen('question');
     } catch (err) {
+      // Don't show error for cancelled requests
+      if (isAbortError(err)) {
+        console.log('Free-text quiz start was cancelled');
+        return;
+      }
       console.error('Failed to start free-text quiz', err);
       alert('Failed to start free-text quiz. Please try again.');
     } finally {
-      setFreeTextLoading(false);
+      // Only clear loading if this controller wasn't replaced
+      if (freeTextAbortController.current === controller) {
+        setFreeTextLoading(false);
+        freeTextAbortController.current = null;
+      }
     }
   };
 
@@ -618,10 +702,19 @@ export function App() {
       return;
     }
     
+    // Cancel any previous in-flight request
+    if (freeTextAbortController.current) {
+      freeTextAbortController.current.abort();
+    }
+    
+    // Create new AbortController for this request
+    const controller = new AbortController();
+    freeTextAbortController.current = controller;
+    
     // Otherwise fetch next question now
     setFreeTextLoading(true);
     try {
-      const nextRes = await freeTextService.getNextQuestion(freeTextSessionId, quizUser);
+      const nextRes = await freeTextService.getNextQuestion(freeTextSessionId, quizUser, controller.signal);
       setFreeTextQuestion(nextRes.current_question);
       setFreeTextQuestionIndex(nextRes.question_index);
       setFreeTextTotalQuestions(nextRes.total_questions);
@@ -631,9 +724,18 @@ export function App() {
       setFreeTextLastAnswer('');
       setFreeTextScreen('question');
     } catch (err) {
+      // Don't show error for cancelled requests
+      if (isAbortError(err)) {
+        console.log('Get next question was cancelled');
+        return;
+      }
       console.error('Failed to get next question', err);
     } finally {
-      setFreeTextLoading(false);
+      // Only clear loading if this controller wasn't replaced
+      if (freeTextAbortController.current === controller) {
+        setFreeTextLoading(false);
+        freeTextAbortController.current = null;
+      }
     }
   };
 
@@ -676,6 +778,12 @@ export function App() {
   };
 
   const handleFreeTextBack = () => {
+    // Cancel any in-flight requests to prevent errors
+    if (freeTextAbortController.current) {
+      freeTextAbortController.current.abort();
+      freeTextAbortController.current = null;
+    }
+    
     setQuizMode('none');
     setFreeTextScreen('start');
     setFreeTextSessionId(null);
@@ -685,6 +793,7 @@ export function App() {
     setFreeTextAnswers([]);
     setFreeTextPendingNext(null);
     setFreeTextLoadingNext(false);
+    setFreeTextLoading(false);
   };
 
  // History Module Handlers
@@ -711,17 +820,6 @@ export function App() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Global Logout Button for logged-in user */}
-      {quizUser && (
-  <button
-    style={{ position: 'fixed', top: 16, right: 16, zIndex: 1000, background: '#fff', border: '1px solid #ccc', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: 'pointer', boxShadow: '0 2px 8px #0001' }}
-    onClick={() => {
-      if (window.confirm('Are you sure you want to logout?')) setQuizUser(null);
-    }}
-  >
-    Logout ({quizUser})
-  </button>
-)}
       {/* Voice Command System - Global Accessibility Control */}
       <VoiceCommandSystem 
         onNavigate={handleVoiceNavigate} 
@@ -769,6 +867,7 @@ export function App() {
         onSelectAdaptive={handleSelectAdaptive}
         onSelectPastPaper={handleSelectPastPaper}
         onViewProfile={handleViewProfile}
+        onLogout={() => { if (window.confirm('Are you sure you want to logout?')) setQuizUser(null); }}
         username={quizUser}
       />
     ) : quizMode === 'freetext' ? (
@@ -793,6 +892,7 @@ export function App() {
             questionIndex={freeTextQuestionIndex}
             onSubmit={handleFreeTextSubmit}
             onFinish={handleFreeTextFinish}
+            onBack={handleFreeTextBack}
             loading={freeTextLoading}
             isRetake={freeTextIsRetake}
           />
@@ -805,6 +905,7 @@ export function App() {
             questionNumber={freeTextQuestionIndex}
             onNext={handleFreeTextNextFromFeedback}
             onFinish={handleFreeTextFinish}
+            onBack={handleFreeTextBack}
             isLoadingNext={freeTextLoadingNext}
           />
         )}
@@ -844,6 +945,7 @@ export function App() {
             totalQuestions={quizQuestions.length || 10}
             onSubmit={handleQuizSubmit}
             onSkip={handleQuizSkip}
+            onBack={handleQuizHome}
             isPastPaper={false}
           />
         )}
@@ -855,6 +957,7 @@ export function App() {
             result={evaluationResult}
             onNext={handleQuizNext}
             onGoHome={handleQuizHome}
+            onBack={handleQuizHome}
             isLastQuestion={questionNumber === quizQuestions.length}
           />
         )}
@@ -887,6 +990,7 @@ export function App() {
             totalQuestions={pastPaperQuestions.length || 10}
             onSubmit={handleQuizSubmit}
             onSkip={handleQuizSkip}
+            onBack={handlePastPaperBack}
             isPastPaper={true}
           />
         )}
@@ -898,6 +1002,7 @@ export function App() {
             result={evaluationResult}
             onNext={handleQuizNext}
             onGoHome={handleQuizHome}
+            onBack={handlePastPaperBack}
             isLastQuestion={questionNumber === pastPaperQuestions.length}
           />
         )}
@@ -931,6 +1036,10 @@ export function App() {
             answeredCount={adaptiveTotal}
             onSubmit={handleAdaptiveSubmit}
             onFinish={handleAdaptiveFinish}
+            onBack={() => {
+              setQuizMode('none');
+              setAdaptiveScreen('start');
+            }}
             feedback={adaptiveFeedback}
             lastResult={adaptiveResult}
             lastQuestion={adaptiveLastQuestion}
@@ -945,6 +1054,10 @@ export function App() {
             result={adaptiveResult}
             onNext={handleAdaptiveNext}
             onFinish={handleAdaptiveFinish}
+            onBack={() => {
+              setQuizMode('none');
+              setAdaptiveScreen('start');
+            }}
             isFinal={adaptiveCompleted || !adaptiveNextItem}
           />
         )}

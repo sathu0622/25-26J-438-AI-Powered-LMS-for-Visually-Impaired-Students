@@ -7,6 +7,8 @@ export interface AdaptiveItem {
   difficulty: number;
   difficulty_label: string;
   context?: string;
+  options?: string[];      // MCQ options (4 choices)
+  correct_index?: number;  // Index of correct answer in options array
 }
 
 export interface AdaptiveStartResponse {
