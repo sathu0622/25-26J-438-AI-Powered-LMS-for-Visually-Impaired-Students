@@ -4,6 +4,8 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
 import { AudioPlayer } from '../AudioPlayer';
+import { brailleApi } from '../../services/api';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface BrailleEvaluationProps {
   onBack: () => void;
@@ -133,6 +135,13 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
   const handleEvaluate = () => {
     setStatus('evaluating');
     setProgress(75);
+    setEvaluationError(null);
+
+    try {
+      const response = await brailleApi.post<EvaluationResponse>('/evaluate', {
+        question: question,
+        student_answer: convertedText,
+      });
 
     // Simulate AI evaluation
     setTimeout(() => {

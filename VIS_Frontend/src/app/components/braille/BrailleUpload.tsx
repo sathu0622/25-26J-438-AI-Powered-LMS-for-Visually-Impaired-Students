@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { Upload, Image as ImageIcon, X, Info } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
+import { brailleApi } from '../../services/api';
 
 interface BrailleUploadProps {
   onUpload: (file: File) => void;
