@@ -9,78 +9,101 @@ import { useTTS } from '../../contexts/TTSContext';
 
 interface BrailleEvaluationProps {
   onBack: () => void;
+  convertedData?: {
+    question: string;
+    answer: string;
+    fullText: string;
+  };
+}
+
+interface EvaluationResponse {
+  question: string;
+  student_answer: string;
+  model_answer: string;
+  final_score: number;
+  semantic_similarity: number;
+  keyword_match: number;
+  jaccard_similarity: number;
+  status: string;
+  feedback: string;
 }
 
 type EvaluationStatus = 'converting' | 'converted' | 'evaluating' | 'complete';
 type ResultType = 'correct' | 'partial' | 'incorrect';
 
-export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
+export const BrailleEvaluation = ({ onBack, convertedData }: BrailleEvaluationProps) => {
   const [status, setStatus] = useState<EvaluationStatus>('converting');
   const [progress, setProgress] = useState(0);
   const [convertedText, setConvertedText] = useState('');
+  const [question, setQuestion] = useState('');
   const [result, setResult] = useState<ResultType | null>(null);
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState<string[]>([]);
+  const [modelAnswer, setModelAnswer] = useState('');
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
   const [showDetailedReport, setShowDetailedReport] = useState(false);
+  const [semanticScore, setSemanticScore] = useState(0);
+  const [keywordScore, setKeywordScore] = useState(0);
+  const [jaccardScore, setJaccardScore] = useState(0);
 
-  const question = "Explain the importance of accessible education for students with visual impairments.";
-  const modelAnswer = "Accessible education for students with visual impairments is crucial for ensuring equal learning opportunities and fostering independence. It involves implementing adaptive technologies such as screen readers, Braille displays, and audio learning materials that enable students to access educational content effectively. Multi-sensory learning approaches help students engage with material through touch, sound, and other senses. Inclusive teaching methods ensure that educational materials are designed with accessibility in mind from the start, rather than as an afterthought. This comprehensive approach empowers visually impaired students to participate fully in academic activities, develop critical thinking skills, and achieve their educational goals without barriers.";
+  const { speak, cancel } = useTTS();
 
-  // Voice announcements for page state changes
   useEffect(() => {
-    // STOP all previous speech immediately when component mounts
-    window.speechSynthesis.cancel();
-    
+    cancel();
     if (status === 'converted' && convertedText) {
-      const announcement = new SpeechSynthesisUtterance('Answer converted from Braille. Press E to evaluate your answer, or Press A to hear your answer read aloud.');
-      setTimeout(() => window.speechSynthesis.speak(announcement), 500);
+      const t = setTimeout(
+        () =>
+          speak(
+            'Answer converted from Braille. Press E to evaluate your answer, or Press A to hear your answer read aloud.',
+            { interrupt: true }
+          ),
+        500
+      );
+      return () => clearTimeout(t);
     }
-    
     if (status === 'complete' && !showDetailedReport) {
-      setTimeout(() => {
-        const announcement = new SpeechSynthesisUtterance(`Evaluation complete. Your score is ${score} percent. Press F to replay feedback, Press D for detailed report, Press B to upload another answer, or Press Escape to go back.`);
-        window.speechSynthesis.speak(announcement);
-      }, 10000); // After feedback finishes
+      const t = setTimeout(
+        () =>
+          speak(
+            `Evaluation complete. Your score is ${score} percent. Press F to replay feedback, Press D for detailed report, Press B to upload another answer, or Press Escape to go back.`,
+            { interrupt: true }
+          ),
+        10000
+      );
+      return () => clearTimeout(t);
     }
-    
     if (showDetailedReport) {
-      window.speechSynthesis.cancel(); // Stop any ongoing speech
-      const announcement = new SpeechSynthesisUtterance('Detailed Report page. Press A to hear your answer, Press M to hear the model answer, Press B to go back to summary, or Press Escape.');
-      setTimeout(() => window.speechSynthesis.speak(announcement), 500);
+      cancel();
+      const t = setTimeout(
+        () =>
+          speak(
+            'Detailed Report page. Press A to hear your answer, Press M to hear the model answer, Press B to go back to summary, or Press Escape.',
+            { interrupt: true }
+          ),
+        500
+      );
+      return () => clearTimeout(t);
     }
-    
-    // Cleanup: stop speech when leaving page
-    return () => {
-      window.speechSynthesis.cancel();
-    };
-  }, [status, showDetailedReport, convertedText, score]);
+    return () => cancel();
+  }, [status, showDetailedReport, convertedText, score, speak, cancel]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // A key to replay answer
       if ((e.key === 'a' || e.key === 'A') && convertedText) {
         e.preventDefault();
-        const utterance = new SpeechSynthesisUtterance(convertedText);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+        cancel();
+        speak(convertedText, { interrupt: true });
       }
-
-      // M key to play model answer
       if ((e.key === 'm' || e.key === 'M') && showDetailedReport) {
         e.preventDefault();
-        const utterance = new SpeechSynthesisUtterance(modelAnswer);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+        cancel();
+        speak(modelAnswer, { interrupt: true });
       }
-
-      // F key to replay feedback
       if ((e.key === 'f' || e.key === 'F') && status === 'complete' && feedback.length > 0) {
         e.preventDefault();
-        const feedbackText = `Your score is ${score}%. ${feedback.join('. ')}`;
-        const utterance = new SpeechSynthesisUtterance(feedbackText);
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
+        cancel();
+        speak(`Your score is ${score}%. ${feedback.join('. ')}`, { interrupt: true });
       }
 
       // E key to evaluate (when converted)
@@ -118,21 +141,36 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [status, convertedText, feedback, score, showDetailedReport, onBack]);
+  }, [status, convertedText, feedback, score, showDetailedReport, onBack, speak, cancel]);
 
   useEffect(() => {
-    // Simulate Braille conversion
-    const timer1 = setTimeout(() => {
+    // If convertedData is provided, use it directly
+    if (convertedData) {
+      setQuestion(convertedData.question);
+      setConvertedText(convertedData.answer || convertedData.fullText);
       setProgress(50);
-      const mockConverted = "Accessible education ensures equal learning opportunities through adaptive technologies and inclusive teaching methods.";
-      setConvertedText(mockConverted);
       setStatus('converted');
-    }, 2000);
+    } else {
+      // Simulate conversion if no data provided (for backward compatibility)
+      const timer1 = setTimeout(() => {
+        setProgress(50);
+        const mockQuestion = "Explain the importance of accessible education for students with visual impairments.";
+        const mockConverted = "Accessible education ensures equal learning opportunities through adaptive technologies and inclusive teaching methods.";
+        setQuestion(mockQuestion);
+        setConvertedText(mockConverted);
+        setStatus('converted');
+      }, 2000);
 
-    return () => clearTimeout(timer1);
-  }, []);
+      return () => clearTimeout(timer1);
+    }
+  }, [convertedData]);
 
-  const handleEvaluate = () => {
+  const handleEvaluate = async () => {
+    if (!question || !convertedText) {
+      setEvaluationError('Question and answer are required for evaluation');
+      return;
+    }
+
     setStatus('evaluating');
     setProgress(75);
     setEvaluationError(null);
@@ -143,18 +181,42 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
         student_answer: convertedText,
       });
 
-    // Simulate AI evaluation
-    setTimeout(() => {
       setProgress(100);
-      setResult('partial');
-      setScore(75);
-      setFeedback([
-        'Good explanation of the core concept',
-        'Missing mention of multi-sensory learning approaches',
-        'Could elaborate on specific adaptive technologies',
-      ]);
+      setModelAnswer(response.model_answer);
+      setScore(Math.round(response.final_score));
+      setSemanticScore(response.semantic_similarity || 0);
+      setKeywordScore(response.keyword_match || 0);
+      setJaccardScore(response.jaccard_similarity || 0);
+
+      // Determine result type based on score
+      if (response.final_score >= 75) {
+        setResult('correct');
+      } else if (response.final_score >= 45) {
+        setResult('partial');
+      } else {
+        setResult('incorrect');
+      }
+
+      // Convert feedback string to array
+      const feedbackArray = response.feedback
+        ? response.feedback.split(/[.!?]+/).filter((f) => f.trim().length > 0)
+        : [];
+
+      if (feedbackArray.length === 0 && response.feedback) {
+        feedbackArray.push(response.feedback);
+      }
+
+      setFeedback(feedbackArray);
       setStatus('complete');
-    }, 2500);
+    } catch (err) {
+      setEvaluationError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to evaluate answer. Please try again.'
+      );
+      setStatus('converted');
+      setProgress(50);
+    }
   };
 
   const getResultIcon = () => {
@@ -197,6 +259,13 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
               {status === 'complete' && 'Press F to replay feedback • Press D for details • Press B to upload another'}
             </p>
           </div>
+
+          {/* Error Message */}
+          {evaluationError && (
+            <Card className="border-destructive bg-destructive/10 p-4">
+              <p className="text-sm text-destructive">{evaluationError}</p>
+            </Card>
+          )}
 
           {/* Progress */}
           {status !== 'complete' && (
@@ -366,6 +435,25 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
             </div>
           </Card>
           
+            <Card className="p-6 space-y-4">
+              <h2 className="font-semibold">Similarity Breakdown</h2>
+
+              <div>
+                <p>Semantic Similarity: {Math.round(semanticScore)}%</p>
+                <Progress value={semanticScore} />
+              </div>
+
+              <div>
+                <p>Keyword Match: {Math.round(keywordScore)}%</p>
+                <Progress value={keywordScore} />
+              </div>
+
+              <div>
+                <p>Jaccard Similarity: {Math.round(jaccardScore)}%</p>
+                <Progress value={jaccardScore} />
+              </div>
+            </Card>
+
           {/* Model Answer (100% Correct Answer) */}
           <Card className="border-2 border-success bg-success/5 p-6">
             <div className="space-y-4">
