@@ -23,13 +23,14 @@ Answer:
         outputs = model.generate(
             **inputs,
             max_new_tokens=300,
-            temperature=0.5,
-            top_p=1.0,
-            repetition_penalty=1.1,
+            do_sample=False,
+            temperature=0,
+            num_beams=4,
+            repetition_penalty=1.2,
+            early_stopping=True,
             pad_token_id=tokenizer.eos_token_id,
             eos_token_id=tokenizer.eos_token_id,
-            do_sample=True
-        )
+)
 
     input_length = inputs["input_ids"].shape[1]
     response = tokenizer.decode(
@@ -52,9 +53,6 @@ def calculate_final_score(correct, student, sbert_model):
     length_factor = length_penalty(correct, student)
 
     final = (semantic * 0.65 + keyword * 0.35 + jaccard * 0.10) * length_factor
-
-    if semantic >= 60 and keyword >= 50:
-        final += 5
 
     return round(final, 2), semantic, keyword, jaccard
 
