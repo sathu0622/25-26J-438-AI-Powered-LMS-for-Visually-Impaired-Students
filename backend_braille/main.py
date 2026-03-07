@@ -79,7 +79,7 @@ async def evaluate_answer(request: EvaluationRequest):
 async def decode_braille(file: UploadFile = File(...)):
     """
     Upload a scanned Braille PDF.
-    Returns JSON with 'question' (page 1) and 'answer' (pages 2+).
+    Returns JSON with 'question' and 'answer'.
     """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
@@ -95,15 +95,39 @@ async def decode_braille(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="PDF has no pages.")
 
     def clean_text(text: str) -> str:
-        """Remove newlines and fix mid-word splits from Braille line wrapping."""
-        text = re.sub(r'(\w)\n(\w)', r'\1\2', text)  # "o\nf" → "of"
-        text = re.sub(r'\n', ' ', text)               # remaining \n → space
-        text = re.sub(r' +', ' ', text)               # collapse multiple spaces
+        """Fix mid-word splits from Braille line wrapping."""
+        text = re.sub(r'(\w)\n(\w)', r'\1\2', text)
+        text = re.sub(r'\s+', ' ', text)
         return text.strip()
 
-    # Page 1 = Question, Pages 2+ = Answer
-    question = clean_text(all_text[0])
-    answer   = clean_text(" ".join(all_text[1:]))
+    # ----------------------------
+    # Question / Answer Split
+    # ----------------------------
+
+    first_page = clean_text(all_text[0])
+
+    # Try splitting by question mark first
+    if "?" in first_page:
+        question, answer_part1 = first_page.split("?", 1)
+        question = question.strip() + "?"
+    else:
+        # Otherwise split at first period
+        if "." in first_page:
+            question, answer_part1 = first_page.split(".", 1)
+            question = question.strip() + "."
+        else:
+            # If no punctuation found, treat whole first page as question
+            question = first_page
+            answer_part1 = ""
+
+    answer = answer_part1.strip()
+
+    # Add remaining pages (if any)
+    if len(all_text) > 1:
+        answer += " " + clean_text(" ".join(all_text[1:]))
+
+    answer = answer.strip()
+
     full_text = f"Question: {question}\n\nAnswer: {answer}"
 
     return JSONResponse(content={
