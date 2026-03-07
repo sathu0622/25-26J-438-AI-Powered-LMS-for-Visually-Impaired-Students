@@ -1,47 +1,34 @@
-import { useState, useEffect } from 'react';
+
+import { useState, useEffect, useRef } from 'react';
 import { Mic, MicOff, Check, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { useTTS } from '../contexts/TTSContext';
 
-interface MockVoiceRecorderProps {
+interface VoiceRecorderProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (text: string) => void;
   title?: string;
-  context?: string; // Context for generating mock answers (e.g., question text)
+  context?: string;
 }
 
-// Mock answer generator for quiz questions
-const generateMockAnswer = (context?: string): string => {
-  const mockAnswers = [
-    "The main event occurred during the colonial period when the Portuguese arrived in Sri Lanka in 1505. They established control over coastal areas and introduced significant changes to the administrative system.",
-    "The significance lies in the fact that this period marked a major transformation in Sri Lankan society. The cultural exchanges that took place during this time influenced art, architecture, and social structures.",
-    "During this era, there were important developments in trade routes and economic systems. The spice trade became particularly significant, connecting Sri Lanka to global commerce networks.",
-    "The key factors include geographical advantages, strategic location, and rich natural resources. These elements combined to make the region politically and economically important.",
-    "This historical development led to changes in governance structures and administrative practices. Local kingdoms had to adapt to new political realities while maintaining cultural traditions.",
-  ];
-  
-  return mockAnswers[Math.floor(Math.random() * mockAnswers.length)];
-};
-
-export const MockVoiceRecorder = ({
+export const VoiceRecorder = ({
   isOpen,
   onClose,
   onSubmit,
   title = 'Record Your Answer',
   context,
-}: MockVoiceRecorderProps) => {
+}: VoiceRecorderProps) => {
   const { speak } = useTTS();
   const [isRecording, setIsRecording] = useState(false);
-  const [recordingTime, setRecordingTime] = useState(0);
   const [hasRecorded, setHasRecorded] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     if (isOpen) {
       setIsRecording(false);
-      setRecordingTime(0);
       setHasRecorded(false);
       setTranscript('');
       const t = setTimeout(
@@ -52,30 +39,10 @@ export const MockVoiceRecorder = ({
     }
   }, [isOpen, speak]);
 
-  // Recording timer
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isRecording) {
-      interval = setInterval(() => {
-        setRecordingTime((prev) => prev + 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRecording]);
-
-  // Auto-stop recording after 10 seconds and generate mock transcript
-  useEffect(() => {
-    if (isRecording && recordingTime >= 10) {
-      handleStopRecording();
-    }
-  }, [isRecording, recordingTime]);
-
   // Keyboard shortcuts
   useEffect(() => {
     if (!isOpen) return;
-
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Space or R to start/stop recording
       if (e.key === ' ' || e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         if (!isRecording && !hasRecorded) {
@@ -84,42 +51,63 @@ export const MockVoiceRecorder = ({
           handleStopRecording();
         }
       }
-
-      // Enter to submit (if has recorded)
       if (e.key === 'Enter' && hasRecorded) {
         e.preventDefault();
         handleSubmit();
       }
-
-      // Escape to cancel
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       }
     };
-
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [isOpen, isRecording, hasRecorded, transcript]);
 
   const handleStartRecording = () => {
     setIsRecording(true);
-    setRecordingTime(0);
-    speak('Recording started. Speak your answer now.', { interrupt: true });
+    setHasRecorded(false);
+    setTranscript('');
+    // Delay starting recognition until TTS is finished
+    speak('Recording started. Speak your answer now.', {
+      interrupt: true,
+      onEnd: () => {
+        if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+          const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+          const recognition = new SpeechRecognition();
+          recognition.lang = 'en-LK';
+          recognition.interimResults = false;
+          recognition.maxAlternatives = 1;
+          recognition.onresult = (event: any) => {
+            const text = event.results[0][0].transcript;
+            setTranscript(text);
+            setHasRecorded(true);
+            setIsRecording(false);
+            speak('Recording complete. Press Enter to submit or Space to re-record.', { interrupt: true });
+          };
+          recognition.onerror = (event: any) => {
+            setIsRecording(false);
+            setHasRecorded(false);
+            setTranscript('');
+            speak('Sorry, could not capture your voice. Please try again.', { interrupt: true });
+          };
+          recognitionRef.current = recognition;
+          recognition.start();
+        } else {
+          setIsRecording(false);
+          setHasRecorded(false);
+          setTranscript('');
+          speak('Speech recognition is not supported in this browser.', { interrupt: true });
+        }
+      }
+    });
   };
 
   const handleStopRecording = () => {
     setIsRecording(false);
-    setHasRecorded(true);
-    
-    // Generate mock transcript
-    const mockTranscript = generateMockAnswer(context);
-    setTranscript(mockTranscript);
-    
-    // Announce completion
-    setTimeout(() => {
-      speak('Recording complete. Mock answer generated. Press Enter to submit or Space to re-record.', { interrupt: true });
-    }, 500);
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
   };
 
   const handleSubmit = () => {
@@ -131,16 +119,9 @@ export const MockVoiceRecorder = ({
 
   const handleReRecord = () => {
     setIsRecording(false);
-    setRecordingTime(0);
     setHasRecorded(false);
     setTranscript('');
     speak('Recording cleared. Press Space to record again.', { interrupt: true });
-  };
-
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   if (!isOpen) return null;
@@ -201,26 +182,12 @@ export const MockVoiceRecorder = ({
               </p>
               <p className="text-sm text-muted-foreground">
                 {isRecording
-                  ? formatTime(recordingTime)
+                  ? 'Speak now...'
                   : hasRecorded
                   ? 'Press Enter to submit'
                   : 'Press Space or R to start'}
               </p>
             </div>
-          </div>
-
-          {/* Demo Mode Notice */}
-          <div className="rounded-lg bg-primary/10 p-4 text-center">
-            <p className="text-sm text-primary">
-              🎙️ Demo Mode: Mock Voice Recording
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {isRecording
-                ? 'Simulating voice capture... Answer will be auto-generated'
-                : hasRecorded
-                ? 'Mock answer generated based on quiz context'
-                : 'Click the button or press Space to simulate recording'}
-            </p>
           </div>
 
           {/* Transcript Preview */}

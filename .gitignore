@@ -1,5 +1,25 @@
 # Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Data files
+*.csv
+
+# Environment
+.env
+virtualenv/
+
+# Models
+Model/
+
+# Offload folder for BitsAndBytes
+offload/# Python
+__pycache__/
 *.py[cod]
 *$py.class
 *.so

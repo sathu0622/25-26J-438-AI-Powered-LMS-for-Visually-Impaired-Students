@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle2, XCircle, AlertCircle, ArrowRight, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle, ArrowRight, Loader2, Home, Play } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { AudioPlayer } from '../AudioPlayer';
@@ -8,199 +8,183 @@ import { useTTS } from '../../contexts/TTSContext';
 interface QuizFeedbackProps {
   question: string;
   answer: string;
-  expectedAnswer?: string;
-  feedback?: string;
+  result: {
+    score: number;
+    feedback: string;
+    correct: boolean;
+    correct_answer?: string;
+  };
   onNext: () => void;
+  onGoHome: () => void;
+  onBack?: () => void;
+  isLastQuestion?: boolean;
 }
 
-type FeedbackType = 'correct' | 'partial' | 'incorrect';
 
-interface FeedbackData {
-  type: FeedbackType;
-  score: number;
-  explanation: string;
-}
-
-export const QuizFeedback = ({ question, answer, expectedAnswer, feedback: providedFeedback, onNext }: QuizFeedbackProps) => {
+export const QuizFeedback = ({
+  question,
+  answer,
+  result,
+  onNext,
+  onGoHome,
+  onBack,
+  isLastQuestion = false,
+}: QuizFeedbackProps & { onGoHome: () => void }) => {
   const { speak, cancel } = useTTS();
-  const [feedback, setFeedback] = useState<FeedbackData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasAnnounced, setHasAnnounced] = useState(false);
+  const isCorrect = result.score>=60;
 
+  // Keyboard shortcuts: N for next, Backspace/B for back
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const key = e.key.toLowerCase();
+      
+      // N or Enter or Space for next
+      if (key === 'n' || key === 'enter' || key === ' ') {
+        e.preventDefault();
+        onNext();
+      }
+      
+      // Backspace or B for back
+      if (e.key === 'Backspace' || key === 'b') {
+        e.preventDefault();
+        if (onBack) {
+          onBack();
+        } else {
+          onGoHome();
+        }
+      }
+      
+      // H for home
+      if (key === 'h') {
+        e.preventDefault();
+        onGoHome();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onNext, onGoHome, onBack]);
+
+  // 🔊 Automatically speak feedback, given answer, and model answer in sequence on load
   useEffect(() => {
     cancel();
-    // Simulate AI evaluation with actual quiz data if available
-    setTimeout(() => {
-      // Calculate similarity score (mock)
-      const similarityScore = Math.floor(Math.random() * 30) + 70;
+    // Chain speech segments using onEnd callback
+      speak(`You scored ${result.score} percent. ${result.feedback}`, {
+        onEnd: () => {
+          speak(`Your answer: ${answer}`, {
+            onEnd: () => {
+              speak(`Model answer: ${result.correct_answer || "No model answer available."}`);
+            }
+          });
+        }
+      });
+        
       
-      const mockFeedback: FeedbackData = {
-        type: similarityScore >= 85 ? 'correct' : similarityScore >= 60 ? 'partial' : 'incorrect',
-        score: similarityScore,
-        explanation: providedFeedback || 'Your answer demonstrates a good understanding of the concept. You correctly identified the key points about the topic.',
-      };
-      setFeedback(mockFeedback);
-      setIsLoading(false);
-    }, 2000);
     
     return () => cancel();
-  }, [question, answer, providedFeedback, cancel]);
-
-  useEffect(() => {
-    if (!isLoading && feedback && !hasAnnounced) {
-      setHasAnnounced(true);
-      setTimeout(() => {
-        const audioText = `${getTitle()} You scored ${feedback.score} percent. ${feedback.explanation}`;
-        speak(audioText, {
-          interrupt: true,
-          onEnd: () => {
-            setTimeout(() => {
-              speak('Press F to replay feedback. Press Space, Enter, or N for next question.', { interrupt: false });
-            }, 1000);
-          },
-        });
-      }, 500);
-    }
-  }, [isLoading, feedback, hasAnnounced, speak]);
-
-  useEffect(() => {
-    if (!isLoading && feedback) {
-      const handleKeyPress = (e: KeyboardEvent) => {
-        if (e.key === 'f' || e.key === 'F') {
-          e.preventDefault();
-          const audioText = `${getTitle()} You scored ${feedback.score} percent. ${feedback.explanation}`;
-          cancel();
-          speak(audioText, { interrupt: true });
-        }
-        if (e.key === 'n' || e.key === 'N' || e.key === ' ' || e.key === 'Enter') {
-          e.preventDefault();
-          onNext();
-        }
-      };
-      window.addEventListener('keydown', handleKeyPress);
-      return () => window.removeEventListener('keydown', handleKeyPress);
-    }
-  }, [isLoading, feedback, onNext, speak, cancel]);
+  }, [result, answer, speak, cancel]);
 
   const getIcon = () => {
-    if (!feedback) return null;
-    switch (feedback.type) {
-      case 'correct':
-        return <CheckCircle2 className="h-16 w-16 text-success" />;
-      case 'partial':
-        return <AlertCircle className="h-16 w-16 text-warning" />;
-      case 'incorrect':
-        return <XCircle className="h-16 w-16 text-destructive" />;
-    }
+    if (result.correct && result.score > 75)
+      return <CheckCircle2 className="h-12 w-12 text-green-500" />;
+
+    if (result.correct)
+      return <AlertCircle className="h-12 w-12 text-yellow-500" />;
+
+    return <XCircle className="h-12 w-12 text-red-500" />;
   };
 
-  const getColor = () => {
-    if (!feedback) return '';
-    switch (feedback.type) {
-      case 'correct':
-        return 'border-success bg-success/10';
-      case 'partial':
-        return 'border-warning bg-warning/10';
-      case 'incorrect':
-        return 'border-destructive bg-destructive/10';
-    }
-  };
-
-  const getTitle = () => {
-    if (!feedback) return '';
-    switch (feedback.type) {
-      case 'correct':
-        return 'Excellent!';
-      case 'partial':
-        return 'Good Effort!';
-      case 'incorrect':
-        return 'Keep Learning!';
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
-        <div className="space-y-2 text-center">
-          <h1 className="text-2xl">Evaluating Answer</h1>
-          <p className="text-muted-foreground">AI is analyzing your response...</p>
-        </div>
-        <Card className="p-12">
-          <div className="flex flex-col items-center gap-4 text-center">
-            <Loader2 className="h-12 w-12 animate-spin text-primary" />
-            <p>Please wait...</p>
-          </div>
-        </Card>
-      </div>
-    );
-  }
-
-  if (!feedback) return null;
-
-  const audioText = `${getTitle()} You scored ${feedback.score} percent. ${feedback.explanation}`;
+  
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
-      {/* Header */}
-      <div className="space-y-2 text-center">
-        <h1 className="text-2xl">Feedback</h1>
-        <p className="text-muted-foreground">
-          Press F to replay feedback • Press Space/Enter/N for next question
-        </p>
-      </div>
-
-      {/* Score Card */}
-      <Card className={`border-2 p-8 ${getColor()}`}>
-        <div className="flex flex-col items-center gap-4 text-center">
-          {getIcon()}
-          <div className="space-y-2">
-            <h2 className="text-2xl">{getTitle()}</h2>
-            <div className="space-y-1">
-              <p className="text-3xl">{feedback.score}%</p>
-              <p className="text-sm text-muted-foreground">
-                {feedback.type === 'correct' && 'Perfect answer'}
-                {feedback.type === 'partial' && 'Similarity score'}
-                {feedback.type === 'incorrect' && 'Needs improvement'}
-              </p>
+    <div className="min-h-screen bg-background p-6">
+      <div className="mx-auto max-w-6xl space-y-6">
+        {/* Header */}
+        <div className="text-center">
+          <h1 className="text-3xl font-semibold">Feedback</h1>
+        </div>
+        {/* Main Split Layout */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* ================= LEFT PANE ================= */}
+          <Card className="p-8 flex flex-col justify-between space-y-6">
+            {/* Score Banner */}
+            <div
+              className={`rounded-xl p-6 text-center ${
+                isCorrect
+                  ? "bg-green-50 border border-green-200"
+                  : "bg-red-50 border border-red-200"
+              }`}
+            >
+             
+              <h2 className="text-4xl font-bold mb-2">{result.score}%</h2>
+              <div className="flex items-center justify-center gap-2 mt-2">
+                {isCorrect ? (
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                ) : (
+                  <XCircle className="h-5 w-5 text-red-500" />
+                )}
+                <span className={`font-medium ${isCorrect ? "text-green-700" : "text-red-700"}`}>
+                  {isCorrect ? "Your Answer is Correct" : "Your Answer is Incorrect"}
+                </span>
+                {/* Voice button for correctness */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Speak correctness"
+                  onClick={() => speak(isCorrect ? "Your answer is correct." : "Your answer is incorrect.")}
+                  className="ml-2"
+                >
+                  <Play className="h-4 w-4 text-blue-600" />
+                </Button>
+              </div>
             </div>
+            {/* Navigation Buttons */}
+            <div className="flex flex-col gap-4 mt-6">
+              <Button size="lg" className="font-semibold" onClick={onNext}>
+                {isLastQuestion ? 'See Summary' : 'Next Question'}
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+              <Button variant="outline" size="lg" className="font-semibold" onClick={onGoHome}>
+                <Home className="mr-2 h-5 w-5" /> Select Another Chapter
+              </Button>
+            </div>
+          </Card>
+          {/* ================= RIGHT PANE ================= */}
+          <div className="space-y-4">
+            
+            {/* Your Answer */}
+            <Card className="p-6 bg-white border border-gray-200 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-muted-foreground mb-2">YOUR ANSWER</p>
+                <p className="text-base">{answer}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Speak your answer"
+                onClick={() => speak(`Your answer: ${answer}`)}
+              >
+                <Play className="h-4 w-4 text-blue-600" />
+              </Button>
+            </Card>
+            {/* Model Answer (always show) */}
+            <Card className="p-6 bg-blue-50 border border-blue-200 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-blue-700 mb-2">MODEL ANSWER</p>
+                <p className="text-base">{result.correct_answer || "No model answer available."}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Speak model answer"
+                onClick={() => speak(`Model answer: ${result.correct_answer || "No model answer available."}`)}
+              >
+                <Play className="h-4 w-4 text-blue-600" />
+              </Button>
+            </Card>
           </div>
         </div>
-      </Card>
-
-      {/* Audio Explanation */}
-      <AudioPlayer text={audioText} autoPlay={true} />
-
-      {/* Your Answer */}
-      <Card className="p-6">
-        <div className="space-y-2">
-          <h3 className="text-sm text-muted-foreground">Your Answer:</h3>
-          <p className="leading-relaxed">{answer}</p>
-        </div>
-      </Card>
-
-      {/* Expected Answer (if provided) */}
-      {expectedAnswer && (
-        <Card className="p-6 border-primary/20 bg-primary/5">
-          <div className="space-y-2">
-            <h3 className="text-sm text-muted-foreground">Model Answer:</h3>
-            <p className="leading-relaxed">{expectedAnswer}</p>
-          </div>
-        </Card>
-      )}
-
-      {/* Explanation */}
-      <Card className="p-6">
-        <div className="space-y-2">
-          <h3 className="text-sm text-muted-foreground">Explanation:</h3>
-          <p className="leading-relaxed">{feedback.explanation}</p>
-        </div>
-      </Card>
-
-      {/* Next Button */}
-      <Button onClick={onNext} size="lg" className="w-full min-h-[56px]">
-        Next Question
-        <ArrowRight className="ml-2 h-5 w-5" />
-      </Button>
+      </div>
     </div>
   );
 };
