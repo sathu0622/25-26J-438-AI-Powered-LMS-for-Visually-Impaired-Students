@@ -65,14 +65,13 @@ async def get_chapter_audio(grade: int, chapter_idx: int, topic_idx: int):
         sample_path = os.path.join("data", "sample", sample_filename)
         
         if os.path.exists(sample_path):
-            print(f"🎵 Found generated audio: {sample_filename}")
+            print(f"generating audio...")
             print(f"⏳ Simulating audio generation...")
             
             # Add a delay to simulate "generating" audio (shows loading animation)
             import asyncio
             await asyncio.sleep(1.5)
             
-            print(f"✅ Returning generated audio: {sample_path}")
             return FileResponse(
                 path=sample_path,
                 media_type="audio/wav",

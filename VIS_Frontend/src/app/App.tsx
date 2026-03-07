@@ -29,6 +29,8 @@ import { FreeTextFeedback } from './components/quiz/FreeTextFeedback';
 import { FreeTextSummary } from './components/quiz/FreeTextSummary';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
+
+// History Module
 import { QuizSummary } from './components/quiz/QuizSummary';
 import { QuizDashboard } from './components/quiz/QuizDashboard';
 import UserAuth from './components/UserAuth';
@@ -169,13 +171,9 @@ export function App() {
       setDocumentScreen('upload');
     } else if (module === 'braille') {
       setBrailleScreen('upload');
-      setBrailleConvertedData(null);
-    } else if (target === 'quiz') {
-      handleQuizHome();
-      setQuizMode('none');
-      setAdaptiveScreen('start');
-      // Do NOT reset quizUser here; keep login persistent until logout
-    } else if (target === 'history') {
+    } else if (module === 'quiz') {
+      setQuizScreen('start');
+    } else if (module === 'history') {
       setHistoryScreen('home');
     }
   };
@@ -872,6 +870,31 @@ export function App() {
         {currentModule === 'home' && <HomePage onNavigate={handleNavigate} />}
 
         {/* Document Module */}
+        {
+          currentModule === 'document' && (
+            <>
+              {documentScreen === 'upload' && (
+                <DocumentUpload onUpload={handleDocumentUpload} />
+              )}
+              {documentScreen === 'processing' && uploadedFile && (
+                <DocumentProcessing
+                  fileName={uploadedFile.name}
+                  onComplete={handleDocumentProcessingComplete}
+                />
+              )}
+              {documentScreen === 'summary' && (
+                <DocumentSummary
+                  summary={documentSummary}
+                  onAskQuestion={handleAskQuestion}
+                />
+              )}
+              {documentScreen === 'qa' && (
+                <DocumentQA mode={qaMode} onBack={handleBackToSummary} />
+              )}
+            </>
+          )
+        }
+
         {currentModule === 'document' && <DocumentModule />}
         {/* Braille Module */}
         {currentModule === 'braille' && (
