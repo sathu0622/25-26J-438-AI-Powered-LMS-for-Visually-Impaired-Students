@@ -1,5 +1,8 @@
 import os
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 from pathlib import Path
 from typing import Optional, Dict
 
@@ -49,6 +52,10 @@ class TTSService:
         
         try:
             if os.path.exists(model_path):
+                if torch is None:
+                    print("⚠ PyTorch is not installed. Will use gTTS fallback.")
+                    return False
+                    
                 print(f"Loading trained model from {model_path}...")
                 checkpoint = torch.load(model_path, map_location=self.device)
                 self.model = checkpoint
