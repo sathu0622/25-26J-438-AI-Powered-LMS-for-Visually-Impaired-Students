@@ -1,22 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
-import { Upload, FileText, Image as ImageIcon } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Upload, FileText, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { useTTS } from '../../contexts/TTSContext';
+import { Progress } from '../ui/progress';
 
 interface DocumentUploadProps {
   onUpload: (file: File) => void;
 }
 
 export const DocumentUpload = ({ onUpload }: DocumentUploadProps) => {
-  const { announce, cancel } = useTTS();
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    announce('Upload document. Drag and drop a file here, or choose Upload PDF or Upload Image below.');
-    return () => cancel();
-  }, [announce, cancel]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

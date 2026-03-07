@@ -4,10 +4,17 @@ import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
 import { VoiceCommandSystem } from './components/VoiceCommandSystem';
 
-// Module Components
-import { DocumentModule } from './components/document/DocumentModule';
+// Document Module
+import { DocumentUpload } from './components/document/DocumentUpload';
+import { DocumentProcessing } from './components/document/DocumentProcessing';
+import { DocumentSummary } from './components/document/DocumentSummary';
+import { DocumentQA } from './components/document/DocumentQA';
+
+// Braille Module
 import { BrailleUpload } from './components/braille/BrailleUpload';
 import { BrailleEvaluation } from './components/braille/BrailleEvaluation';
+
+// Quiz Module
 import { QuizStart } from './components/quiz/QuizStart';
 import { QuizModeSelect } from './components/quiz/QuizModeSelect';
 import { PastPaperQuizStart } from './components/quiz/PastPaperQuizStart';
@@ -22,11 +29,14 @@ import { FreeTextFeedback } from './components/quiz/FreeTextFeedback';
 import { FreeTextSummary } from './components/quiz/FreeTextSummary';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
+
+// History Module
 import { QuizSummary } from './components/quiz/QuizSummary';
 import { QuizDashboard } from './components/quiz/QuizDashboard';
 import UserAuth from './components/UserAuth';
 import { HistoryHome } from './components/history/HistoryHome';
-import { LessonList } from './components/history/LessonList';
+import { ChapterList } from './components/history/ChapterList';
+import { TopicList } from './components/history/TopicList';
 import { LessonPlayer } from './components/history/LessonPlayer';
 import { UserProfilePage } from './components/UserProfilePage';
 
@@ -37,9 +47,10 @@ import { adaptiveService, AdaptiveItem, AdaptiveAnswerResponse } from './service
 import { freeTextService, isAbortError, FreeTextQuestion as FreeTextQuestionType, FreeTextAnswerResponse, FreeTextSummary as FreeTextSummaryType, FreeTextNextResponse } from './services/freeTextService';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
+type DocumentScreen = 'upload' | 'processing' | 'summary' | 'qa';
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback' | 'summary' | 'dashboard' | 'profile';
-type HistoryScreen = 'home' | 'lessons' | 'player';
+type HistoryScreen = 'home' | 'chapters' | 'topics' | 'lessons' | 'player';
 type QuizMode = 'none' | 'generative' | 'adaptive' | 'pastpaper' | 'freetext';
 type AdaptiveScreen = 'start' | 'question' | 'feedback' | 'summary';
 type FreeTextScreen = 'start' | 'question' | 'feedback' | 'summary';
@@ -47,13 +58,14 @@ type FreeTextScreen = 'start' | 'question' | 'feedback' | 'summary';
 export function App() {
   const [currentModule, setCurrentModule] = useState<Module>('home');
 
+  // Document module state
+  const [documentScreen, setDocumentScreen] = useState<DocumentScreen>('upload');
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [documentSummary, setDocumentSummary] = useState('');
+  const [qaMode, setQaMode] = useState<'voice' | 'text'>('voice');
+
   // Braille module state
   const [brailleScreen, setBrailleScreen] = useState<BrailleScreen>('upload');
-  const [brailleConvertedData, setBrailleConvertedData] = useState<{
-    question: string;
-    answer: string;
-    fullText: string;
-  } | null>(null);
 
   // =========================
   //  QUIZ STATE
@@ -146,34 +158,25 @@ export function App() {
   // History module state
   const [historyScreen, setHistoryScreen] = useState<HistoryScreen>('home');
   const [selectedGrade, setSelectedGrade] = useState<number>(10);
-  const [selectedLesson, setSelectedLesson] = useState<number>(1);
+  const [selectedChapter, setSelectedChapter] = useState<number>(0);
+  const [selectedChapterName, setSelectedChapterName] = useState<string>('');
+  const [selectedTopicIdx, setSelectedTopicIdx] = useState<number>(0);
+  const [selectedTopicName, setSelectedTopicName] = useState<string>('');
+  const [selectedTopicContent, setSelectedTopicContent] = useState<string>('');
 
-  const handleNavigate = (module: string) => {
-    const target = module as Module;
-    setCurrentModule(target);
+  const handleNavigate = (module: Module) => {
+    setCurrentModule(module);
 
     // Reset module states when navigating
-    if (target === 'braille') {
+    if (module === 'document') {
+      setDocumentScreen('upload');
+    } else if (module === 'braille') {
       setBrailleScreen('upload');
-      setBrailleConvertedData(null);
-    } else if (target === 'quiz') {
-      handleQuizHome();
-      setQuizMode('none');
-      setAdaptiveScreen('start');
-      // Do NOT reset quizUser here; keep login persistent until logout
-    } else if (target === 'history') {
+    } else if (module === 'quiz') {
+      setQuizScreen('start');
+    } else if (module === 'history') {
       setHistoryScreen('home');
     }
-
-    // Voice feedback: announce new section for visually impaired users
-    const labels: Record<string, string> = {
-      home: 'Home',
-      document: 'Documents',
-      braille: 'Braille',
-      quiz: 'Quiz',
-      history: 'History',
-    };
-    announce(labels[target] || target);
   };
   // Handler for successful login/register
   const handleQuizAuthSuccess = (username: string) => {
@@ -202,16 +205,34 @@ export function App() {
     return currentModule;
   };
 
+  // Document Module Handlers
+  const handleDocumentUpload = (file: File) => {
+    setUploadedFile(file);
+    setDocumentScreen('processing');
+  };
+
+  const handleDocumentProcessingComplete = (summary: string) => {
+    setDocumentSummary(summary);
+    setDocumentScreen('summary');
+  };
+
+  const handleAskQuestion = (mode: 'voice' | 'text') => {
+    setQaMode(mode);
+    setDocumentScreen('qa');
+  };
+
+  const handleBackToSummary = () => {
+    setDocumentScreen('summary');
+  };
+
   // Braille Module Handlers
-  const handleBrailleUpload = (data: { question: string; answer: string; fullText: string }) => {
-    // Converted data is received, now proceed to evaluation
-    setBrailleConvertedData(data);
+  const handleBrailleUpload = (file: File) => {
+    // File is received, now proceed to evaluation
     setBrailleScreen('evaluation');
   };
 
   const handleBrailleBack = () => {
     setBrailleScreen('upload');
-    setBrailleConvertedData(null);
   };
 
   // =========================
@@ -808,23 +829,33 @@ export function App() {
 
   const handleSelectGrade = (grade: number) => {
     setSelectedGrade(grade);
-    setHistoryScreen('lessons');
+    setHistoryScreen('chapters');
   };
 
-  const handleSelectLesson = (lessonId: number) => {
-    setSelectedLesson(lessonId);
+  const handleSelectChapter = (chapterId: number, chapterName?: string) => {
+    setSelectedChapter(chapterId);
+    if (chapterName) {
+      setSelectedChapterName(chapterName);
+    }
+    setHistoryScreen('topics');
+  };
+
+  const handleSelectTopic = (topicId: number, topicName: string, content: string) => {
+    setSelectedTopicIdx(topicId);
+    setSelectedTopicName(topicName);
+    setSelectedTopicContent(content);
     setHistoryScreen('player');
   };
 
   const handleHistoryBack = () => {
     if (historyScreen === 'player') {
-      setHistoryScreen('lessons');
-    } else if (historyScreen === 'lessons') {
+      setHistoryScreen('topics');
+    } else if (historyScreen === 'topics') {
+      setHistoryScreen('chapters');
+    } else if (historyScreen === 'chapters') {
       setHistoryScreen('home');
     }
   };
-
-  const { announce } = useTTS();
 
   return (
     <div className="min-h-screen bg-background">
@@ -840,6 +871,31 @@ export function App() {
         {currentModule === 'home' && <HomePage onNavigate={handleNavigate} />}
 
         {/* Document Module */}
+        {
+          currentModule === 'document' && (
+            <>
+              {documentScreen === 'upload' && (
+                <DocumentUpload onUpload={handleDocumentUpload} />
+              )}
+              {documentScreen === 'processing' && uploadedFile && (
+                <DocumentProcessing
+                  fileName={uploadedFile.name}
+                  onComplete={handleDocumentProcessingComplete}
+                />
+              )}
+              {documentScreen === 'summary' && (
+                <DocumentSummary
+                  summary={documentSummary}
+                  onAskQuestion={handleAskQuestion}
+                />
+              )}
+              {documentScreen === 'qa' && (
+                <DocumentQA mode={qaMode} onBack={handleBackToSummary} />
+              )}
+            </>
+          )
+        }
+
         {currentModule === 'document' && <DocumentModule />}
         {/* Braille Module */}
         {currentModule === 'braille' && (
@@ -848,10 +904,7 @@ export function App() {
               <BrailleUpload onUpload={handleBrailleUpload} />
             )}
             {brailleScreen === 'evaluation' && (
-              <BrailleEvaluation 
-                onBack={handleBrailleBack} 
-                convertedData={brailleConvertedData || undefined}
-              />
+              <BrailleEvaluation onBack={handleBrailleBack} />
             )}
           </>
         )}
@@ -1091,15 +1144,33 @@ export function App() {
             {historyScreen === 'home' && (
               <HistoryHome onSelectGrade={handleSelectGrade} />
             )}
-            {historyScreen === 'lessons' && (
-              <LessonList
+            {historyScreen === 'chapters' && (
+              <ChapterList
                 grade={selectedGrade}
-                onSelectLesson={handleSelectLesson}
+                onSelectChapter={handleSelectChapter}
+                onBack={handleHistoryBack}
+              />
+            )}
+            {historyScreen === 'topics' && (
+              <TopicList
+                grade={selectedGrade}
+                chapterId={selectedChapter}
+                chapterName={selectedChapterName}
+                onSelectTopic={handleSelectTopic}
                 onBack={handleHistoryBack}
               />
             )}
             {historyScreen === 'player' && (
-              <LessonPlayer lessonId={selectedLesson} onBack={handleHistoryBack} />
+              <LessonPlayer
+                topicName={selectedTopicName}
+                content={selectedTopicContent}
+                grade={selectedGrade}
+                chapterIdx={selectedChapter}
+                topicIdx={selectedTopicIdx}
+                autoPlay={true}
+                onBack={handleHistoryBack}
+                onGoToGradeChapters={handleSelectGrade}
+              />
             )}
           </>
         )}

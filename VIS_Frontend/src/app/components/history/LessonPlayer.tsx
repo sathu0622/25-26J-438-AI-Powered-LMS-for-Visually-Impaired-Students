@@ -2,317 +2,613 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Play,
   Pause,
-  SkipBack,
-  SkipForward,
+  RotateCcw,
   ArrowLeft,
   Volume2,
-  BookOpen,
+  Loader,
+  SkipBack,
+  SkipForward,
+  Shuffle,
+  Repeat,
 } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
+import { Alert, AlertDescription } from '../ui/alert';
 import { Slider } from '../ui/slider';
-import { getLessonById } from '../../data/historyData';
-import { useTTS } from '../../contexts/TTSContext';
+import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { API_BASE_URL } from '../../services/api';
 
 interface LessonPlayerProps {
-  lessonId: number;
+  topicName: string;
+  content: string;
+  grade: number;
+  chapterIdx: number;
+  topicIdx: number;
+  autoPlay?: boolean;
   onBack: () => void;
+  onGoToGradeChapters: (grade: number) => void;
 }
 
-export const LessonPlayer = ({ lessonId, onBack }: LessonPlayerProps) => {
-  const lesson = getLessonById(lessonId);
-  
-  // Fallback if lesson not found
-  if (!lesson) {
-    return (
-      <div className="mx-auto max-w-4xl p-4">
-        <p className="text-center text-muted-foreground">Lesson not found</p>
-        <Button onClick={onBack} className="mt-4">Go Back</Button>
-      </div>
-    );
-  }
-
-  const { speak, cancel, isSpeaking } = useTTS();
-  const [currentTopicIndex, setCurrentTopicIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
+export const LessonPlayer = ({
+  topicName,
+  content,
+  grade,
+  chapterIdx,
+  topicIdx,
+  autoPlay = true,
+  onBack,
+  onGoToGradeChapters
+}: LessonPlayerProps) => {
+  const [isLoading, setIsLoading] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [hasAnnounced, setHasAnnounced] = useState(false);
-  const hasAnnouncedRef = useRef(false);
-  const lastTopicIndexRef = useRef<number>(-1);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [isRepeat, setIsRepeat] = useState(false);
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(0.9);
+  const recognitionRef = useRef<any>(null);
+  const isListeningRef = useRef(false);
+  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const currentTopic = lesson.topics[currentTopicIndex];
-
+  // Generate audio when component mounts
   useEffect(() => {
-    cancel();
+    safeCancel();
     setHasAnnounced(false);
-    hasAnnouncedRef.current = false;
+    generateAudio();
+  }, [grade, chapterIdx, topicIdx]);
 
-    const announcement = `${lesson.title}. Topic ${currentTopicIndex + 1} of ${lesson.topics.length}. ${currentTopic.title}. Press Space to play or pause. Press Right Arrow for next topic. Press Left Arrow for previous topic. Press number keys 1 to ${lesson.topics.length} to jump to specific topics. Press H for help.`;
+  // Auto-play if enabled and audio is ready
+  useEffect(() => {
+    if (autoPlay && audioUrl && audioRef.current && !isLoading && !hasAnnounced) {
+      const timer = setTimeout(() => {
+        if (audioRef.current) {
+          // Ensure playback speed is set
+          audioRef.current.playbackRate = playbackSpeed;
+          audioRef.current.play().then(() => {
+            setIsPlaying(true);
+            // safeSpeak(`Now playing: ${topicName}`);
+            setHasAnnounced(true);
+          }).catch(err => {
+            console.error('Auto-play failed:', err);
+            // safeSpeak('Audio ready. Click play to start.');
+            setHasAnnounced(true);
+          });
+        }
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [audioUrl, autoPlay, isLoading, topicName, hasAnnounced, playbackSpeed]);
 
-    const t = setTimeout(() => {
-      speak(announcement, {
-        interrupt: true,
-        onEnd: () => {
-          hasAnnouncedRef.current = true;
-          lastTopicIndexRef.current = currentTopicIndex;
-          setHasAnnounced(true);
-          speak(currentTopic.content, { interrupt: false });
-        },
+  const generateAudio = async () => {
+    const endpoint = `${API_BASE_URL}/api/audio/chapter/${grade}/${chapterIdx}/${topicIdx}?t=${Date.now()}`;
+
+    try {
+      setIsLoading(true);
+      setError(null);
+      //safeSpeak('Generating audio using AI text-to-speech model...');
+
+      // First try fetching a blob to keep existing flow.
+      // Do not set Content-Type on GET (can trigger unnecessary preflight/CORS issues).
+      const response = await fetch(endpoint, {
+        method: 'GET',
+        cache: 'no-store',
       });
-    }, 500);
+
+      if (!response.ok) {
+        throw new Error(`Failed to generate audio: ${response.statusText}`);
+      }
+
+      // Create a blob URL from the audio response
+      const audioBlob = await response.blob();
+      const url = URL.createObjectURL(audioBlob);
+      setAudioUrl(url);
+      safeSpeak(`Audio generated successfully. Press space to play.`);
+    } catch (err) {
+      // Fallback: set the backend endpoint directly as audio source.
+      // This avoids fetch/blob CORS failures while still allowing playback.
+      console.error('Audio generation error:', err);
+      setAudioUrl(endpoint);
+      setError(null);
+      safeSpeak('Audio ready. Press space to play.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handlePlayPause = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+        // safeSpeak('Audio paused'); // Disabled voice announcement
+      } else {
+        audioRef.current.play();
+        // safeSpeak('Audio playing'); // Disabled voice announcement
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  const handleReplay = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = 0;
+      audioRef.current.play();
+      setIsPlaying(true);
+      //safeSpeak('Replaying audio');
+    }
+  };
+
+  const handleStop = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+      setIsPlaying(false);
+      //safeSpeak('Audio stopped');
+    }
+  };
+
+  const handleAudioEnded = () => {
+    if (isRepeat) {
+      if (audioRef.current) {
+        audioRef.current.currentTime = 0;
+        audioRef.current.play();
+      }
+    } else {
+      setIsPlaying(false);
+      // safeSpeak('Audio playback completed');
+    }
+  };
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) {
+      setCurrentTime(audioRef.current.currentTime);
+    }
+  };
+
+  const handleLoadedMetadata = () => {
+    if (audioRef.current) {
+      setDuration(audioRef.current.duration);
+      // Set playback speed to 0.9 for clearer speech
+      audioRef.current.playbackRate = playbackSpeed;
+    }
+  };
+
+  const handleSeek = (value: number[]) => {
+    if (audioRef.current) {
+      const newTime = (value[0] / 100) * duration;
+      audioRef.current.currentTime = newTime;
+      setCurrentTime(newTime);
+    }
+  };
+
+  const handleSkipForward = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = Math.min(audioRef.current.currentTime + 10, duration);
+      //   safeSpeak('Skipped forward 10 seconds');
+    }
+  };
+
+  const handleSkipBackward = () => {
+    if (audioRef.current) {
+      audioRef.current.currentTime = Math.max(audioRef.current.currentTime - 10, 0);
+      //safeSpeak('Skipped backward 10 seconds');
+    }
+  };
+
+  const toggleRepeat = () => {
+    setIsRepeat(!isRepeat);
+    //safeSpeak(isRepeat ? 'Repeat off' : 'Repeat on');
+  };
+
+  const toggleShuffle = () => {
+    setIsShuffle(!isShuffle);
+    //safeSpeak(isShuffle ? 'Shuffle off' : 'Shuffle on');
+  };
+
+  const handleSpeedChange = (speed: number) => {
+    setPlaybackSpeed(speed);
+    if (audioRef.current) {
+      audioRef.current.playbackRate = speed;
+    }
+    //safeSpeak(`Playback speed set to ${speed}x`);
+  };
+
+  const formatTime = (time: number) => {
+    if (isNaN(time)) return '0:00';
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const handleVoiceCommand = (transcript: string) => {
+    const normalized = transcript.toLowerCase().trim();
+    if (!normalized) {
+      return;
+    }
+
+    // Stop any ongoing TTS before acting on command.
+    safeCancel();
+
+    // Audio playback controls
+    if (normalized.includes('stop') || normalized.includes('pause')) {
+      if (audioRef.current && isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+        safeSpeak('Audio paused');
+      }
+      return;
+    }
+
+    if (normalized.includes('play') || normalized.includes('resume') || normalized.includes('start')) {
+      if (audioRef.current && !isPlaying && audioUrl) {
+        audioRef.current.play().then(() => {
+          setIsPlaying(true);
+          safeSpeak('Audio playing');
+        }).catch(err => {
+          console.error('Play failed:', err);
+          safeSpeak('Unable to play audio');
+        });
+      }
+      return;
+    }
+
+    // Navigation commands
+    if (normalized.includes('go back') || normalized.includes('back') || normalized.includes('previous page')) {
+      handleStop();
+      onBack();
+      return;
+    }
+
+    const wantsChapters = normalized.includes('chapter');
+    const hasGrade10 = normalized.includes('grade 10') || normalized.includes('grade ten') || /\b10\b/.test(normalized);
+    const hasGrade11 = normalized.includes('grade 11') || normalized.includes('grade eleven') || /\b11\b/.test(normalized);
+
+    if (wantsChapters && hasGrade10) {
+      handleStop();
+      safeSpeak('Opening Grade 10 chapters.');
+      setTimeout(() => onGoToGradeChapters(10), 300);
+      return;
+    }
+
+    if (wantsChapters && hasGrade11) {
+      handleStop();
+      safeSpeak('Opening Grade 11 chapters.');
+      setTimeout(() => onGoToGradeChapters(11), 300);
+    }
+  };
+
+  // Always-on voice commands for lesson navigation
+  useEffect(() => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    const startListening = () => {
+      if (!recognitionRef.current || isListeningRef.current) {
+        return;
+      }
+
+      try {
+        recognitionRef.current.start();
+      } catch {
+        if (restartTimeoutRef.current) {
+          clearTimeout(restartTimeoutRef.current);
+        }
+        restartTimeoutRef.current = setTimeout(startListening, 800);
+      }
+    };
+
+    recognition.onstart = () => {
+      isListeningRef.current = true;
+    };
+
+    recognition.onresult = (event: any) => {
+      const latestIndex = event.results.length - 1;
+      const transcript = event.results[latestIndex]?.[0]?.transcript || '';
+      handleVoiceCommand(transcript);
+    };
+
+    recognition.onerror = () => {
+      isListeningRef.current = false;
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+      restartTimeoutRef.current = setTimeout(startListening, 700);
+    };
+
+    recognition.onend = () => {
+      isListeningRef.current = false;
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+      restartTimeoutRef.current = setTimeout(startListening, 700);
+    };
+
+    recognitionRef.current = recognition;
+    startListening();
 
     return () => {
-      clearTimeout(t);
-      cancel();
-    };
-  }, [lessonId]);
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
 
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onstart = null;
+          recognitionRef.current.onresult = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+        } catch {
+          // Ignore cleanup errors.
+        }
+      }
+
+      isListeningRef.current = false;
+      recognitionRef.current = null;
+    };
+  }, [onBack, onGoToGradeChapters]);
+
+  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      // Space bar to play/pause
       if (e.key === ' ') {
         e.preventDefault();
         handlePlayPause();
-        speak(isSpeaking ? 'Paused' : 'Playing', { interrupt: true });
       }
+
+      // R key to replay
+      if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        handleReplay();
+      }
+
+      // Arrow Left - Skip backward
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (currentTopicIndex > 0) {
-          handlePrevious();
-          cancel();
-          speak(`Previous topic. ${lesson.topics[currentTopicIndex - 1].title}`, { interrupt: true });
-        } else {
-          cancel();
-          speak('Already at first topic', { interrupt: true });
-        }
+        handleSkipBackward();
       }
+
+      // Arrow Right - Skip forward
       if (e.key === 'ArrowRight') {
         e.preventDefault();
-        if (currentTopicIndex < lesson.topics.length - 1) {
-          handleNext();
-          cancel();
-          speak(`Next topic. ${lesson.topics[currentTopicIndex + 1].title}`, { interrupt: true });
-        } else {
-          cancel();
-          speak('Already at last topic', { interrupt: true });
-        }
+        handleSkipForward();
       }
-      const num = parseInt(e.key);
-      if (num >= 1 && num <= lesson.topics.length) {
+
+      // T key to toggle repeat
+      if (e.key === 't' || e.key === 'T') {
         e.preventDefault();
-        handleSelectTopic(num - 1);
-        cancel();
-        speak(`Topic ${num}. ${lesson.topics[num - 1].title}`, { interrupt: true });
+        toggleRepeat();
       }
-      if (e.key === 'h' || e.key === 'H') {
+
+      // S key to toggle shuffle
+      if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
-        cancel();
-        speak(
-          `Press Space to play or pause. Press Left Arrow for previous topic. Press Right Arrow for next topic. Press numbers 1 to ${lesson.topics.length} to jump to topics. Press Escape to go back.`,
-          { interrupt: true }
-        );
+        toggleShuffle();
       }
-      if (e.key === 'l' || e.key === 'L') {
-        e.preventDefault();
-        let list = `${lesson.topics.length} topics in this lesson. `;
-        lesson.topics.forEach((topic, index) => {
-          list += `${index + 1}. ${topic.title}. `;
-        });
-        cancel();
-        speak(list, { interrupt: true });
-      }
+
+      // Escape to go back
       if (e.key === 'Escape') {
         e.preventDefault();
-        cancel();
+        safeCancel();
+        handleStop();
         onBack();
       }
+
+      // H key for help
+      if (e.key === 'h' || e.key === 'H') {
+        e.preventDefault();
+        // safeSpeak(
+        //   `Now playing: ${topicName}. Press Space to play or pause. Press R to replay. Press Left or Right arrows to skip. Press T to toggle repeat. Press S to toggle shuffle. Press Escape to go back.`
+        //  );
+      }
     };
+
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [currentTopicIndex, lesson, isSpeaking, onBack, speak, cancel]);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    if (isSpeaking) {
-      interval = setInterval(() => setProgress((prev) => Math.min(prev + 1, 100)), 100);
-    }
-    return () => clearInterval(interval);
-  }, [isSpeaking]);
-
-  useEffect(() => {
-    if (!hasAnnounced) return;
-    if (lastTopicIndexRef.current === currentTopicIndex) return;
-    lastTopicIndexRef.current = currentTopicIndex;
-    cancel();
-    setProgress(0);
-    const timer = setTimeout(() => speak(currentTopic.content, { interrupt: false }), 500);
-    return () => clearTimeout(timer);
-  }, [currentTopicIndex, currentTopic.content, speak, cancel, hasAnnounced]);
-
-  const handlePlayPause = () => {
-    cancel();
-    if (isSpeaking) {
-      // Pause = stop
-    } else {
-      speak(currentTopic.content, { interrupt: false });
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentTopicIndex > 0) {
-      cancel();
-      setCurrentTopicIndex(currentTopicIndex - 1);
-      setProgress(0);
-    }
-  };
-
-  const handleNext = () => {
-    if (currentTopicIndex < lesson.topics.length - 1) {
-      cancel();
-      setCurrentTopicIndex(currentTopicIndex + 1);
-      setProgress(0);
-    }
-  };
-
-  const handleSelectTopic = (index: number) => {
-    cancel();
-    setCurrentTopicIndex(index);
-    setProgress(0);
-  };
+  }, [isPlaying, topicName, onBack, isRepeat, isShuffle]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 pb-24">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button onClick={onBack} variant="ghost" size="icon" aria-label="Go back">
+        <Button 
+          onClick={onBack} 
+          variant="ghost" 
+          size="icon" 
+          aria-label="Go back"
+          title="Press ESC to go back"
+        >
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <div className="flex-1">
-          <h1 className="text-2xl">{lesson.title}</h1>
+          <h1 className="text-2xl font-bold">{topicName}</h1>
           <p className="text-sm text-muted-foreground">
-            Space: Play/Pause • 1-{lesson.topics.length}: Jump • Arrows: Navigate • H: Help
+            Grade {grade} • Chapter {chapterIdx + 1} • Topic {topicIdx + 1}
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            SPC: Play/Pause • ←/→: Skip • R: Replay • T: Repeat • S: Shuffle • H: Help • ESC: Back
           </p>
         </div>
       </div>
 
-      {/* Current Topic */}
+      {/* Content Card */}
       <Card className="p-6">
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <Volume2 className="h-6 w-6 text-orange-500" aria-hidden="true" />
-            <h2 className="text-lg">{currentTopic.title}</h2>
+            <h2 className="text-lg font-semibold">Lesson Content</h2>
           </div>
-          <p className="leading-relaxed text-muted-foreground">
-            {currentTopic.content}
+          <p className="leading-relaxed text-foreground whitespace-pre-wrap">
+            {content || 'No content available'}
           </p>
         </div>
       </Card>
 
+      {/* Error Message */}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
       {/* Audio Player Controls */}
-      <Card className="p-6">
+      <Card className="p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <div className="space-y-6">
-          {/* Progress Bar */}
+          {/* Status */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-semibold">
+                {isLoading ? '⏳ Generating Audio...' :
+                 error ? '❌ Audio Generation Failed' :
+                 !audioUrl ? '⏸️ Audio Not Ready' :
+                      isPlaying ? '▶️ Now Playing' : '⏸️ Paused'}
+              </p>
+              <p className="text-xs text-gray-400">
+                {isLoading ? 'Please wait...' : 'AI Text-to-Speech'}
+              </p>
+            </div>
+          </div>
+
+          {/* Progress Slider */}
           <div className="space-y-2">
             <Slider
-              value={[progress]}
-              onValueChange={(value) => setProgress(value[0])}
+              value={[duration > 0 ? (currentTime / duration) * 100 : 0]}
+              onValueChange={handleSeek}
               max={100}
-              step={1}
-              className="w-full"
+              step={0.1}
+              className="w-full cursor-pointer"
+              disabled={!audioUrl || isLoading}
               aria-label="Audio progress"
             />
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>
-                {isSpeaking ? 'Playing' : 'Ready'}
-              </span>
-              <span>{progress}%</span>
+            <div className="flex justify-between text-xs text-gray-400">
+              <span>{formatTime(currentTime)}</span>
+              {/* <span className="text-blue-400">Speed: {playbackSpeed}x</span> */}
+              <span>{formatTime(duration)}</span>
             </div>
           </div>
 
           {/* Control Buttons */}
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex items-center justify-center gap-3">
             <Button
-              onClick={handlePrevious}
-              disabled={currentTopicIndex === 0}
-              variant="outline"
+              onClick={toggleShuffle}
+              disabled={isLoading || !audioUrl}
+              variant="ghost"
               size="icon"
-              className="h-12 w-12"
-              aria-label="Previous topic"
+              className={`h-10 w-10 ${isShuffle ? 'text-green-500' : 'text-gray-400'} hover:text-white`}
+              aria-label="Toggle shuffle"
+              title="Press S to toggle shuffle"
             >
-              <SkipBack className="h-5 w-5" />
+              <Shuffle className="h-5 w-5" />
+            </Button>
+
+            <Button
+              onClick={handleSkipBackward}
+              disabled={isLoading || !audioUrl}
+              variant="ghost"
+              size="icon"
+              className="h-12 w-12 text-white hover:text-white hover:bg-white/20"
+              aria-label="Skip backward 10 seconds"
+              title="Press ← to skip backward"
+            >
+              <SkipBack className="h-6 w-6" />
             </Button>
 
             <Button
               onClick={handlePlayPause}
+              disabled={isLoading || !audioUrl}
               size="icon"
-              className="h-16 w-16"
-              aria-label={isSpeaking ? 'Pause' : 'Play'}
+              className="h-16 w-16 rounded-full bg-white text-gray-900 hover:bg-gray-200 shadow-lg"
+              aria-label={isPlaying ? 'Pause audio' : 'Play audio'}
+              title="Press SPACE to play/pause"
             >
-              {isSpeaking ? (
-                <Pause className="h-8 w-8" />
+              {isLoading ? (
+                <Loader className="h-8 w-8 animate-spin" aria-hidden="true" />
+              ) : isPlaying ? (
+                <Pause className="h-8 w-8" aria-hidden="true" />
               ) : (
-                <Play className="h-8 w-8" />
+                <Play className="h-8 w-8" aria-hidden="true" />
               )}
             </Button>
 
             <Button
-              onClick={handleNext}
-              disabled={currentTopicIndex === lesson.topics.length - 1}
-              variant="outline"
+              onClick={handleSkipForward}
+              disabled={isLoading || !audioUrl}
+              variant="ghost"
               size="icon"
-              className="h-12 w-12"
-              aria-label="Next topic"
+              className="h-12 w-12 text-white hover:text-white hover:bg-white/20"
+              aria-label="Skip forward 10 seconds"
+              title="Press → to skip forward"
             >
-              <SkipForward className="h-5 w-5" />
+              <SkipForward className="h-6 w-6" />
+            </Button>
+
+            <Button
+              onClick={toggleRepeat}
+              disabled={isLoading || !audioUrl}
+              variant="ghost"
+              size="icon"
+              className={`h-10 w-10 ${isRepeat ? 'text-green-500' : 'text-gray-400'} hover:text-white`}
+              aria-label="Toggle repeat"
+              title="Press T to toggle repeat"
+            >
+              <Repeat className="h-5 w-5" />
             </Button>
           </div>
 
+          {/* Hidden audio element */}
+          <audio
+            ref={audioRef}
+            src={audioUrl || undefined}
+            onEnded={handleAudioEnded}
+            onTimeUpdate={handleTimeUpdate}
+            onLoadedMetadata={handleLoadedMetadata}
+            className="hidden"
+            aria-label="Lesson audio player"
+          />
+
           {/* Demo Mode Label */}
-          <div className="text-center text-xs text-muted-foreground">
-            🎙️ Demo Mode: Simulated AI Voice Lesson
+          <div className="text-center text-xs text-gray-400 pt-2">
+            🎙️ AI-Powered Voice Lesson
           </div>
         </div>
       </Card>
 
-      {/* Topic List */}
-      <div className="space-y-3">
-        <h3 className="text-sm text-muted-foreground">Topics in this lesson</h3>
-        <div className="space-y-2">
-          {lesson.topics.map((topic, index) => (
-            <Card
-              key={topic.id}
-              className={`overflow-hidden transition-all ${
-                index === currentTopicIndex
-                  ? 'border-primary bg-primary/5'
-                  : 'hover:shadow-md'
-              }`}
-            >
-              <button
-                onClick={() => handleSelectTopic(index)}
-                className="w-full p-4 text-left"
-                aria-label={`Play ${topic.title}`}
-                aria-current={index === currentTopicIndex ? 'true' : undefined}
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm ${
-                      index === currentTopicIndex
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {index + 1}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm">{topic.title}</p>
-                  </div>
-                  {index === currentTopicIndex && (
-                    <Volume2 className="h-4 w-4 text-primary" aria-hidden="true" />
-                  )}
-                </div>
-              </button>
-            </Card>
-          ))}
+      {/* Regenerate Button */}
+      {audioUrl && !isLoading && (
+        <Button
+          onClick={generateAudio}
+          variant="secondary"
+          className="w-full"
+        >
+          Regenerate Audio
+        </Button>
+      )}
+
+      {/* Keyboard Shortcuts Help */}
+      <Card className="p-4 bg-muted">
+        <p className="text-xs font-semibold mb-2">⌨️ Keyboard Shortcuts:</p>
+        <div className="text-xs space-y-1 text-muted-foreground">
+          <p>• <kbd className="bg-background px-2 py-1 rounded border">SPACE</kbd> - Play/Pause Audio</p>
+          <p>• <kbd className="bg-background px-2 py-1 rounded border">←</kbd> / <kbd className="bg-background px-2 py-1 rounded border">→</kbd> - Skip Backward/Forward 10s</p>
+          <p>• <kbd className="bg-background px-2 py-1 rounded border">R</kbd> - Replay from Start</p>
+          <p>• <kbd className="bg-background px-2 py-1 rounded border">T</kbd> - Toggle Repeat</p>
+          <p>• <kbd className="bg-background px-2 py-1 rounded border">S</kbd> - Toggle Shuffle</p>
+          <p>• <kbd className="bg-background px-2 py-1 rounded border">H</kbd> - Show Help</p>
+          <p>• <kbd className="bg-background px-2 py-1 rounded border">ESC</kbd> - Go Back</p>
         </div>
-      </div>
+      </Card>
     </div>
   );
 };
