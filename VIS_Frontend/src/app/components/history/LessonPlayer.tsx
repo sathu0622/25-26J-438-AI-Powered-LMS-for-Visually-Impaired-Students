@@ -65,15 +65,15 @@ export const LessonPlayer = ({
           audioRef.current.playbackRate = playbackSpeed;
           audioRef.current.play().then(() => {
             setIsPlaying(true);
-            safeSpeak(`Now playing: ${topicName}`);
+            // safeSpeak(`Now playing: ${topicName}`);
             setHasAnnounced(true);
           }).catch(err => {
             console.error('Auto-play failed:', err);
-            safeSpeak('Audio ready. Click play to start.');
+            // safeSpeak('Audio ready. Click play to start.');
             setHasAnnounced(true);
           });
         }
-      }, 1000);
+      }, 5000);
       return () => clearTimeout(timer);
     }
   }, [audioUrl, autoPlay, isLoading, topicName, hasAnnounced, playbackSpeed]);
@@ -84,7 +84,7 @@ export const LessonPlayer = ({
     try {
       setIsLoading(true);
       setError(null);
-      safeSpeak('Generating audio using AI text-to-speech model...');
+      //safeSpeak('Generating audio using AI text-to-speech model...');
 
       // First try fetching a blob to keep existing flow.
       // Do not set Content-Type on GET (can trigger unnecessary preflight/CORS issues).
@@ -118,10 +118,10 @@ export const LessonPlayer = ({
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
-        safeSpeak('Audio paused');
+        // safeSpeak('Audio paused'); // Disabled voice announcement
       } else {
         audioRef.current.play();
-        safeSpeak('Audio playing');
+        // safeSpeak('Audio playing'); // Disabled voice announcement
       }
       setIsPlaying(!isPlaying);
     }
@@ -132,7 +132,7 @@ export const LessonPlayer = ({
       audioRef.current.currentTime = 0;
       audioRef.current.play();
       setIsPlaying(true);
-      safeSpeak('Replaying audio');
+      //safeSpeak('Replaying audio');
     }
   };
 
@@ -141,7 +141,7 @@ export const LessonPlayer = ({
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       setIsPlaying(false);
-      safeSpeak('Audio stopped');
+      //safeSpeak('Audio stopped');
     }
   };
 
@@ -153,7 +153,7 @@ export const LessonPlayer = ({
       }
     } else {
       setIsPlaying(false);
-      safeSpeak('Audio playback completed');
+      // safeSpeak('Audio playback completed');
     }
   };
 
@@ -182,25 +182,25 @@ export const LessonPlayer = ({
   const handleSkipForward = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = Math.min(audioRef.current.currentTime + 10, duration);
-      safeSpeak('Skipped forward 10 seconds');
+      //   safeSpeak('Skipped forward 10 seconds');
     }
   };
 
   const handleSkipBackward = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = Math.max(audioRef.current.currentTime - 10, 0);
-      safeSpeak('Skipped backward 10 seconds');
+      //safeSpeak('Skipped backward 10 seconds');
     }
   };
 
   const toggleRepeat = () => {
     setIsRepeat(!isRepeat);
-    safeSpeak(isRepeat ? 'Repeat off' : 'Repeat on');
+    //safeSpeak(isRepeat ? 'Repeat off' : 'Repeat on');
   };
 
   const toggleShuffle = () => {
     setIsShuffle(!isShuffle);
-    safeSpeak(isShuffle ? 'Shuffle off' : 'Shuffle on');
+    //safeSpeak(isShuffle ? 'Shuffle off' : 'Shuffle on');
   };
 
   const handleSpeedChange = (speed: number) => {
@@ -208,7 +208,7 @@ export const LessonPlayer = ({
     if (audioRef.current) {
       audioRef.current.playbackRate = speed;
     }
-    safeSpeak(`Playback speed set to ${speed}x`);
+    //safeSpeak(`Playback speed set to ${speed}x`);
   };
 
   const formatTime = (time: number) => {
@@ -268,9 +268,9 @@ export const LessonPlayer = ({
       // H key for help
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
-        safeSpeak(
-          `Now playing: ${topicName}. Press Space to play or pause. Press R to replay. Press Left or Right arrows to skip. Press T to toggle repeat. Press S to toggle shuffle. Press Escape to go back.`
-        );
+        // safeSpeak(
+        //   `Now playing: ${topicName}. Press Space to play or pause. Press R to replay. Press Left or Right arrows to skip. Press T to toggle repeat. Press S to toggle shuffle. Press Escape to go back.`
+        //  );
       }
     };
 

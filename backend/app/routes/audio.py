@@ -8,6 +8,16 @@ from app.services.chapter_service import chapter_service
 router = APIRouter(prefix="/api/audio", tags=["audio"])
 
 
+def _get_generation_time() -> float:
+    """Read delay from env and clamp to [0, 10] seconds."""
+    raw_value = os.getenv("AUDIO_GENERATION_TIME", "1.5")
+    try:
+        delay = float(raw_value)
+    except ValueError:
+        delay = 1.5
+    return max(0.0, min(delay, 10.0))
+
+
 @router.post("/generate")
 async def generate_audio(text: str):
     """
@@ -70,7 +80,7 @@ async def get_chapter_audio(grade: int, chapter_idx: int, topic_idx: int):
             
             # Add a delay to simulate "generating" audio (shows loading animation)
             import asyncio
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(_get_generation_time())
             
             return FileResponse(
                 path=sample_path,
