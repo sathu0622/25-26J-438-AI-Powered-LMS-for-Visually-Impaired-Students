@@ -90,3 +90,18 @@ export const documentApi = createApi(VITE_API_URL_DOCUMENT);
 
 /** Braille microservice: decode, evaluate. */
 export const brailleApi = createApi(VITE_API_URL_BRAILLE);
+
+/** Thrown when a request is aborted (e.g. AbortController). */
+export class AbortedRequestError extends Error {
+  constructor(message = 'Request was aborted') {
+    super(message);
+    this.name = 'AbortedRequestError';
+  }
+}
+
+/** Returns true if the error is from an aborted request. */
+export function isAbortError(err: unknown): boolean {
+  if (err instanceof AbortedRequestError) return true;
+  if (err instanceof DOMException && err.name === 'AbortError') return true;
+  return false;
+}
