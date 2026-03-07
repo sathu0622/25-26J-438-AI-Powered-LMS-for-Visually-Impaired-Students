@@ -232,6 +232,30 @@ export const LessonPlayer = ({
     // Stop any ongoing TTS before acting on command.
     safeCancel();
 
+    // Audio playback controls
+    if (normalized.includes('stop') || normalized.includes('pause')) {
+      if (audioRef.current && isPlaying) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+        safeSpeak('Audio paused');
+      }
+      return;
+    }
+
+    if (normalized.includes('play') || normalized.includes('resume') || normalized.includes('start')) {
+      if (audioRef.current && !isPlaying && audioUrl) {
+        audioRef.current.play().then(() => {
+          setIsPlaying(true);
+          safeSpeak('Audio playing');
+        }).catch(err => {
+          console.error('Play failed:', err);
+          safeSpeak('Unable to play audio');
+        });
+      }
+      return;
+    }
+
+    // Navigation commands
     if (normalized.includes('go back') || normalized.includes('back') || normalized.includes('previous page')) {
       handleStop();
       onBack();

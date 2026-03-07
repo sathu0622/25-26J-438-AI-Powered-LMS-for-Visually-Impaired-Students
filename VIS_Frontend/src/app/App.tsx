@@ -47,9 +47,10 @@ import { adaptiveService, AdaptiveItem, AdaptiveAnswerResponse } from './service
 import { freeTextService, isAbortError, FreeTextQuestion as FreeTextQuestionType, FreeTextAnswerResponse, FreeTextSummary as FreeTextSummaryType, FreeTextNextResponse } from './services/freeTextService';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
+type DocumentScreen = 'upload' | 'processing' | 'summary' | 'qa';
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback' | 'summary' | 'dashboard' | 'profile';
-type HistoryScreen = 'home' | 'lessons' | 'player';
+type HistoryScreen = 'home' | 'chapters' | 'topics' | 'lessons' | 'player';
 type QuizMode = 'none' | 'generative' | 'adaptive' | 'pastpaper' | 'freetext';
 type AdaptiveScreen = 'start' | 'question' | 'feedback' | 'summary';
 type FreeTextScreen = 'start' | 'question' | 'feedback' | 'summary';
