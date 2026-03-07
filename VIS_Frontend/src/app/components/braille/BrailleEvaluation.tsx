@@ -4,7 +4,7 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
 import { AudioPlayer } from '../AudioPlayer';
-import { api } from '../../services/api';
+import { brailleApi } from '../../services/api';
 import { useTTS } from '../../contexts/TTSContext';
 
 interface BrailleEvaluationProps {
@@ -176,7 +176,7 @@ const [jaccardScore, setJaccardScore] = useState(0);
     setEvaluationError(null);
 
     try {
-      const response = await api.post<EvaluationResponse>('/evaluate', {
+      const response = await brailleApi.post<EvaluationResponse>('/evaluate', {
         question: question,
         student_answer: convertedText,
       });
