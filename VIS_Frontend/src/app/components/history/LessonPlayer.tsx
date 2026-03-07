@@ -47,7 +47,6 @@ export const LessonPlayer = ({
   const [duration, setDuration] = useState(0);
   const [isRepeat, setIsRepeat] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(0.9);
 
   // Generate audio when component mounts
   useEffect(() => {
@@ -61,8 +60,6 @@ export const LessonPlayer = ({
     if (autoPlay && audioUrl && audioRef.current && !isLoading && !hasAnnounced) {
       const timer = setTimeout(() => {
         if (audioRef.current) {
-          // Ensure playback speed is set
-          audioRef.current.playbackRate = playbackSpeed;
           audioRef.current.play().then(() => {
             setIsPlaying(true);
             safeSpeak(`Now playing: ${topicName}`);
@@ -76,7 +73,7 @@ export const LessonPlayer = ({
       }, 1000);
       return () => clearTimeout(timer);
     }
-  }, [audioUrl, autoPlay, isLoading, topicName, hasAnnounced, playbackSpeed]);
+  }, [audioUrl, autoPlay, isLoading, topicName, hasAnnounced]);
 
   const generateAudio = async () => {
     try {
@@ -166,8 +163,6 @@ export const LessonPlayer = ({
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
-      // Set playback speed to 0.9 for clearer speech
-      audioRef.current.playbackRate = playbackSpeed;
     }
   };
 
@@ -201,14 +196,6 @@ export const LessonPlayer = ({
   const toggleShuffle = () => {
     setIsShuffle(!isShuffle);
     safeSpeak(isShuffle ? 'Shuffle off' : 'Shuffle on');
-  };
-
-  const handleSpeedChange = (speed: number) => {
-    setPlaybackSpeed(speed);
-    if (audioRef.current) {
-      audioRef.current.playbackRate = speed;
-    }
-    safeSpeak(`Playback speed set to ${speed}x`);
   };
 
   const formatTime = (time: number) => {
@@ -353,7 +340,6 @@ export const LessonPlayer = ({
             />
             <div className="flex justify-between text-xs text-gray-400">
               <span>{formatTime(currentTime)}</span>
-              {/* <span className="text-blue-400">Speed: {playbackSpeed}x</span> */}
               <span>{formatTime(duration)}</span>
             </div>
           </div>
