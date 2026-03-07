@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, CheckCircle2, XCircle, AlertCircle, Volume2 } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -13,6 +13,8 @@ interface BrailleEvaluationProps {
     question: string;
     answer: string;
     fullText: string;
+    /** Pass true when coming from manual input to skip the "converted" pause */
+    autoEvaluate?: boolean;
   };
 }
 
@@ -42,12 +44,22 @@ export const BrailleEvaluation = ({ onBack, convertedData }: BrailleEvaluationPr
   const [modelAnswer, setModelAnswer] = useState('');
   const [evaluationError, setEvaluationError] = useState<string | null>(null);
   const [showDetailedReport, setShowDetailedReport] = useState(false);
-const [semanticScore, setSemanticScore] = useState(0);
-const [keywordScore, setKeywordScore] = useState(0);
-const [jaccardScore, setJaccardScore] = useState(0);
+  const [semanticScore, setSemanticScore] = useState(0);
+  const [keywordScore, setKeywordScore] = useState(0);
+  const [jaccardScore, setJaccardScore] = useState(0);
 
   const { speak, cancel } = useTTS();
 
+  // Ref so handleEvaluate can be called from useEffect without stale closure issues
+  const questionRef = useRef('');
+  const convertedTextRef = useRef('');
+
+  useEffect(() => {
+    questionRef.current = question;
+    convertedTextRef.current = convertedText;
+  }, [question, convertedText]);
+
+  // ── TTS announcements ───────────────────────────────────────────────────
   useEffect(() => {
     cancel();
     if (status === 'converted' && convertedText) {
@@ -87,7 +99,7 @@ const [jaccardScore, setJaccardScore] = useState(0);
     return () => cancel();
   }, [status, showDetailedReport, convertedText, score, speak, cancel]);
 
-  // Keyboard shortcuts
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if ((e.key === 'a' || e.key === 'A') && convertedText) {
@@ -105,21 +117,15 @@ const [jaccardScore, setJaccardScore] = useState(0);
         cancel();
         speak(`Your score is ${score}%. ${feedback.join('. ')}`, { interrupt: true });
       }
-
-      // E key to evaluate (when converted)
       if ((e.key === 'e' || e.key === 'E') && status === 'converted') {
         e.preventDefault();
         handleEvaluate();
       }
-
-      // D key to view detailed report
       if ((e.key === 'd' || e.key === 'D') && status === 'complete' && !showDetailedReport) {
         e.preventDefault();
         setShowDetailedReport(true);
       }
-
-      // B key to go back
-      if ((e.key === 'b' || e.key === 'B')) {
+      if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         if (showDetailedReport) {
           setShowDetailedReport(false);
@@ -127,8 +133,6 @@ const [jaccardScore, setJaccardScore] = useState(0);
           onBack();
         }
       }
-
-      // Escape to go back
       if (e.key === 'Escape') {
         e.preventDefault();
         if (showDetailedReport) {
@@ -143,30 +147,50 @@ const [jaccardScore, setJaccardScore] = useState(0);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [status, convertedText, feedback, score, showDetailedReport, onBack, speak, cancel]);
 
+  // ── Data initialisation ─────────────────────────────────────────────────
   useEffect(() => {
-    // If convertedData is provided, use it directly
     if (convertedData) {
       setQuestion(convertedData.question);
       setConvertedText(convertedData.answer || convertedData.fullText);
       setProgress(50);
-      setStatus('converted');
+
+      if (convertedData.autoEvaluate) {
+        // From manual input — skip the "converted" holding state and evaluate immediately
+        setStatus('evaluating');
+        setProgress(75);
+        // We need a small tick so the refs have updated before calling the API
+        setTimeout(() => {
+          handleEvaluateWithData(convertedData.question, convertedData.answer || convertedData.fullText);
+        }, 0);
+      } else {
+        setStatus('converted');
+      }
     } else {
-      // Simulate conversion if no data provided (for backward compatibility)
-      const timer1 = setTimeout(() => {
+      // Fallback mock for backward compatibility
+      const timer = setTimeout(() => {
         setProgress(50);
-        const mockQuestion = "Explain the importance of accessible education for students with visual impairments.";
-        const mockConverted = "Accessible education ensures equal learning opportunities through adaptive technologies and inclusive teaching methods.";
+        const mockQuestion =
+          'Explain the importance of accessible education for students with visual impairments.';
+        const mockConverted =
+          'Accessible education ensures equal learning opportunities through adaptive technologies and inclusive teaching methods.';
         setQuestion(mockQuestion);
         setConvertedText(mockConverted);
         setStatus('converted');
       }, 2000);
-
-      return () => clearTimeout(timer1);
+      return () => clearTimeout(timer);
     }
   }, [convertedData]);
 
+  // ── Evaluation helpers ──────────────────────────────────────────────────
+
+  /** Called from button / keyboard shortcut — reads from state */
   const handleEvaluate = async () => {
-    if (!question || !convertedText) {
+    await handleEvaluateWithData(questionRef.current, convertedTextRef.current);
+  };
+
+  /** Core evaluation logic — accepts explicit values so it works at init time */
+  const handleEvaluateWithData = async (q: string, ans: string) => {
+    if (!q || !ans) {
       setEvaluationError('Question and answer are required for evaluation');
       return;
     }
@@ -177,8 +201,8 @@ const [jaccardScore, setJaccardScore] = useState(0);
 
     try {
       const response = await brailleApi.post<EvaluationResponse>('/evaluate', {
-        question: question,
-        student_answer: convertedText,
+        question: q,
+        student_answer: ans,
       });
 
       setProgress(100);
@@ -188,7 +212,6 @@ const [jaccardScore, setJaccardScore] = useState(0);
       setKeywordScore(response.keyword_match || 0);
       setJaccardScore(response.jaccard_similarity || 0);
 
-      // Determine result type based on score
       if (response.final_score >= 75) {
         setResult('correct');
       } else if (response.final_score >= 45) {
@@ -197,11 +220,9 @@ const [jaccardScore, setJaccardScore] = useState(0);
         setResult('incorrect');
       }
 
-      // Convert feedback string to array
       const feedbackArray = response.feedback
         ? response.feedback.split(/[.!?]+/).filter((f) => f.trim().length > 0)
         : [];
-      
       if (feedbackArray.length === 0 && response.feedback) {
         feedbackArray.push(response.feedback);
       }
@@ -210,15 +231,14 @@ const [jaccardScore, setJaccardScore] = useState(0);
       setStatus('complete');
     } catch (err) {
       setEvaluationError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to evaluate answer. Please try again.'
+        err instanceof Error ? err.message : 'Failed to evaluate answer. Please try again.'
       );
       setStatus('converted');
       setProgress(50);
     }
   };
 
+  // ── UI helpers ──────────────────────────────────────────────────────────
   const getResultIcon = () => {
     switch (result) {
       case 'correct':
@@ -245,6 +265,7 @@ const [jaccardScore, setJaccardScore] = useState(0);
     }
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
       {!showDetailedReport ? (
@@ -256,7 +277,8 @@ const [jaccardScore, setJaccardScore] = useState(0);
               {status === 'converting' && 'Converting Braille to text...'}
               {status === 'converted' && 'Press E to evaluate • Press A to hear answer'}
               {status === 'evaluating' && 'Evaluating your answer...'}
-              {status === 'complete' && 'Press F to replay feedback • Press D for details • Press B to upload another'}
+              {status === 'complete' &&
+                'Press F to replay feedback • Press D for details • Press B to upload another'}
             </p>
           </div>
 
@@ -271,9 +293,7 @@ const [jaccardScore, setJaccardScore] = useState(0);
           {status !== 'complete' && (
             <div className="space-y-2">
               <Progress value={progress} className="h-2" />
-              <p className="text-center text-sm text-muted-foreground">
-                {progress}% complete
-              </p>
+              <p className="text-center text-sm text-muted-foreground">{progress}% complete</p>
             </div>
           )}
 
@@ -285,7 +305,7 @@ const [jaccardScore, setJaccardScore] = useState(0);
             </div>
           </Card>
 
-          {/* Converted Text */}
+          {/* Converted / Student Answer */}
           {status !== 'converting' && (
             <Card className="p-6">
               <div className="space-y-4">
@@ -310,13 +330,9 @@ const [jaccardScore, setJaccardScore] = useState(0);
             </Card>
           )}
 
-          {/* Evaluate Button */}
+          {/* Evaluate Button (shown only when not auto-evaluating) */}
           {status === 'converted' && (
-            <Button
-              onClick={handleEvaluate}
-              size="lg"
-              className="w-full min-h-[56px]"
-            >
+            <Button onClick={handleEvaluate} size="lg" className="w-full min-h-[56px]">
               Evaluate Answer
             </Button>
           )}
@@ -372,12 +388,7 @@ const [jaccardScore, setJaccardScore] = useState(0);
 
               {/* Actions */}
               <div className="grid gap-3 sm:grid-cols-2">
-                <Button
-                  onClick={onBack}
-                  variant="outline"
-                  size="lg"
-                  className="min-h-[56px]"
-                >
+                <Button onClick={onBack} variant="outline" size="lg" className="min-h-[56px]">
                   Upload Another
                 </Button>
                 <Button
@@ -392,21 +403,20 @@ const [jaccardScore, setJaccardScore] = useState(0);
           )}
         </>
       ) : (
+        /* ── Detailed Report ── */
         <div className="space-y-6">
           <h1 className="text-2xl">Detailed Report</h1>
           <p className="text-muted-foreground">
             Press A to hear your answer • Press M for model answer • Press B to go back
           </p>
-          
-          {/* Question */}
+
           <Card className="p-6">
             <div className="space-y-4">
               <h2 className="text-sm text-muted-foreground">Question:</h2>
               <p className="text-lg">{question}</p>
             </div>
           </Card>
-          
-          {/* Your Answer */}
+
           <Card className="p-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -426,41 +436,38 @@ const [jaccardScore, setJaccardScore] = useState(0);
               <p className="leading-relaxed">{convertedText}</p>
             </div>
           </Card>
-          
-          {/* Score */}
+
           <Card className="p-6">
             <div className="space-y-4">
               <h2 className="text-sm text-muted-foreground">Score:</h2>
               <p className="text-lg">{score}%</p>
             </div>
           </Card>
-          
-            <Card className="p-6 space-y-4">
-      <h2 className="font-semibold">Similarity Breakdown</h2>
 
-      <div>
-        <p>Semantic Similarity: {Math.round(semanticScore)}%</p>
-        <Progress value={semanticScore} />
-      </div>
+          <Card className="p-6 space-y-4">
+            <h2 className="font-semibold">Similarity Breakdown</h2>
+            <div>
+              <p>Semantic Similarity: {Math.round(semanticScore)}%</p>
+              <Progress value={semanticScore} />
+            </div>
+            <div>
+              <p>Keyword Match: {Math.round(keywordScore)}%</p>
+              <Progress value={keywordScore} />
+            </div>
+            <div>
+              <p>Jaccard Similarity: {Math.round(jaccardScore)}%</p>
+              <Progress value={jaccardScore} />
+            </div>
+          </Card>
 
-      <div>
-        <p>Keyword Match: {Math.round(keywordScore)}%</p>
-        <Progress value={keywordScore} />
-      </div>
-
-      <div>
-        <p>Jaccard Similarity: {Math.round(jaccardScore)}%</p>
-        <Progress value={jaccardScore} />
-      </div>
-    </Card>
-          
-          {/* Model Answer (100% Correct Answer) */}
           <Card className="border-2 border-success bg-success/5 p-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <h2 className="text-sm text-muted-foreground">Model Answer (100%):</h2>
-                  <p className="text-xs text-muted-foreground">This is what a perfect answer looks like</p>
+                  <p className="text-xs text-muted-foreground">
+                    This is what a perfect answer looks like
+                  </p>
                 </div>
                 <Button
                   variant="ghost"
@@ -477,8 +484,7 @@ const [jaccardScore, setJaccardScore] = useState(0);
               <p className="leading-relaxed">{modelAnswer}</p>
             </div>
           </Card>
-          
-          {/* Feedback */}
+
           <Card className="p-6">
             <div className="space-y-4">
               <h2 className="text-sm text-muted-foreground">Feedback:</h2>
@@ -492,8 +498,7 @@ const [jaccardScore, setJaccardScore] = useState(0);
               </ul>
             </div>
           </Card>
-          
-          {/* Back Button */}
+
           <Button
             onClick={() => setShowDetailedReport(false)}
             size="lg"

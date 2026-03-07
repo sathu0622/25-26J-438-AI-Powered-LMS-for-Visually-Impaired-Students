@@ -13,6 +13,14 @@ python-multipart>=0.0.6
 python-dotenv>=1.0.0
 huggingface_hub
 
+# Image / PDF processing libraries used by braille_decoder.py
+#   opencv for contour detection, numpy for arrays,
+#   Pillow for image handling, pymupdf (imported as fitz) for PDF reading
+opencv-python>=4.8.0
+numpy>=1.26.0
+Pillow>=10.0.0
+pymupdf>=1.23.0
+
 # Note: bitsandbytes is not available on Windows
 # The code will automatically work without it (no quantization)
 # For Linux/WSL, you can optionally install: pip install bitsandbytes
