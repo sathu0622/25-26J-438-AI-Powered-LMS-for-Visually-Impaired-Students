@@ -1168,6 +1168,7 @@ export function App() {
                 topicIdx={selectedTopicIdx}
                 autoPlay={true}
                 onBack={handleHistoryBack}
+                onGoToGradeChapters={handleSelectGrade}
               />
             )}
           </>

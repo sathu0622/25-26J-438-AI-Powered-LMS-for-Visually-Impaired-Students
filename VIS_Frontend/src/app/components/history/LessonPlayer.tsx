@@ -26,6 +26,7 @@ interface LessonPlayerProps {
   topicIdx: number;
   autoPlay?: boolean;
   onBack: () => void;
+  onGoToGradeChapters: (grade: number) => void;
 }
 
 export const LessonPlayer = ({
@@ -35,7 +36,8 @@ export const LessonPlayer = ({
   chapterIdx,
   topicIdx,
   autoPlay = true,
-  onBack
+  onBack,
+  onGoToGradeChapters
 }: LessonPlayerProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -48,6 +50,9 @@ export const LessonPlayer = ({
   const [isRepeat, setIsRepeat] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(0.9);
+  const recognitionRef = useRef<any>(null);
+  const isListeningRef = useRef(false);
+  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Generate audio when component mounts
   useEffect(() => {
@@ -217,6 +222,118 @@ export const LessonPlayer = ({
     const seconds = Math.floor(time % 60);
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
+
+  const handleVoiceCommand = (transcript: string) => {
+    const normalized = transcript.toLowerCase().trim();
+    if (!normalized) {
+      return;
+    }
+
+    // Stop any ongoing TTS before acting on command.
+    safeCancel();
+
+    if (normalized.includes('go back') || normalized.includes('back') || normalized.includes('previous page')) {
+      handleStop();
+      onBack();
+      return;
+    }
+
+    const wantsChapters = normalized.includes('chapter');
+    const hasGrade10 = normalized.includes('grade 10') || normalized.includes('grade ten') || /\b10\b/.test(normalized);
+    const hasGrade11 = normalized.includes('grade 11') || normalized.includes('grade eleven') || /\b11\b/.test(normalized);
+
+    if (wantsChapters && hasGrade10) {
+      handleStop();
+      safeSpeak('Opening Grade 10 chapters.');
+      setTimeout(() => onGoToGradeChapters(10), 300);
+      return;
+    }
+
+    if (wantsChapters && hasGrade11) {
+      handleStop();
+      safeSpeak('Opening Grade 11 chapters.');
+      setTimeout(() => onGoToGradeChapters(11), 300);
+    }
+  };
+
+  // Always-on voice commands for lesson navigation
+  useEffect(() => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    const startListening = () => {
+      if (!recognitionRef.current || isListeningRef.current) {
+        return;
+      }
+
+      try {
+        recognitionRef.current.start();
+      } catch {
+        if (restartTimeoutRef.current) {
+          clearTimeout(restartTimeoutRef.current);
+        }
+        restartTimeoutRef.current = setTimeout(startListening, 800);
+      }
+    };
+
+    recognition.onstart = () => {
+      isListeningRef.current = true;
+    };
+
+    recognition.onresult = (event: any) => {
+      const latestIndex = event.results.length - 1;
+      const transcript = event.results[latestIndex]?.[0]?.transcript || '';
+      handleVoiceCommand(transcript);
+    };
+
+    recognition.onerror = () => {
+      isListeningRef.current = false;
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+      restartTimeoutRef.current = setTimeout(startListening, 700);
+    };
+
+    recognition.onend = () => {
+      isListeningRef.current = false;
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+      restartTimeoutRef.current = setTimeout(startListening, 700);
+    };
+
+    recognitionRef.current = recognition;
+    startListening();
+
+    return () => {
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onstart = null;
+          recognitionRef.current.onresult = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+        } catch {
+          // Ignore cleanup errors.
+        }
+      }
+
+      isListeningRef.current = false;
+      recognitionRef.current = null;
+    };
+  }, [onBack, onGoToGradeChapters]);
 
   // Keyboard shortcuts
   useEffect(() => {

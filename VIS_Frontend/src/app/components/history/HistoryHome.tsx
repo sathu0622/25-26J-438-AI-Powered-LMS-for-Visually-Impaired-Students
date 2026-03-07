@@ -12,6 +12,7 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
   const hasAnnounced = useRef(false);
   const recognitionRef = useRef<any>(null);
   const [isListening, setIsListening] = useState(false);
+  const isListeningRef = useRef(false);
   const listeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialize voice recognition
@@ -26,6 +27,7 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
       recognition.maxAlternatives = 1;
 
       recognition.onstart = () => {
+        isListeningRef.current = true;
         setIsListening(true);
       };
 
@@ -54,15 +56,20 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
 
       recognition.onerror = (event: any) => {
         console.error('Voice recognition error:', event.error);
+        isListeningRef.current = false;
         setIsListening(false);
 
         if (event.error === 'no-speech') {
-          console.log('No speech detected, restarting...');
-          setTimeout(() => startListening(), 500);
+          console.log('No speech detected, asking again...');
+          safeCancel();
+          safeSpeak('No speech detected. Please say Grade 10 or Grade 11.', () => {
+            setTimeout(() => startListening(), 500);
+          });
         }
       };
 
       recognition.onend = () => {
+        isListeningRef.current = false;
         setIsListening(false);
       };
 
@@ -80,12 +87,13 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
   }, [onSelectGrade]);
 
   const startListening = () => {
-    if (recognitionRef.current && !isListening) {
+    if (recognitionRef.current && !isListeningRef.current) {
       try {
         recognitionRef.current.start();
         listeningTimeoutRef.current = setTimeout(() => {
           if (recognitionRef.current) {
             recognitionRef.current.stop();
+            isListeningRef.current = false;
             setIsListening(false);
           }
         }, 10000);
@@ -133,6 +141,7 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         safeCancel();
         if (recognitionRef.current) {
           recognitionRef.current.abort();
+          isListeningRef.current = false;
           setIsListening(false);
         }
         safeSpeak('Grade 10 selected.', () => {
@@ -145,6 +154,7 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         safeCancel();
         if (recognitionRef.current) {
           recognitionRef.current.abort();
+          isListeningRef.current = false;
           setIsListening(false);
         }
         safeSpeak('Grade 11 selected.', () => {
@@ -163,6 +173,7 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         if (isListening) {
           if (recognitionRef.current) {
             recognitionRef.current.stop();
+            isListeningRef.current = false;
             setIsListening(false);
           }
           safeCancel();

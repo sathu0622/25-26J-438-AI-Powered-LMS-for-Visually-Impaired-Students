@@ -5,6 +5,30 @@ import { useEffect, useState } from 'react';
 import { getLessonsByGrade, Lesson } from '../../data/historyData';
 import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
 
+const speakSlow = (text: string, onEnd?: () => void) => {
+  safeCancel();
+
+  if (
+    typeof window !== 'undefined' &&
+    'speechSynthesis' in window &&
+    typeof window.SpeechSynthesisUtterance === 'function'
+  ) {
+    try {
+      const utterance = new window.SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      if (onEnd) {
+        utterance.onend = onEnd;
+      }
+      window.speechSynthesis.speak(utterance);
+      return;
+    } catch {
+      // Fall back to shared helper if browser API fails.
+    }
+  }
+
+  safeSpeak(text, onEnd);
+};
+
 interface LessonListProps {
   grade: number;
   onSelectLesson: (lessonId: number) => void;
@@ -30,7 +54,7 @@ export const LessonList = ({ grade, onSelectLesson, onBack }: LessonListProps) =
         });
         announcement += 'Press H for help, or Escape to go back.';
         
-        safeSpeak(announcement);
+        speakSlow(announcement);
       }, 500);
     }
     
@@ -48,7 +72,7 @@ export const LessonList = ({ grade, onSelectLesson, onBack }: LessonListProps) =
       if (num >= 1 && num <= lessons.length) {
         e.preventDefault();
         const selectedLesson = lessons[num - 1];
-        safeSpeak(
+        speakSlow(
           `${selectedLesson.title} selected. Duration ${selectedLesson.duration}. Loading lesson.`,
           () => {
             setTimeout(() => onSelectLesson(selectedLesson.id), 500);
@@ -66,7 +90,7 @@ export const LessonList = ({ grade, onSelectLesson, onBack }: LessonListProps) =
         help += 'Press Escape to go back.';
         
         safeCancel();
-        safeSpeak(help);
+        speakSlow(help);
       }
 
       // L key to list all lessons again
@@ -78,7 +102,7 @@ export const LessonList = ({ grade, onSelectLesson, onBack }: LessonListProps) =
         });
         
         safeCancel();
-        safeSpeak(list);
+        speakSlow(list);
       }
 
       // Escape to go back

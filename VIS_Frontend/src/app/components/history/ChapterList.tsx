@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, BookOpen, Clock } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -18,11 +18,153 @@ interface ChapterListProps {
   onBack: () => void;
 }
 
+const cleanChapterNameForSpeech = (name: string) => {
+  return name.replace(/^\s*\d+\s*[.):-]?\s*/, '').trim();
+};
+
+const speakSlow = (text: string, onEnd?: () => void) => {
+  safeCancel();
+
+  if (
+    typeof window !== 'undefined' &&
+    'speechSynthesis' in window &&
+    typeof window.SpeechSynthesisUtterance === 'function'
+  ) {
+    try {
+      const utterance = new window.SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      if (onEnd) {
+        utterance.onend = onEnd;
+      }
+      window.speechSynthesis.speak(utterance);
+      return;
+    } catch {
+      // Fall back to shared helper if browser API fails.
+    }
+  }
+
+  safeSpeak(text, onEnd);
+};
+
+const SPOKEN_NUMBERS: Record<string, number> = {
+  one: 1,
+  two: 2,
+  three: 3,
+  four: 4,
+  five: 5,
+  six: 6,
+  seven: 7,
+  eight: 8,
+  nine: 9,
+  ten: 10,
+};
+
 export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps) => {
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hasAnnounced, setHasAnnounced] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const isListeningRef = useRef(false);
+  const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const speakChapterList = useCallback(() => {
+    if (chapters.length === 0) {
+      speakSlow('No chapters available for this grade.');
+      return;
+    }
+
+    let list = `Grade ${grade}. ${chapters.length} chapters available. Press number or say number you want. `;
+    chapters.forEach((chapter, index) => {
+      list += `${index + 1}. ${cleanChapterNameForSpeech(chapter.chapter_name)}. `;
+    });
+    speakSlow(list);
+  }, [chapters, grade]);
+
+  const selectChapterByNumber = useCallback((chapterNumber: number) => {
+    if (chapterNumber < 1 || chapterNumber > chapters.length) {
+      speakSlow(`Invalid chapter number. Please say a number from 1 to ${chapters.length}.`);
+      return;
+    }
+
+    const selectedChapter = chapters[chapterNumber - 1];
+    speakSlow(`${cleanChapterNameForSpeech(selectedChapter.chapter_name)} selected. Loading topics.`, () => {
+      setTimeout(() => onSelectChapter(selectedChapter.id, selectedChapter.chapter_name), 500);
+    });
+  }, [chapters, onSelectChapter]);
+
+  const getSpokenNumber = useCallback((transcript: string): number | null => {
+    const normalized = transcript.toLowerCase();
+    const digitMatch = normalized.match(/\b(10|[1-9])\b/);
+    if (digitMatch) {
+      return parseInt(digitMatch[1], 10);
+    }
+
+    for (const [word, number] of Object.entries(SPOKEN_NUMBERS)) {
+      if (normalized.includes(word)) {
+        return number;
+      }
+    }
+
+    return null;
+  }, []);
+
+  const handleVoiceCommand = useCallback((transcript: string) => {
+    const normalized = transcript.toLowerCase().trim();
+    if (!normalized) {
+      return;
+    }
+
+    if (normalized.includes('stop') || normalized.includes('pause') || normalized.includes('silent')) {
+      safeCancel();
+      return;
+    }
+
+    // Voice commands take priority over any ongoing speech.
+    safeCancel();
+
+    if (normalized.includes('back') || normalized.includes('go back') || normalized.includes('escape')) {
+      speakSlow('Going back.', () => {
+        setTimeout(() => onBack(), 250);
+      });
+      return;
+    }
+
+    if (normalized.includes('help')) {
+      speakSlow(`Say or press a number from 1 to ${chapters.length} to select a chapter. Say list to hear chapters again. Say back to go back.`);
+      return;
+    }
+
+    if (normalized.includes('list') || normalized.includes('repeat') || normalized.includes('explain') || normalized.includes('again')) {
+      speakChapterList();
+      return;
+    }
+
+    const spokenNumber = getSpokenNumber(normalized);
+    if (spokenNumber !== null) {
+      selectChapterByNumber(spokenNumber);
+      return;
+    }
+
+    speakSlow('Command not recognized. Say a chapter number, explain, stop, help, or back.');
+  }, [chapters.length, getSpokenNumber, onBack, selectChapterByNumber, speakChapterList]);
+
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current || isListeningRef.current) {
+      return;
+    }
+
+    try {
+      recognitionRef.current.start();
+    } catch {
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+      restartTimeoutRef.current = setTimeout(() => {
+        startListening();
+      }, 800);
+    }
+  }, []);
 
   // Fetch chapters from backend
   useEffect(() => {
@@ -41,7 +183,7 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
       } catch (err) {
         console.error('Error fetching chapters:', err);
         setError(err instanceof Error ? err.message : 'Failed to load chapters');
-        safeSpeak(`Error loading chapters. Please try again.`);
+        speakSlow(`Error loading chapters. Please try again.`);
       } finally {
         setLoading(false);
       }
@@ -57,17 +199,16 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
       setHasAnnounced(true);
 
       if (chapters.length === 0) {
-        safeSpeak('No chapters available for this grade.');
+        speakSlow('No chapters available for this grade.');
         return;
       }
 
       setTimeout(() => {
-        let announcement = `Grade ${grade}. ${chapters.length} chapters available. `;
+        let announcement = `Grade ${grade}. ${chapters.length} chapters available. Press number or say number you want. `;
         chapters.forEach((chapter, index) => {
-          announcement += `Press ${index + 1} for ${chapter.chapter_name}. ${chapter.topic_count} topics. `;
+          announcement += `${index + 1}. ${cleanChapterNameForSpeech(chapter.chapter_name)}. `;
         });
-        announcement += 'Press H for help, or Escape to go back.';
-        safeSpeak(announcement);
+        speakSlow(announcement);
       }, 500);
     }
 
@@ -76,33 +217,95 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
     };
   }, [loading, chapters, hasAnnounced, grade]);
 
+  // Always-on voice commands on chapter screen
+  useEffect(() => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      isListeningRef.current = true;
+    };
+
+    recognition.onresult = (event: any) => {
+      const latestIndex = event.results.length - 1;
+      const transcript = event.results[latestIndex]?.[0]?.transcript || '';
+      handleVoiceCommand(transcript);
+    };
+
+    recognition.onerror = () => {
+      isListeningRef.current = false;
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+      restartTimeoutRef.current = setTimeout(() => {
+        startListening();
+      }, 700);
+    };
+
+    recognition.onend = () => {
+      isListeningRef.current = false;
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+      restartTimeoutRef.current = setTimeout(() => {
+        startListening();
+      }, 700);
+    };
+
+    recognitionRef.current = recognition;
+    startListening();
+
+    return () => {
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onstart = null;
+          recognitionRef.current.onresult = null;
+          recognitionRef.current.onerror = null;
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+        } catch {
+          // ignore cleanup errors
+        }
+      }
+
+      isListeningRef.current = false;
+      recognitionRef.current = null;
+    };
+  }, [handleVoiceCommand, startListening]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       const num = parseInt(e.key);
       if (num >= 1 && num <= chapters.length) {
         e.preventDefault();
-        const selectedChapter = chapters[num - 1];
-        safeSpeak(`${selectedChapter.chapter_name} selected. Loading topics.`, () => {
-          setTimeout(() => onSelectChapter(selectedChapter.id, selectedChapter.chapter_name), 500);
-        });
+        safeCancel();
+        selectChapterByNumber(num);
       }
 
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
         let help = `Press a number 1 to ${chapters.length} to select a chapter. `;
         safeCancel();
-        safeSpeak(help);
+        speakSlow(help);
       }
 
       if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
-        let list = `${chapters.length} chapters available. `;
-        chapters.forEach((chapter, index) => {
-          list += `Chapter ${index + 1}: ${chapter.chapter_name}. ${chapter.topic_count} topics. `;
-        });
         safeCancel();
-        safeSpeak(list);
+        speakChapterList();
       }
 
       if (e.key === 'Escape') {
@@ -113,7 +316,7 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [chapters, onSelectChapter, onBack]);
+  }, [chapters.length, onBack, selectChapterByNumber, speakChapterList]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
