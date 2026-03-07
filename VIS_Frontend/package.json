@@ -1,5 +1,5 @@
 {
-  "name": "@figma/my-make-file",
+  "name": "vis-lms-frontend",
   "private": true,
   "version": "0.0.1",
   "type": "module",

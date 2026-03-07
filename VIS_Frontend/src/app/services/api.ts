@@ -1,46 +1,31 @@
 /**
  * API Configuration and Base Setup
- * Centralized API URL and utility functions for all API calls
+ * Five microservice base URLs: voice, braille, document, history, quiz.
+ * Voice is used in ttsService.ts via VITE_API_URL_VOICE.
  */
 
-const API_BASE_URL =
-  (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+const env = (import.meta as any).env;
 
-/**
- * Custom error class for cancelled/aborted requests
- */
-export class AbortedRequestError extends Error {
-  constructor(message: string = 'Request was cancelled') {
-    super(message);
-    this.name = 'AbortedRequestError';
-  }
-}
-
-/**
- * Check if an error is an AbortedRequestError or AbortError
- */
-export function isAbortError(error: unknown): boolean {
-  if (error instanceof AbortedRequestError) return true;
-  if (error instanceof Error && error.name === 'AbortError') return true;
-  if (error instanceof DOMException && error.name === 'AbortError') return true;
-  return false;
-}
+const VITE_API_URL_DOCUMENT =
+  env?.VITE_API_URL_DOCUMENT || env?.VITE_API_URL || 'http://localhost:8000';
+const VITE_API_URL_BRAILLE =
+  env?.VITE_API_URL_BRAILLE || 'http://localhost:8000';
+const VITE_API_URL_HISTORY =
+  env?.VITE_API_URL_HISTORY || 'http://localhost:8000';
+const VITE_API_URL_QUIZ = env?.VITE_API_URL_QUIZ || 'http://localhost:8000';
 
 export const api = {
   baseURL: API_BASE_URL,
 
   /**
    * Generic fetch wrapper with error handling
-   * @param options.signal - Optional AbortSignal for request cancellation
-  */
+   */
   async request<T>(
     endpoint: string,
-    options: RequestInit & { method?: string; signal?: AbortSignal } = {}
+    options: RequestInit & { method?: string } = {}
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`;
-    
-    try {
-      const response = await fetch(url, options);
+    const response = await fetch(url, options);
 
       if (!response.ok) {
         let errorMessage = `API Error: ${response.statusText}`;
@@ -55,14 +40,7 @@ export const api = {
         throw new Error(errorMessage);
       }
 
-      return response.json();
-    } catch (error) {
-      // Re-throw abort errors with our custom type for consistent handling
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        throw new AbortedRequestError('Request was cancelled');
-      }
-      throw error;
-    }
+    return response.json();
   },
 
   /**
@@ -77,12 +55,10 @@ export const api = {
 
   /**
    * POST request with JSON
-   * @param signal - Optional AbortSignal for request cancellation
    */
   async post<T>(
     endpoint: string,
-    data: Record<string, any>,
-    signal?: AbortSignal
+    data: Record<string, any>
   ): Promise<T> {
     return this.request<T>(endpoint, {
       method: 'POST',
@@ -90,7 +66,6 @@ export const api = {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(data),
-      signal,
     });
   },
 

@@ -1,32 +1,65 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Loader2, CheckCircle2, XCircle, AlertCircle, Volume2 } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Progress } from '../ui/progress';
 import { AudioPlayer } from '../AudioPlayer';
+import { brailleApi } from '../../services/api';
 import { useTTS } from '../../contexts/TTSContext';
 
 interface BrailleEvaluationProps {
   onBack: () => void;
+  convertedData?: {
+    question: string;
+    answer: string;
+    fullText: string;
+    /** Pass true when coming from manual input to skip the "converted" pause */
+    autoEvaluate?: boolean;
+  };
+}
+
+interface EvaluationResponse {
+  question: string;
+  student_answer: string;
+  model_answer: string;
+  final_score: number;
+  semantic_similarity: number;
+  keyword_match: number;
+  jaccard_similarity: number;
+  status: string;
+  feedback: string;
 }
 
 type EvaluationStatus = 'converting' | 'converted' | 'evaluating' | 'complete';
 type ResultType = 'correct' | 'partial' | 'incorrect';
 
-export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
+export const BrailleEvaluation = ({ onBack, convertedData }: BrailleEvaluationProps) => {
   const [status, setStatus] = useState<EvaluationStatus>('converting');
   const [progress, setProgress] = useState(0);
   const [convertedText, setConvertedText] = useState('');
+  const [question, setQuestion] = useState('');
   const [result, setResult] = useState<ResultType | null>(null);
   const [score, setScore] = useState(0);
   const [feedback, setFeedback] = useState<string[]>([]);
+  const [modelAnswer, setModelAnswer] = useState('');
+  const [evaluationError, setEvaluationError] = useState<string | null>(null);
   const [showDetailedReport, setShowDetailedReport] = useState(false);
-
-  const question = "Explain the importance of accessible education for students with visual impairments.";
-  const modelAnswer = "Accessible education for students with visual impairments is crucial for ensuring equal learning opportunities and fostering independence. It involves implementing adaptive technologies such as screen readers, Braille displays, and audio learning materials that enable students to access educational content effectively. Multi-sensory learning approaches help students engage with material through touch, sound, and other senses. Inclusive teaching methods ensure that educational materials are designed with accessibility in mind from the start, rather than as an afterthought. This comprehensive approach empowers visually impaired students to participate fully in academic activities, develop critical thinking skills, and achieve their educational goals without barriers.";
+  const [semanticScore, setSemanticScore] = useState(0);
+  const [keywordScore, setKeywordScore] = useState(0);
+  const [jaccardScore, setJaccardScore] = useState(0);
 
   const { speak, cancel } = useTTS();
 
+  // Ref so handleEvaluate can be called from useEffect without stale closure issues
+  const questionRef = useRef('');
+  const convertedTextRef = useRef('');
+
+  useEffect(() => {
+    questionRef.current = question;
+    convertedTextRef.current = convertedText;
+  }, [question, convertedText]);
+
+  // ── TTS announcements ───────────────────────────────────────────────────
   useEffect(() => {
     cancel();
     if (status === 'converted' && convertedText) {
@@ -66,7 +99,7 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
     return () => cancel();
   }, [status, showDetailedReport, convertedText, score, speak, cancel]);
 
-  // Keyboard shortcuts
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if ((e.key === 'a' || e.key === 'A') && convertedText) {
@@ -84,21 +117,15 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
         cancel();
         speak(`Your score is ${score}%. ${feedback.join('. ')}`, { interrupt: true });
       }
-
-      // E key to evaluate (when converted)
       if ((e.key === 'e' || e.key === 'E') && status === 'converted') {
         e.preventDefault();
         handleEvaluate();
       }
-
-      // D key to view detailed report
       if ((e.key === 'd' || e.key === 'D') && status === 'complete' && !showDetailedReport) {
         e.preventDefault();
         setShowDetailedReport(true);
       }
-
-      // B key to go back
-      if ((e.key === 'b' || e.key === 'B')) {
+      if (e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         if (showDetailedReport) {
           setShowDetailedReport(false);
@@ -106,8 +133,6 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
           onBack();
         }
       }
-
-      // Escape to go back
       if (e.key === 'Escape') {
         e.preventDefault();
         if (showDetailedReport) {
@@ -122,36 +147,98 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [status, convertedText, feedback, score, showDetailedReport, onBack, speak, cancel]);
 
+  // ── Data initialisation ─────────────────────────────────────────────────
   useEffect(() => {
-    // Simulate Braille conversion
-    const timer1 = setTimeout(() => {
+    if (convertedData) {
+      setQuestion(convertedData.question);
+      setConvertedText(convertedData.answer || convertedData.fullText);
       setProgress(50);
-      const mockConverted = "Accessible education ensures equal learning opportunities through adaptive technologies and inclusive teaching methods.";
-      setConvertedText(mockConverted);
-      setStatus('converted');
-    }, 2000);
 
-    return () => clearTimeout(timer1);
-  }, []);
+      if (convertedData.autoEvaluate) {
+        // From manual input — skip the "converted" holding state and evaluate immediately
+        setStatus('evaluating');
+        setProgress(75);
+        // We need a small tick so the refs have updated before calling the API
+        setTimeout(() => {
+          handleEvaluateWithData(convertedData.question, convertedData.answer || convertedData.fullText);
+        }, 0);
+      } else {
+        setStatus('converted');
+      }
+    } else {
+      // Fallback mock for backward compatibility
+      const timer = setTimeout(() => {
+        setProgress(50);
+        const mockQuestion =
+          'Explain the importance of accessible education for students with visual impairments.';
+        const mockConverted =
+          'Accessible education ensures equal learning opportunities through adaptive technologies and inclusive teaching methods.';
+        setQuestion(mockQuestion);
+        setConvertedText(mockConverted);
+        setStatus('converted');
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [convertedData]);
 
-  const handleEvaluate = () => {
-    setStatus('evaluating');
-    setProgress(75);
+  // ── Evaluation helpers ──────────────────────────────────────────────────
 
-    // Simulate AI evaluation
-    setTimeout(() => {
-      setProgress(100);
-      setResult('partial');
-      setScore(75);
-      setFeedback([
-        'Good explanation of the core concept',
-        'Missing mention of multi-sensory learning approaches',
-        'Could elaborate on specific adaptive technologies',
-      ]);
-      setStatus('complete');
-    }, 2500);
+  /** Called from button / keyboard shortcut — reads from state */
+  const handleEvaluate = async () => {
+    await handleEvaluateWithData(questionRef.current, convertedTextRef.current);
   };
 
+  /** Core evaluation logic — accepts explicit values so it works at init time */
+  const handleEvaluateWithData = async (q: string, ans: string) => {
+    if (!q || !ans) {
+      setEvaluationError('Question and answer are required for evaluation');
+      return;
+    }
+
+    setStatus('evaluating');
+    setProgress(75);
+    setEvaluationError(null);
+
+    try {
+      const response = await brailleApi.post<EvaluationResponse>('/evaluate', {
+        question: q,
+        student_answer: ans,
+      });
+
+      setProgress(100);
+      setModelAnswer(response.model_answer);
+      setScore(Math.round(response.final_score));
+      setSemanticScore(response.semantic_similarity || 0);
+      setKeywordScore(response.keyword_match || 0);
+      setJaccardScore(response.jaccard_similarity || 0);
+
+      if (response.final_score >= 75) {
+        setResult('correct');
+      } else if (response.final_score >= 45) {
+        setResult('partial');
+      } else {
+        setResult('incorrect');
+      }
+
+      const feedbackArray = response.feedback
+        ? response.feedback.split(/[.!?]+/).filter((f) => f.trim().length > 0)
+        : [];
+      if (feedbackArray.length === 0 && response.feedback) {
+        feedbackArray.push(response.feedback);
+      }
+
+      setFeedback(feedbackArray);
+      setStatus('complete');
+    } catch (err) {
+      setEvaluationError(
+        err instanceof Error ? err.message : 'Failed to evaluate answer. Please try again.'
+      );
+      setStatus('converted');
+      setProgress(50);
+    }
+  };
+
+  // ── UI helpers ──────────────────────────────────────────────────────────
   const getResultIcon = () => {
     switch (result) {
       case 'correct':
@@ -178,6 +265,7 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
     }
   };
 
+  // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
       {!showDetailedReport ? (
@@ -189,17 +277,23 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
               {status === 'converting' && 'Converting Braille to text...'}
               {status === 'converted' && 'Press E to evaluate • Press A to hear answer'}
               {status === 'evaluating' && 'Evaluating your answer...'}
-              {status === 'complete' && 'Press F to replay feedback • Press D for details • Press B to upload another'}
+              {status === 'complete' &&
+                'Press F to replay feedback • Press D for details • Press B to upload another'}
             </p>
           </div>
+
+          {/* Error Message */}
+          {evaluationError && (
+            <Card className="border-destructive bg-destructive/10 p-4">
+              <p className="text-sm text-destructive">{evaluationError}</p>
+            </Card>
+          )}
 
           {/* Progress */}
           {status !== 'complete' && (
             <div className="space-y-2">
               <Progress value={progress} className="h-2" />
-              <p className="text-center text-sm text-muted-foreground">
-                {progress}% complete
-              </p>
+              <p className="text-center text-sm text-muted-foreground">{progress}% complete</p>
             </div>
           )}
 
@@ -211,7 +305,7 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
             </div>
           </Card>
 
-          {/* Converted Text */}
+          {/* Converted / Student Answer */}
           {status !== 'converting' && (
             <Card className="p-6">
               <div className="space-y-4">
@@ -236,13 +330,9 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
             </Card>
           )}
 
-          {/* Evaluate Button */}
+          {/* Evaluate Button (shown only when not auto-evaluating) */}
           {status === 'converted' && (
-            <Button
-              onClick={handleEvaluate}
-              size="lg"
-              className="w-full min-h-[56px]"
-            >
+            <Button onClick={handleEvaluate} size="lg" className="w-full min-h-[56px]">
               Evaluate Answer
             </Button>
           )}
@@ -298,12 +388,7 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
 
               {/* Actions */}
               <div className="grid gap-3 sm:grid-cols-2">
-                <Button
-                  onClick={onBack}
-                  variant="outline"
-                  size="lg"
-                  className="min-h-[56px]"
-                >
+                <Button onClick={onBack} variant="outline" size="lg" className="min-h-[56px]">
                   Upload Another
                 </Button>
                 <Button
@@ -318,21 +403,20 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
           )}
         </>
       ) : (
+        /* ── Detailed Report ── */
         <div className="space-y-6">
           <h1 className="text-2xl">Detailed Report</h1>
           <p className="text-muted-foreground">
             Press A to hear your answer • Press M for model answer • Press B to go back
           </p>
-          
-          {/* Question */}
+
           <Card className="p-6">
             <div className="space-y-4">
               <h2 className="text-sm text-muted-foreground">Question:</h2>
               <p className="text-lg">{question}</p>
             </div>
           </Card>
-          
-          {/* Your Answer */}
+
           <Card className="p-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -352,22 +436,38 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
               <p className="leading-relaxed">{convertedText}</p>
             </div>
           </Card>
-          
-          {/* Score */}
+
           <Card className="p-6">
             <div className="space-y-4">
               <h2 className="text-sm text-muted-foreground">Score:</h2>
               <p className="text-lg">{score}%</p>
             </div>
           </Card>
-          
-          {/* Model Answer (100% Correct Answer) */}
+
+          <Card className="p-6 space-y-4">
+            <h2 className="font-semibold">Similarity Breakdown</h2>
+            <div>
+              <p>Semantic Similarity: {Math.round(semanticScore)}%</p>
+              <Progress value={semanticScore} />
+            </div>
+            <div>
+              <p>Keyword Match: {Math.round(keywordScore)}%</p>
+              <Progress value={keywordScore} />
+            </div>
+            <div>
+              <p>Jaccard Similarity: {Math.round(jaccardScore)}%</p>
+              <Progress value={jaccardScore} />
+            </div>
+          </Card>
+
           <Card className="border-2 border-success bg-success/5 p-6">
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <div className="space-y-1">
                   <h2 className="text-sm text-muted-foreground">Model Answer (100%):</h2>
-                  <p className="text-xs text-muted-foreground">This is what a perfect answer looks like</p>
+                  <p className="text-xs text-muted-foreground">
+                    This is what a perfect answer looks like
+                  </p>
                 </div>
                 <Button
                   variant="ghost"
@@ -384,8 +484,7 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
               <p className="leading-relaxed">{modelAnswer}</p>
             </div>
           </Card>
-          
-          {/* Feedback */}
+
           <Card className="p-6">
             <div className="space-y-4">
               <h2 className="text-sm text-muted-foreground">Feedback:</h2>
@@ -399,8 +498,7 @@ export const BrailleEvaluation = ({ onBack }: BrailleEvaluationProps) => {
               </ul>
             </div>
           </Card>
-          
-          {/* Back Button */}
+
           <Button
             onClick={() => setShowDetailedReport(false)}
             size="lg"
