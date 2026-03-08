@@ -52,9 +52,13 @@ def calculate_final_score(correct, student, sbert_model):
 
     length_factor = length_penalty(correct, student)
 
-    final = (semantic * 0.65 + keyword * 0.35 + jaccard * 0.10) * length_factor
+    semantic_weighted = semantic * 0.55
+    keyword_weighted = keyword * 0.35
+    jaccard_weighted = jaccard * 0.10
 
-    return round(final, 2), semantic, keyword, jaccard
+    final = (semantic_weighted + keyword_weighted + jaccard_weighted) * length_factor
+
+    return round(final, 2), round(semantic_weighted, 2), round(keyword_weighted, 2), round(jaccard_weighted, 2)
 
 def generate_feedback(score):
     if score >= 75:
