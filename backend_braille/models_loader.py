@@ -18,24 +18,24 @@ def load_models():
         tokenizer.pad_token = tokenizer.eos_token
 
         logger.info("Loading base model with 4-bit quantization...")
-        bnb_config = BitsAndBytesConfig(
+        bnb_config = BitsAndBytesConfig(    #4-bit quantization (memory optimization)
             load_in_4bit=True,
             bnb_4bit_compute_dtype=torch.float16,
-            bnb_4bit_use_double_quant=True,
-            bnb_4bit_quant_type="nf4"
+            bnb_4bit_use_double_quant=True, #Improves compression efficiency.
+            bnb_4bit_quant_type="nf4"   #Uses NF4 quantization.
         )
 
         base_model = AutoModelForCausalLM.from_pretrained(
             BASE_MODEL,
             quantization_config=bnb_config,
-            device_map="sequential",
-            torch_dtype=torch.float16,
+            device_map="sequential",    # Helps load large models on limited GPU memory
+            torch_dtype=torch.float16,  #Speeds up inference and reduces memory usage
             token=HF_TOKEN,
-            low_cpu_mem_usage=True
+            low_cpu_mem_usage=True  #Optimizes CPU memory while loading the model
         )
 
         logger.info("Loading LoRA adapter...")
-        model = PeftModel.from_pretrained(base_model, LORA_MODEL_PATH)
+        model = PeftModel.from_pretrained(base_model, LORA_MODEL_PATH)  #final combined model
         model.eval()
 
         logger.info("Loading Sentence-BERT...")

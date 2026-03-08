@@ -33,7 +33,11 @@ def jaccard_similarity(correct, student):
     return round(len(a & b) / len(a | b) * 100, 2)
 
 def length_penalty(correct, student):
-    r = len(student.split()) / max(len(correct.split()), 1)
-    if 0.5 <= r <= 1.5: return 1.0
-    elif r < 0.8: return 0.6
-    return 0.95
+    length = len(student.split())
+
+    if length > 150:
+        return 1.0
+    elif 90 <= length <= 150:
+        return 0.75
+    else:
+        return 0.4
