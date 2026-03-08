@@ -1,5 +1,5 @@
 # azure_processor.py
-from typing import Dict, Any, List, Optional  # ADD Optional here
+from typing import Dict, Any, List, Optional  
 from config import AZURE_ENDPOINT, AZURE_KEY
 
 def extract_with_azure(file_path: str) -> Dict[str, Any]:
@@ -62,11 +62,11 @@ def extract_with_azure(file_path: str) -> Dict[str, Any]:
 
 def extract_articles_exact_colab_logic(result) -> List[Dict[str, Any]]:
     """
-    EXACT COLAB LOGIC: Extract structured articles from Azure Document Intelligence result.
-    This is your exact Colab code converted to Python.
+    Extract structured articles from Azure Document Intelligence result.
+
     """
     try:
-        # Step 1: Group paragraphs by column (left/right) EXACTLY like Colab
+        # Step 1: Group paragraphs by column (left/right)
         articles_by_column = {}
         
         for p in result.paragraphs:
@@ -75,10 +75,10 @@ def extract_articles_exact_colab_logic(result) -> List[Dict[str, Any]]:
                 
             box = p.bounding_regions[0].polygon
             
-            # Calculate average X position (EXACT Colab logic)
+            # Calculate average X position 
             x_avg = sum(point.x for point in box) / len(box)
             
-            # Determine column (EXACT Colab logic)
+            # Determine column 
             column = "left" if x_avg < 0.5 else "right"
             
             if column not in articles_by_column:
@@ -89,7 +89,7 @@ def extract_articles_exact_colab_logic(result) -> List[Dict[str, Any]]:
         
         print(f"Paragraphs grouped by column: { {k: len(v) for k, v in articles_by_column.items()} }")
         
-        # Step 2: Function to split paragraphs into articles (EXACT Colab function)
+        # Step 2: Function to split paragraphs into articles 
         def split_into_articles(paragraphs):
             article_list = []
             current_article = None
@@ -124,7 +124,7 @@ def extract_articles_exact_colab_logic(result) -> List[Dict[str, Any]]:
 
             return article_list
         
-        # Step 3: Process each column (EXACT Colab logic)
+        # Step 3: Process each column
         all_articles = []
         
         for col, paras in articles_by_column.items():

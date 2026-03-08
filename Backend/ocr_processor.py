@@ -102,73 +102,78 @@ def ocr_pdf_simple(pdf_path: str) -> str:
 # 🔹 BOOK STRUCTURE DETECTION
 # ==========================================
 def structure_book_text(full_text: str) -> dict:
+    """
+    Detect chapters and structure book text properly.
+    """
+
     if not full_text.strip():
         return {"book_title": "Unknown Title", "chapters": []}
 
-    # Merge broken OCR lines
-    raw_lines = full_text.split("\n")
-    merged_lines = []
-    buffer = ""
-    for line in raw_lines:
-        line = line.strip()
-        if not line:
-            if buffer:
-                merged_lines.append(buffer.strip())
-                buffer = ""
-            continue
-        if buffer and not buffer.endswith((".", "!", "?", ":", ";")):
-            buffer += " " + line
-        else:
-            if buffer:
-                merged_lines.append(buffer.strip())
-            buffer = line
-    if buffer:
-        merged_lines.append(buffer.strip())
+    # -----------------------------------------
+    # 1️⃣ Clean OCR text
+    # -----------------------------------------
+    text = re.sub(r'\r', '\n', full_text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
 
-    book_title = merged_lines[0] if merged_lines else "Unknown Title"
+    # Fix OCR broken words 
+    text = re.sub(r'([a-z])([A-Z])', r'\1 \2', text)
 
-    # Detect chapters
+    # -----------------------------------------
+    # 2️⃣ Detect Chapter Headings
+    # -----------------------------------------
+    chapter_pattern = re.compile(
+    r'^(?:THE\s+\w+\s+CHAPTER.*|[IVXLCDM]+\.\s+.+)$',
+    re.IGNORECASE | re.MULTILINE
+)
+
+    matches = list(chapter_pattern.finditer(text))
+
     chapters = []
-    current_chapter = None
-    for line in merged_lines:
-        words = line.split()
-        heading_score = 0
-        if 2 <= len(words) <= 8:
-            heading_score += 1
-        upper_ratio = sum(c.isupper() for c in line) / max(len(line), 1)
-        if upper_ratio > 0.6:
-            heading_score += 2
-        if line.istitle():
-            heading_score += 1
-        if re.search(r'\bchapter\b', line, re.IGNORECASE):
-            heading_score += 3
 
-        if heading_score >= 3:
-            # Always append current chapter if exists, no length check
-            if current_chapter:
-                chapters.append(current_chapter)
-            current_chapter = {"heading": line, "content": []}
-        else:
-            if current_chapter:
-                current_chapter["content"].append(line)
+    # -----------------------------------------
+    # 3️⃣ Extract Chapter Content
+    # -----------------------------------------
+    for i, match in enumerate(matches):
 
-    if current_chapter:
-        chapters.append(current_chapter)  # always append last chapter
+        start = match.start()
+        end = matches[i+1].start() if i+1 < len(matches) else len(text)
 
-    # Format structured chapters
-    structured_chapters = []
-    for idx, ch in enumerate(chapters):
-        structured_chapters.append({
-            "article_id": f"chapter_{idx+1}",
-            "heading": ch["heading"],
+        chapter_block = text[start:end].strip()
+
+        lines = chapter_block.split("\n")
+
+        heading = lines[0].strip()
+
+        content = "\n".join(lines[1:]).strip()
+
+        # Split paragraphs
+        paragraphs = [p.strip() for p in content.split("\n\n") if len(p.strip()) > 20]
+
+        chapters.append({
+            "article_id": f"chapter_{i+1}",
+            "heading": heading,
             "subheading": "",
-            "body": ch["content"],
-            "full_text": "\n".join(ch["content"]).strip()
+            "body": paragraphs,
+            "full_text": "\n\n".join(paragraphs)
         })
 
-    print(f"Detected {len(structured_chapters)} structured chapters")
-    return {"book_title": book_title, "chapters": structured_chapters}
+    # -----------------------------------------
+    # 4️⃣ Detect Book Title
+    # -----------------------------------------
+    first_lines = text.split("\n")[:5]
 
+    book_title = "Unknown Title"
+    for line in first_lines:
+        if 3 < len(line.split()) < 10 and line.isupper():
+            book_title = line.strip()
+            break
+
+    print(f"Detected {len(chapters)} chapters")
+
+    return {
+        "book_title": book_title,
+        "chapters": chapters
+    }
 
 # ==========================================
 # 🔹 MAIN BOOK TEXT EXTRACTOR

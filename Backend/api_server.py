@@ -8,7 +8,7 @@ import tempfile
 import subprocess
 import sys
 from datetime import datetime
-from typing import Optional  # ADD THIS IMPORT
+from typing import Optional
 
 from config import processed_documents
 from models import load_all_models
@@ -21,8 +21,8 @@ class QARequest(BaseModel):
     document_id: str = Field(..., description="Document ID from processing")
     article_id: str = Field(..., description="Article ID to ask questions about")
     question: str = Field(..., min_length=1, description="Question to ask")
-    max_answer_len: int = Field(64, ge=1, le=256, description="Maximum answer token length")
-    score_threshold: float = Field(0.15, ge=0.0, le=1.0, description="Confidence threshold")
+    max_answer_len: int = Field(128, ge=1, le=256, description="Maximum answer token length")
+    score_threshold: float = Field(0.08, ge=0.0, le=1.0, description="Confidence threshold")
 
 class QAResponse(BaseModel):
     document_id: str
@@ -37,7 +37,7 @@ class QAResponse(BaseModel):
 # Load models globally
 models = load_all_models()
 
-app = FastAPI(title="EXACT Colab Article Detection Document Processor with Q&A", version="6.0.0")
+app = FastAPI(title="Article Detection Document Processor with Q&A", version="6.0.0")
 
 app.add_middleware(
     CORSMiddleware,

@@ -4,7 +4,7 @@ import tempfile
 import hashlib
 import numpy as np
 from datetime import datetime
-from typing import Dict, Any, Optional  # ADD Optional here
+from typing import Dict, Any, Optional 
 import tensorflow as tf
 from tensorflow.keras.preprocessing import image
 import pdf2image

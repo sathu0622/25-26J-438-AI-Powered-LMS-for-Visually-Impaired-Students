@@ -5,6 +5,37 @@ from typing import Dict, Any, Optional  # ADD Optional here
 from datetime import datetime
 from models import DEVICE
 
+# Minimum score to still return an answer when below main threshold (reduces "not in content" false negatives)
+LOW_CONFIDENCE_FLOOR = 0.02
+
+def _expand_to_sentences(context: str, start_char: int, end_char: int, max_chars: int = 400) -> str:
+    """Expand a span to full sentence(s) for more explanatory answers."""
+    if start_char < 0 or end_char > len(context) or start_char >= end_char:
+        raw = context[max(0, start_char):min(end_char, len(context))].strip()
+        return raw if raw else ""
+    # Find start of sentence containing start_char (go back to last . ! ? or start)
+    start_sent = start_char
+    for i in range(start_char - 1, -1, -1):
+        if context[i] in '.!?':
+            start_sent = i + 1
+            break
+        if i == 0:
+            start_sent = 0
+            break
+    # Find end of sentence containing end_char (go forward to next . ! ? or end)
+    end_sent = end_char
+    for i in range(end_char, len(context)):
+        if context[i] in '.!?':
+            end_sent = i + 1
+            break
+        if i == len(context) - 1:
+            end_sent = len(context)
+            break
+    expanded = context[start_sent:end_sent].strip()
+    if len(expanded) <= max_chars and len(expanded) > len(context[start_char:end_char].strip()):
+        return expanded
+    return context[start_char:end_char].strip()
+
 def softmax_1d(x: torch.Tensor) -> torch.Tensor:
     """Compute softmax for 1D tensor."""
     x = x - x.max()
@@ -16,8 +47,8 @@ def answer_question_with_sliding_window(
     context: str,
     qa_tokenizer,
     qa_model,
-    max_answer_len: int = 64,
-    score_threshold: float = 0.15,
+    max_answer_len: int = 128,
+    score_threshold: float = 0.08,
     max_seq_len: int = 384,
     doc_stride: int = 128,
 ) -> Dict[str, Any]:
@@ -128,7 +159,9 @@ def answer_question_with_sliding_window(
                         start_char, end_char = chunk_offsets[s].tolist()[0], chunk_offsets[e].tolist()[1]
                         # Guard: sometimes offsets can be weird; ensure valid slice
                         if 0 <= start_char < end_char <= len(context):
-                            ans = context[start_char:end_char].strip()
+                            raw_ans = context[start_char:end_char].strip()
+                            # Expand to full sentence(s) for more explanatory answers
+                            ans = _expand_to_sentences(context, start_char, end_char) if len(raw_ans) < 80 else raw_ans
                         else:
                             # Try to get answer from tokens
                             ans_tokens = input_ids[ci, s:e+1]
@@ -145,11 +178,10 @@ def answer_question_with_sliding_window(
                                 }
                             )
 
-        # If confidence too low, return a safe fallback
+        # If confidence too low, try fallbacks before saying "not in content"
         if best["score"] < score_threshold or not best["answer"]:
-            # Try a simpler approach with direct QA
+            # Try a simpler approach with direct QA (single chunk)
             try:
-                # Single chunk approach for short contexts
                 inputs = qa_tokenizer(
                     question,
                     context,
@@ -162,16 +194,15 @@ def answer_question_with_sliding_window(
                 with torch.no_grad():
                     outputs = qa_model(**inputs)
                 
-                start_idx = torch.argmax(outputs.start_logits)
-                end_idx = torch.argmax(outputs.end_logits)
+                start_idx = torch.argmax(outputs.start_logits).item()
+                end_idx = torch.argmax(outputs.end_logits).item()
                 
                 if end_idx >= start_idx:
                     answer_tokens = inputs["input_ids"][0][start_idx:end_idx+1]
-                    answer = qa_tokenizer.decode(answer_tokens, skip_special_tokens=True)
+                    answer = qa_tokenizer.decode(answer_tokens, skip_special_tokens=True).strip()
                     confidence = (torch.softmax(outputs.start_logits, dim=1)[0, start_idx] * 
                                  torch.softmax(outputs.end_logits, dim=1)[0, end_idx]).item()
-                    
-                    if confidence > score_threshold and answer.strip():
+                    if answer and (confidence > score_threshold or confidence >= LOW_CONFIDENCE_FLOOR):
                         return {
                             "answer": answer,
                             "confidence": float(confidence),
@@ -180,8 +211,18 @@ def answer_question_with_sliding_window(
             except Exception:
                 pass
             
+            # Return best answer we have if it exists and score is above floor (reduces false "not in content")
+            if best["answer"] and best["score"] >= LOW_CONFIDENCE_FLOOR:
+                return {
+                    "answer": best["answer"],
+                    "confidence": float(best["score"]),
+                    "context_preview": context[:200] + "..." if len(context) > 200 else context,
+                    "start_char": int(best["start_char"]) if best["start_char"] is not None else None,
+                    "end_char": int(best["end_char"]) if best["end_char"] is not None else None,
+                }
+            
             return {
-                "answer": "I couldn't find a confident answer in the provided text. Try asking a more specific question or provide more context.",
+                "answer": "I couldn't find a confident answer in the provided text. Try asking a more specific question or rephrasing.",
                 "confidence": float(best["score"] if best["score"] >= 0 else 0.0),
                 "context_preview": context[:200] + "..." if len(context) > 200 else context,
             }
@@ -210,8 +251,8 @@ def answer_question_for_article(
     processed_documents: Dict[str, Any],
     qa_tokenizer,
     qa_model,
-    max_answer_len: int = 64,
-    score_threshold: float = 0.15
+    max_answer_len: int = 128,
+    score_threshold: float = 0.08
 ) -> Dict[str, Any]:
     """Answer a question about a specific article with better error handling."""
     
