@@ -88,7 +88,7 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
     }
 
     const selectedChapter = chapters[chapterNumber - 1];
-    speakSlow(`${cleanChapterNameForSpeech(selectedChapter.chapter_name)} selected. Loading topics.`, () => {
+    speakSlow(`okay, ${cleanChapterNameForSpeech(selectedChapter.chapter_name)} selected. Loading topics.`, () => {
       setTimeout(() => onSelectChapter(selectedChapter.id, selectedChapter.chapter_name), 500);
     });
   }, [chapters, onSelectChapter]);
@@ -115,18 +115,25 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
       return;
     }
 
-    if (normalized.includes('stop') || normalized.includes('pause') || normalized.includes('silent')) {
-      safeCancel();
+    safeCancel();
+
+    if (normalized.includes('hello')) {
+      speakSlow('Yes, say dear.');
       return;
     }
 
-    // Voice commands take priority over any ongoing speech.
-    safeCancel();
+    if (normalized.includes('stop speech')) {
+      speakSlow("Okay, I'm silance now, say me what to do?");
+      return;
+    }
+
+    if (normalized.includes('stop') || normalized.includes('pause') || normalized.includes('silent')) {
+      return;
+    }
 
     if (normalized.includes('back') || normalized.includes('go back') || normalized.includes('escape')) {
-      speakSlow('Going back.', () => {
-        setTimeout(() => onBack(), 250);
-      });
+      speakSlow('Going back.');
+      onBack();
       return;
     }
 

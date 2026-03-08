@@ -14,6 +14,32 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
   const [isListening, setIsListening] = useState(false);
   const isListeningRef = useRef(false);
   const listeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restartListeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoListenEnabledRef = useRef(true);
+
+  const scheduleAutoListenRestart = (delay = 500) => {
+    if (!autoListenEnabledRef.current) return;
+    if (restartListeningTimeoutRef.current) {
+      clearTimeout(restartListeningTimeoutRef.current);
+    }
+
+    restartListeningTimeoutRef.current = setTimeout(() => {
+      if (recognitionRef.current && !isListeningRef.current && autoListenEnabledRef.current) {
+        try {
+          recognitionRef.current.start();
+          listeningTimeoutRef.current = setTimeout(() => {
+            if (recognitionRef.current) {
+              recognitionRef.current.stop();
+              isListeningRef.current = false;
+              setIsListening(false);
+            }
+          }, 10000);
+        } catch (error) {
+          console.error('Error auto-restarting voice recognition:', error);
+        }
+      }
+    }, delay);
+  };
 
   // Initialize voice recognition
   useEffect(() => {
@@ -35,22 +61,26 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         const transcript = event.results[0][0].transcript.toLowerCase().trim();
         console.log('Voice input detected:', transcript);
 
-        // Check for grade commands
+        safeCancel();
+
+        if (transcript.includes('hello')) {
+          safeSpeak('Yes, say dear.');
+          return;
+        }
+
+        if (transcript.includes('stop speech')) {
+          safeSpeak("Okay, I'm silance now, say me what to do?");
+          return;
+        }
+
         if (transcript.includes('grade 10') || transcript.includes('ten') || transcript.match(/\b10\b/)) {
-          safeCancel();
-          safeSpeak('Grade 10 selected. Loading lessons.', () => {
-            setTimeout(() => onSelectGrade(10), 400);
-          });
+          safeSpeak('Grade 10 selected. Loading lessons.');
+          onSelectGrade(10);
         } else if (transcript.includes('grade 11') || transcript.includes('eleven') || transcript.match(/\b11\b/)) {
-          safeCancel();
-          safeSpeak('Grade 11 selected. Loading lessons.', () => {
-            setTimeout(() => onSelectGrade(11), 400);
-          });
+          safeSpeak('Grade 11 selected. Loading lessons.');
+          onSelectGrade(11);
         } else {
-          safeCancel();
-          safeSpeak('Command not recognized. Please say Grade 10 or Grade 11.', () => {
-            setTimeout(() => startListening(), 1000);
-          });
+          safeSpeak('Invalid speech. Please select Grade 10 or Grade 11.');
         }
       };
 
@@ -71,6 +101,7 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
       recognition.onend = () => {
         isListeningRef.current = false;
         setIsListening(false);
+        scheduleAutoListenRestart(300);
       };
 
       recognitionRef.current = recognition;
@@ -80,6 +111,10 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
       if (listeningTimeoutRef.current) {
         clearTimeout(listeningTimeoutRef.current);
       }
+      if (restartListeningTimeoutRef.current) {
+        clearTimeout(restartListeningTimeoutRef.current);
+      }
+      autoListenEnabledRef.current = false;
       if (recognitionRef.current) {
         recognitionRef.current.abort();
       }
@@ -89,6 +124,9 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
   const startListening = () => {
     if (recognitionRef.current && !isListeningRef.current) {
       try {
+        if (listeningTimeoutRef.current) {
+          clearTimeout(listeningTimeoutRef.current);
+        }
         recognitionRef.current.start();
         listeningTimeoutRef.current = setTimeout(() => {
           if (recognitionRef.current) {
@@ -171,6 +209,7 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
       if (e.key === 'F1') {
         e.preventDefault();
         if (isListening) {
+          autoListenEnabledRef.current = false;
           if (recognitionRef.current) {
             recognitionRef.current.stop();
             isListeningRef.current = false;
@@ -179,6 +218,7 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
           safeCancel();
           safeSpeak('Microphone stopped.');
         } else {
+          autoListenEnabledRef.current = true;
           safeCancel();
           safeSpeak('Listening for grade selection.');
           setTimeout(() => startListening(), 500);

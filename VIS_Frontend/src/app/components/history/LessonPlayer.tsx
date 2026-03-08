@@ -106,7 +106,7 @@ export const LessonPlayer = ({
       const audioBlob = await response.blob();
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(url);
-      safeSpeak(`Audio generated successfully. Press space to play.`);
+      safeSpeak(`Audio generated successfully.`);
     } catch (err) {
       // Fallback: set the backend endpoint directly as audio source.
       // This avoids fetch/blob CORS failures while still allowing playback.
@@ -225,6 +225,7 @@ export const LessonPlayer = ({
 
   const handleVoiceCommand = (transcript: string) => {
     const normalized = transcript.toLowerCase().trim();
+    const audioEl = audioRef.current;
     if (!normalized) {
       return;
     }
@@ -232,30 +233,57 @@ export const LessonPlayer = ({
     // Stop any ongoing TTS before acting on command.
     safeCancel();
 
+    if (normalized.includes('hello')) {
+      if (audioEl && !audioEl.paused) {
+        audioEl.pause();
+        setIsPlaying(false);
+      }
+      safeSpeak('Yes, say dear.');
+      return;
+    }
+
+    if (normalized.includes('stop speech')) {
+      if (audioEl && !audioEl.paused) {
+        audioEl.pause();
+        setIsPlaying(false);
+      }
+      safeSpeak("Okay, I'm silance now, say me what to do?");
+      return;
+    }
+
+    const wrongContextRequest =
+      normalized.includes('wrong lesson') ||
+      normalized.includes('wrong page') ||
+      normalized.includes('wrong chapter') ||
+      normalized.includes('wrong topic') ||
+      normalized.includes('wrong grade') ||
+      (normalized.includes('wrong') && normalized.includes('go back')) ||
+      normalized.includes('please go back');
+
+    if (wrongContextRequest) {
+      handleStop();
+      safeSpeak('Ok, going back.');
+      onBack();
+      return;
+    }
+
     // Audio playback controls
     if (normalized.includes('stop') || normalized.includes('pause')) {
-      if (audioRef.current && isPlaying) {
-        audioRef.current.pause();
+      if (audioEl && !audioEl.paused) {
+        audioEl.pause();
         setIsPlaying(false);
-        safeSpeak('Audio paused');
       }
       return;
     }
 
     if (normalized.includes('play') || normalized.includes('resume') || normalized.includes('start')) {
-      if (audioRef.current && !isPlaying && audioUrl) {
-        audioRef.current.play().then(() => {
-          setIsPlaying(true);
-          safeSpeak('Audio playing');
-        }).catch(err => {
-          console.error('Play failed:', err);
-          safeSpeak('Unable to play audio');
-        });
+      if (audioEl && audioEl.paused) {
+        audioEl.play().catch(err => console.error('Play failed:', err));
+        setIsPlaying(true);
       }
       return;
     }
 
-    // Navigation commands
     if (normalized.includes('go back') || normalized.includes('back') || normalized.includes('previous page')) {
       handleStop();
       onBack();

@@ -45,7 +45,7 @@ export function safeSpeak(text: string, onEnd?: () => void) {
 export function safeCancel() {
   if (isSpeechSynthesisSupported()) {
     window.speechSynthesis.cancel();
-    console.log('[Mock TTS] Cancelled');
+    // console.log('[Mock TTS] Cancelled');
   }
 }
 

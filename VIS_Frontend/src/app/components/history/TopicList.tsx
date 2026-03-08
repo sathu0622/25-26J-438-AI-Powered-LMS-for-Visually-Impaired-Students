@@ -111,7 +111,7 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
   const selectTopic = useCallback((topic: Topic) => {
     const content = topic.simplified_text || topic.original_text || topic.narrative_text || '';
 
-    speakSlow(`${topic.topic_name} selected. Loading lesson.`, () => {
+    speakSlow(`ok,${topic.topic_name} selected. Loading lesson.`, () => {
       setTimeout(() => onSelectTopic(topic.id, topic.topic_name, content), 500);
     });
   }, [onSelectTopic]);
@@ -149,17 +149,25 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
       return;
     }
 
-    if (normalized.includes('stop') || normalized.includes('pause') || normalized.includes('silent')) {
-      safeCancel();
+    safeCancel();
+
+    if (normalized.includes('hello')) {
+      speakSlow('Yes, say dear.');
       return;
     }
 
-    safeCancel();
+    if (normalized.includes('stop speech')) {
+      speakSlow("Okay, I'm silance now, say me what to do?");
+      return;
+    }
+
+    if (normalized.includes('stop') || normalized.includes('pause') || normalized.includes('silent')) {
+      return;
+    }
 
     if (normalized.includes('back') || normalized.includes('go back') || normalized.includes('escape')) {
-      speakSlow('Going back.', () => {
-        setTimeout(() => onBack(), 250);
-      });
+      speakSlow('Going back.');
+      onBack();
       return;
     }
 
