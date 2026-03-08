@@ -22,6 +22,14 @@ const cleanChapterNameForSpeech = (name: string) => {
   return name.replace(/^\s*\d+\s*[.):-]?\s*/, '').trim();
 };
 
+const normalizeSpeechText = (text: string) => {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
 const speakSlow = (text: string, onEnd?: () => void) => {
   safeCancel();
 
@@ -109,31 +117,54 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
     return null;
   }, []);
 
+  const getChapterBySpokenName = useCallback((transcript: string): Chapter | null => {
+    const normalizedTranscript = normalizeSpeechText(transcript)
+      .replace(/\b(open|go to|show|select|chapter|chapters|please)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!normalizedTranscript) {
+      return null;
+    }
+
+    const fullMatch = chapters.find((chapter) => {
+      const chapterName = normalizeSpeechText(chapter.chapter_name);
+      return chapterName.includes(normalizedTranscript) || normalizedTranscript.includes(chapterName);
+    });
+
+    return fullMatch || null;
+  }, [chapters]);
+
   const handleVoiceCommand = useCallback((transcript: string) => {
     const normalized = transcript.toLowerCase().trim();
     if (!normalized) {
       return;
     }
 
-    safeCancel();
-
     if (normalized.includes('hello')) {
+      safeCancel();
       speakSlow('Yes, say dear.');
       return;
     }
 
     if (normalized.includes('stop speech')) {
+      safeCancel();
       speakSlow("Okay, I'm silance now, say me what to do?");
       return;
     }
 
     if (normalized.includes('stop') || normalized.includes('pause') || normalized.includes('silent')) {
+      safeCancel();
       return;
     }
 
+    // Voice commands take priority over any ongoing speech.
+    safeCancel();
+
     if (normalized.includes('back') || normalized.includes('go back') || normalized.includes('escape')) {
-      speakSlow('Going back.');
-      onBack();
+      speakSlow('Going back.', () => {
+        setTimeout(() => onBack(), 250);
+      });
       return;
     }
 
@@ -153,8 +184,16 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
       return;
     }
 
-    speakSlow('Command not recognized. Say a chapter number, explain, stop, help, or back.');
-  }, [chapters.length, getSpokenNumber, onBack, selectChapterByNumber, speakChapterList]);
+    const spokenChapter = getChapterBySpokenName(normalized);
+    if (spokenChapter) {
+      speakSlow(`okay, ${cleanChapterNameForSpeech(spokenChapter.chapter_name)} selected. Loading topics.`, () => {
+        setTimeout(() => onSelectChapter(spokenChapter.id, spokenChapter.chapter_name), 500);
+      });
+      return;
+    }
+
+    speakSlow('Command not recognized. Say a chapter number or chapter name, explain, stop, help, or back.');
+  }, [chapters, chapters.length, getChapterBySpokenName, getSpokenNumber, onBack, onSelectChapter, selectChapterByNumber, speakChapterList]);
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current || isListeningRef.current) {

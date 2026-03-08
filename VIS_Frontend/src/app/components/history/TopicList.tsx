@@ -149,25 +149,29 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
       return;
     }
 
-    safeCancel();
-
     if (normalized.includes('hello')) {
+      safeCancel();
       speakSlow('Yes, say dear.');
       return;
     }
 
     if (normalized.includes('stop speech')) {
+      safeCancel();
       speakSlow("Okay, I'm silance now, say me what to do?");
       return;
     }
 
     if (normalized.includes('stop') || normalized.includes('pause') || normalized.includes('silent')) {
+      safeCancel();
       return;
     }
 
+    safeCancel();
+
     if (normalized.includes('back') || normalized.includes('go back') || normalized.includes('escape')) {
-      speakSlow('Going back.');
-      onBack();
+      speakSlow('Going back.', () => {
+        setTimeout(() => onBack(), 250);
+      });
       return;
     }
 

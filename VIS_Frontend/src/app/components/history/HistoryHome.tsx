@@ -61,26 +61,38 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         const transcript = event.results[0][0].transcript.toLowerCase().trim();
         console.log('Voice input detected:', transcript);
 
-        safeCancel();
-
         if (transcript.includes('hello')) {
-          safeSpeak('Yes, say dear.');
+          safeCancel();
+          safeSpeak('Yes, say dear.', () => {
+            setTimeout(() => startListening(), 500);
+          });
           return;
         }
 
         if (transcript.includes('stop speech')) {
-          safeSpeak("Okay, I'm silance now, say me what to do?");
+          safeCancel();
+          safeSpeak("Okay, I'm silance now, say me what to do?", () => {
+            setTimeout(() => startListening(), 500);
+          });
           return;
         }
 
+        // Check for grade commands
         if (transcript.includes('grade 10') || transcript.includes('ten') || transcript.match(/\b10\b/)) {
-          safeSpeak('Grade 10 selected. Loading lessons.');
-          onSelectGrade(10);
+          safeCancel();
+          safeSpeak('Grade 10 selected. Loading lessons.', () => {
+            setTimeout(() => onSelectGrade(10), 400);
+          });
         } else if (transcript.includes('grade 11') || transcript.includes('eleven') || transcript.match(/\b11\b/)) {
-          safeSpeak('Grade 11 selected. Loading lessons.');
-          onSelectGrade(11);
+          safeCancel();
+          safeSpeak('Grade 11 selected. Loading lessons.', () => {
+            setTimeout(() => onSelectGrade(11), 400);
+          });
         } else {
-          safeSpeak('Invalid speech. Please select Grade 10 or Grade 11.');
+          safeCancel();
+          safeSpeak('Invalid speech. Please select Grade 10 or Grade 11.', () => {
+            setTimeout(() => startListening(), 1000);
+          });
         }
       };
 

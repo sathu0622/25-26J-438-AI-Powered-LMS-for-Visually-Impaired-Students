@@ -53,6 +53,18 @@ export const LessonPlayer = ({
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
   const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track if this component is the currently active component
+  const isComponentActiveRef = useRef(true);
+
+  // Mark component as active and cleanup on unmount
+  useEffect(() => {
+    isComponentActiveRef.current = true;
+    return () => {
+      isComponentActiveRef.current = false;
+      // Aggressively cancel any ongoing speech from this component on unmount
+      safeCancel();
+    };
+  }, []);
 
   // Generate audio when component mounts
   useEffect(() => {
@@ -106,14 +118,14 @@ export const LessonPlayer = ({
       const audioBlob = await response.blob();
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(url);
-      safeSpeak(`Audio generated successfully.`);
+      safeSpeakIfActive(`Audio generated successfully.`);
     } catch (err) {
       // Fallback: set the backend endpoint directly as audio source.
       // This avoids fetch/blob CORS failures while still allowing playback.
       console.error('Audio generation error:', err);
       setAudioUrl(endpoint);
       setError(null);
-      safeSpeak('Audio ready. Press space to play.');
+      safeSpeakIfActive('Audio ready. Press space to play.');
     } finally {
       setIsLoading(false);
     }
@@ -223,7 +235,18 @@ export const LessonPlayer = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
+  // Validate that component is active before speaking (prevents interference from other components)
+  const safeSpeakIfActive = (text: string, onEnd?: () => void) => {
+    if (isComponentActiveRef.current) {
+      safeSpeak(text, onEnd);
+    }
+  };
+
   const handleVoiceCommand = (transcript: string) => {
+    // Validate this component is still active
+    if (!isComponentActiveRef.current) {
+      return;
+    }
     const normalized = transcript.toLowerCase().trim();
     const audioEl = audioRef.current;
     if (!normalized) {
@@ -238,7 +261,7 @@ export const LessonPlayer = ({
         audioEl.pause();
         setIsPlaying(false);
       }
-      safeSpeak('Yes, say dear.');
+      safeSpeakIfActive('Yes, say dear.');
       return;
     }
 
@@ -247,7 +270,7 @@ export const LessonPlayer = ({
         audioEl.pause();
         setIsPlaying(false);
       }
-      safeSpeak("Okay, I'm silance now, say me what to do?");
+      safeSpeakIfActive("Okay, I'm silance now, say me what to do?");
       return;
     }
 
@@ -262,8 +285,9 @@ export const LessonPlayer = ({
 
     if (wrongContextRequest) {
       handleStop();
-      safeSpeak('Ok, going back.');
-      onBack();
+      safeSpeakIfActive('Ok, going back.', () => {
+        setTimeout(() => onBack(), 250);
+      });
       return;
     }
 
@@ -284,6 +308,21 @@ export const LessonPlayer = ({
       return;
     }
 
+    const wantsChapterPageAgain =
+      normalized.includes('go to the chapters') ||
+      normalized.includes('go to chapters') ||
+      normalized.includes('chapters again') ||
+      normalized.includes('chapter page') ||
+      normalized.includes('open chapters') ||
+      normalized.includes('show chapters');
+
+    if (wantsChapterPageAgain) {
+      handleStop();
+      safeSpeakIfActive(`Opening Grade ${grade} chapters.`);
+      setTimeout(() => onGoToGradeChapters(grade), 300);
+      return;
+    }
+
     if (normalized.includes('go back') || normalized.includes('back') || normalized.includes('previous page')) {
       handleStop();
       onBack();
@@ -296,14 +335,14 @@ export const LessonPlayer = ({
 
     if (wantsChapters && hasGrade10) {
       handleStop();
-      safeSpeak('Opening Grade 10 chapters.');
+      safeSpeakIfActive('Opening Grade 10 chapters.');
       setTimeout(() => onGoToGradeChapters(10), 300);
       return;
     }
 
     if (wantsChapters && hasGrade11) {
       handleStop();
-      safeSpeak('Opening Grade 11 chapters.');
+      safeSpeakIfActive('Opening Grade 11 chapters.');
       setTimeout(() => onGoToGradeChapters(11), 300);
     }
   };
