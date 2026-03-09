@@ -26,7 +26,8 @@ import { QuizSummary } from './components/quiz/QuizSummary';
 import { QuizDashboard } from './components/quiz/QuizDashboard';
 import UserAuth from './components/UserAuth';
 import { HistoryHome } from './components/history/HistoryHome';
-import { LessonList } from './components/history/LessonList';
+import { ChapterList } from './components/history/ChapterList';
+import { TopicList } from './components/history/TopicList';
 import { LessonPlayer } from './components/history/LessonPlayer';
 import { UserProfilePage } from './components/UserProfilePage';
 
@@ -39,7 +40,7 @@ import { freeTextService, isAbortError, FreeTextQuestion as FreeTextQuestionType
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback' | 'summary' | 'dashboard' | 'profile';
-type HistoryScreen = 'home' | 'lessons' | 'player';
+type HistoryScreen = 'home' | 'chapters' | 'topics' | 'player';
 type QuizMode = 'none' | 'generative' | 'adaptive' | 'pastpaper' | 'freetext';
 type AdaptiveScreen = 'start' | 'question' | 'feedback' | 'summary';
 type FreeTextScreen = 'start' | 'question' | 'feedback' | 'summary';
@@ -146,7 +147,12 @@ export function App() {
   // History module state
   const [historyScreen, setHistoryScreen] = useState<HistoryScreen>('home');
   const [selectedGrade, setSelectedGrade] = useState<number>(10);
-  const [selectedLesson, setSelectedLesson] = useState<number>(1);
+  const [selectedChapterId, setSelectedChapterId] = useState<number>(0);
+  const [selectedChapterName, setSelectedChapterName] = useState<string>('');
+  const [selectedChapterIdx, setSelectedChapterIdx] = useState<number>(0);
+  const [selectedTopicName, setSelectedTopicName] = useState<string>('');
+  const [selectedTopicContent, setSelectedTopicContent] = useState<string>('');
+  const [selectedTopicIdx, setSelectedTopicIdx] = useState<number>(0);
 
   const handleNavigate = (module: string) => {
     const target = module as Module;
@@ -808,18 +814,34 @@ export function App() {
 
   const handleSelectGrade = (grade: number) => {
     setSelectedGrade(grade);
-    setHistoryScreen('lessons');
+    setHistoryScreen('chapters');
   };
 
-  const handleSelectLesson = (lessonId: number) => {
-    setSelectedLesson(lessonId);
+  const handleSelectChapter = (chapterId: number, chapterName: string, chapterIdx: number) => {
+    setSelectedChapterId(chapterId);
+    setSelectedChapterName(chapterName);
+    setSelectedChapterIdx(chapterIdx);
+    setHistoryScreen('topics');
+  };
+
+  const handleSelectTopic = (topicId: number, topicName: string, content: string, topicIdx: number) => {
+    setSelectedTopicName(topicName);
+    setSelectedTopicContent(content);
+    setSelectedTopicIdx(topicIdx);
     setHistoryScreen('player');
+  };
+
+  const handleGoToGradeChapters = (grade: number) => {
+    setSelectedGrade(grade);
+    setHistoryScreen('chapters');
   };
 
   const handleHistoryBack = () => {
     if (historyScreen === 'player') {
-      setHistoryScreen('lessons');
-    } else if (historyScreen === 'lessons') {
+      setHistoryScreen('topics');
+    } else if (historyScreen === 'topics') {
+      setHistoryScreen('chapters');
+    } else if (historyScreen === 'chapters') {
       setHistoryScreen('home');
     }
   };
@@ -1091,15 +1113,32 @@ export function App() {
             {historyScreen === 'home' && (
               <HistoryHome onSelectGrade={handleSelectGrade} />
             )}
-            {historyScreen === 'lessons' && (
-              <LessonList
+            {historyScreen === 'chapters' && (
+              <ChapterList
                 grade={selectedGrade}
-                onSelectLesson={handleSelectLesson}
+                onSelectChapter={handleSelectChapter}
+                onBack={handleHistoryBack}
+              />
+            )}
+            {historyScreen === 'topics' && (
+              <TopicList
+                grade={selectedGrade}
+                chapterId={selectedChapterId}
+                chapterName={selectedChapterName}
+                onSelectTopic={handleSelectTopic}
                 onBack={handleHistoryBack}
               />
             )}
             {historyScreen === 'player' && (
-              <LessonPlayer lessonId={selectedLesson} onBack={handleHistoryBack} />
+              <LessonPlayer
+                topicName={selectedTopicName}
+                content={selectedTopicContent}
+                grade={selectedGrade}
+                chapterIdx={selectedChapterIdx}
+                topicIdx={selectedTopicIdx}
+                onBack={handleHistoryBack}
+                onGoToGradeChapters={handleGoToGradeChapters}
+              />
             )}
           </>
         )}

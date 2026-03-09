@@ -1,7 +1,6 @@
-import { BookOpen, Headphones, GraduationCap } from 'lucide-react';
+import { BookOpen, Headphones, GraduationCap, Mic } from 'lucide-react';
 import { Card } from '../ui/card';
-import { Button } from '../ui/button';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTTS } from '../../contexts/TTSContext';
 
 interface HistoryHomeProps {
@@ -10,140 +9,305 @@ interface HistoryHomeProps {
 
 export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
   const { speak, cancel } = useTTS();
-  const [hasAnnounced, setHasAnnounced] = useState(false);
+  const hasAnnounced = useRef(false);
+  const recognitionRef = useRef<any>(null);
+  const [isListening, setIsListening] = useState(false);
+  const isListeningRef = useRef(false);
+  const listeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restartListeningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoListenEnabledRef = useRef(true);
+
+  const scheduleAutoListenRestart = (delay = 500) => {
+    if (!autoListenEnabledRef.current) return;
+    if (restartListeningTimeoutRef.current) {
+      clearTimeout(restartListeningTimeoutRef.current);
+    }
+
+    restartListeningTimeoutRef.current = setTimeout(() => {
+      if (recognitionRef.current && !isListeningRef.current && autoListenEnabledRef.current) {
+        try {
+          recognitionRef.current.start();
+          listeningTimeoutRef.current = setTimeout(() => {
+            if (recognitionRef.current) {
+              recognitionRef.current.stop();
+              isListeningRef.current = false;
+              setIsListening(false);
+            }
+          }, 10000);
+        } catch (error) {
+          console.error('Error auto-restarting voice recognition:', error);
+        }
+      }
+    }, delay);
+  };
+
+  useEffect(() => {
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        isListeningRef.current = true;
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript.toLowerCase().trim();
+        console.log('Voice input detected:', transcript);
+
+        if (transcript.includes('hello')) {
+          cancel();
+          speak('Yes, say dear.', { interrupt: true, onEnd: () => setTimeout(() => startListening(), 500) });
+          return;
+        }
+
+        if (transcript.includes('stop speech')) {
+          cancel();
+          speak("Okay, I'm silance now, say me what to do?", { interrupt: true, onEnd: () => setTimeout(() => startListening(), 500) });
+          return;
+        }
+
+        if (transcript.includes('grade 10') || transcript.includes('ten') || transcript.match(/\b10\b/)) {
+          cancel();
+          speak('Grade 10 selected. Loading lessons.', { interrupt: true, onEnd: () => setTimeout(() => onSelectGrade(10), 400) });
+        } else if (transcript.includes('grade 11') || transcript.includes('eleven') || transcript.match(/\b11\b/)) {
+          cancel();
+          speak('Grade 11 selected. Loading lessons.', { interrupt: true, onEnd: () => setTimeout(() => onSelectGrade(11), 400) });
+        } else {
+          cancel();
+          speak('Invalid speech. Please select Grade 10 or Grade 11.', { interrupt: true, onEnd: () => setTimeout(() => startListening(), 1000) });
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Voice recognition error:', event.error);
+        isListeningRef.current = false;
+        setIsListening(false);
+
+        if (event.error === 'no-speech') {
+          console.log('No speech detected, asking again...');
+          cancel();
+          speak('No speech detected. Please say Grade 10 or Grade 11.', { interrupt: true, onEnd: () => setTimeout(() => startListening(), 500) });
+        }
+      };
+
+      recognition.onend = () => {
+        isListeningRef.current = false;
+        setIsListening(false);
+        scheduleAutoListenRestart(300);
+      };
+
+      recognitionRef.current = recognition;
+    }
+
+    return () => {
+      if (listeningTimeoutRef.current) {
+        clearTimeout(listeningTimeoutRef.current);
+      }
+      if (restartListeningTimeoutRef.current) {
+        clearTimeout(restartListeningTimeoutRef.current);
+      }
+      autoListenEnabledRef.current = false;
+      if (recognitionRef.current) {
+        recognitionRef.current.abort();
+      }
+    };
+  }, [onSelectGrade]);
+
+  const startListening = () => {
+    if (recognitionRef.current && !isListeningRef.current) {
+      try {
+        if (listeningTimeoutRef.current) {
+          clearTimeout(listeningTimeoutRef.current);
+        }
+        recognitionRef.current.start();
+        listeningTimeoutRef.current = setTimeout(() => {
+          if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            isListeningRef.current = false;
+            setIsListening(false);
+          }
+        }, 10000);
+      } catch (error) {
+        console.error('Error starting voice recognition:', error);
+      }
+    }
+  };
 
   useEffect(() => {
     cancel();
-    if (!hasAnnounced) {
-      setHasAnnounced(true);
-      setTimeout(() => {
-        speak(
-          'AI History Teacher. Learn History with Smart Audio Lessons. Please select your grade. Press 1 for Grade 10: Ancient Civilizations, World History, and Cultural Studies. Press 2 for Grade 11: Modern History, World Wars, and Contemporary Issues. You can also press Escape to go back to home.',
-          { interrupt: true }
-        );
+
+    if (!hasAnnounced.current) {
+      hasAnnounced.current = true;
+
+      const timer = setTimeout(() => {
+        speak('AI History Teacher. Please select your grade.', {
+          interrupt: true,
+          onEnd: () => {
+            setTimeout(() => {
+              speak('Say Grade 10 or Grade 11.', { interrupt: true, onEnd: () => setTimeout(() => startListening(), 500) });
+            }, 500);
+          },
+        });
       }, 500);
+
+      return () => {
+        clearTimeout(timer);
+        cancel();
+      };
     }
+
     return () => cancel();
-  }, [hasAnnounced, speak, cancel]);
+  }, [cancel, speak]);
 
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.repeat) return;
+
       if (e.key === '1') {
         e.preventDefault();
         cancel();
-        speak('Grade 10 selected. Loading lessons.', {
-          interrupt: true,
-          onEnd: () => setTimeout(() => onSelectGrade(10), 500),
-        });
+        if (recognitionRef.current) {
+          recognitionRef.current.abort();
+          isListeningRef.current = false;
+          setIsListening(false);
+        }
+        speak('Grade 10 selected.', { interrupt: true, onEnd: () => setTimeout(() => onSelectGrade(10), 400) });
       }
+
       if (e.key === '2') {
         e.preventDefault();
         cancel();
-        speak('Grade 11 selected. Loading lessons.', {
-          interrupt: true,
-          onEnd: () => setTimeout(() => onSelectGrade(11), 500),
-        });
+        if (recognitionRef.current) {
+          recognitionRef.current.abort();
+          isListeningRef.current = false;
+          setIsListening(false);
+        }
+        speak('Grade 11 selected.', { interrupt: true, onEnd: () => setTimeout(() => onSelectGrade(11), 400) });
       }
-      if (e.key === 'h' || e.key === 'H') {
+
+      if (e.key.toLowerCase() === 'h') {
         e.preventDefault();
         cancel();
-        speak('Press 1 for Grade 10, Press 2 for Grade 11, Press Escape to go back.', { interrupt: true });
+        speak('Press 1 for Grade 10. Press 2 for Grade 11. Or say Grade 10 or Grade 11.', { interrupt: true });
+      }
+
+      if (e.key === 'F1') {
+        e.preventDefault();
+        if (isListening) {
+          autoListenEnabledRef.current = false;
+          if (recognitionRef.current) {
+            recognitionRef.current.stop();
+            isListeningRef.current = false;
+            setIsListening(false);
+          }
+          cancel();
+          speak('Microphone stopped.', { interrupt: true });
+        } else {
+          autoListenEnabledRef.current = true;
+          cancel();
+          speak('Listening for grade selection.', { interrupt: true });
+          setTimeout(() => startListening(), 500);
+        }
       }
     };
+
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [onSelectGrade, speak, cancel]);
+  }, [onSelectGrade, isListening, speak, cancel]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 pb-24">
-      {/* Header */}
       <div className="space-y-4 text-center">
         <div className="flex justify-center">
           <div className="rounded-full bg-orange-500 p-6">
-            <BookOpen className="h-12 w-12 text-white" aria-hidden="true" />
+            <BookOpen className="h-12 w-12 text-white" aria-hidden />
           </div>
         </div>
+
         <h1 className="text-2xl">AI History Teacher</h1>
         <p className="text-muted-foreground">
-          Press 1 for Grade 10 • Press 2 for Grade 11 • Press H for help
+          Press 1 for Grade 10 • Press 2 for Grade 11 • Press H for help • Press F1 for microphone
         </p>
       </div>
 
-      {/* Features */}
-      <Card className="p-6">
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <Headphones className="h-6 w-6 text-secondary" aria-hidden="true" />
-            <div>
-              <h3 className="text-sm">AI-Generated Audio Lessons</h3>
-              <p className="text-xs text-muted-foreground">
-                Listen to comprehensive history lessons
-              </p>
-            </div>
+      {isListening && (
+        <Card className="bg-blue-50 border-blue-200 p-4">
+          <div className="flex items-center gap-3 justify-center">
+            <Mic className="h-5 w-5 text-blue-600 animate-pulse" />
+            <span className="text-sm text-blue-600 font-medium">Listening for voice command...</span>
           </div>
-          <div className="flex items-center gap-3">
-            <GraduationCap className="h-6 w-6 text-secondary" aria-hidden="true" />
-            <div>
-              <h3 className="text-sm">Curriculum Aligned</h3>
-              <p className="text-xs text-muted-foreground">
-                Follows Grade 10 & 11 syllabus
-              </p>
-            </div>
+        </Card>
+      )}
+
+      <Card className="p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <Headphones className="h-6 w-6 text-secondary" />
+          <div>
+            <h3 className="text-sm">AI-Generated Audio Lessons</h3>
+            <p className="text-xs text-muted-foreground">
+              Listen to comprehensive history lessons
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <GraduationCap className="h-6 w-6 text-secondary" />
+          <div>
+            <h3 className="text-sm">Curriculum Aligned</h3>
+            <p className="text-xs text-muted-foreground">
+              Follows Grade 10 & 11 syllabus
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Mic className="h-6 w-6 text-secondary" />
+          <div>
+            <h3 className="text-sm">Voice Commands</h3>
+            <p className="text-xs text-muted-foreground">
+              Say your grade to navigate automatically
+            </p>
           </div>
         </div>
       </Card>
 
-      {/* Grade Selection */}
       <div className="space-y-3">
         <h2 className="text-center">Select Your Grade</h2>
-        <div className="grid gap-4">
-          <Card className="overflow-hidden transition-all hover:shadow-lg">
+
+        {[10, 11].map((grade) => (
+          <Card key={grade} className="overflow-hidden hover:shadow-lg">
             <button
-              onClick={() => onSelectGrade(10)}
+              onClick={() => onSelectGrade(grade)}
               className="w-full p-6 text-left"
-              aria-label="Select Grade 10"
             >
               <div className="flex items-center gap-4">
                 <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-primary text-2xl text-primary-foreground">
-                  10
+                  {grade}
                 </div>
-                <div className="flex-1 space-y-1">
-                  <h3 className="text-xl">Grade 10</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Ancient Civilizations • World History • Cultural Studies
-                  </p>
-                </div>
-              </div>
-            </button>
-          </Card>
 
-          <Card className="overflow-hidden transition-all hover:shadow-lg">
-            <button
-              onClick={() => onSelectGrade(11)}
-              className="w-full p-6 text-left"
-              aria-label="Select Grade 11"
-            >
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-xl bg-secondary text-2xl text-secondary-foreground">
-                  11
-                </div>
                 <div className="flex-1 space-y-1">
-                  <h3 className="text-xl">Grade 11</h3>
+                  <h3 className="text-xl">Grade {grade}</h3>
                   <p className="text-sm text-muted-foreground">
-                    Modern History • World Wars • Contemporary Issues
+                    {grade === 10
+                      ? 'Ancient Civilizations • World History • Cultural Studies'
+                      : 'Modern History • World Wars • Contemporary Issues'}
                   </p>
                 </div>
               </div>
             </button>
           </Card>
-        </div>
+        ))}
       </div>
 
-      {/* Info Card */}
       <Card className="border-secondary bg-secondary/10 p-4">
         <p className="text-center text-sm">
-          Each lesson is narrated by AI and includes key topics, important dates, and
-          historical context
+          Each lesson is narrated by AI and includes key topics and historical context. Say your grade or press 1 or 2 to begin.
         </p>
       </Card>
     </div>
