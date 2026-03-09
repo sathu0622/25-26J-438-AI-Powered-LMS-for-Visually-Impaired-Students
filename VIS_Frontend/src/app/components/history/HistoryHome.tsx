@@ -1,14 +1,14 @@
-import { BookOpen, Headphones, GraduationCap, Mic, MicOff } from 'lucide-react';
+import { BookOpen, Headphones, GraduationCap, Mic } from 'lucide-react';
 import { Card } from '../ui/card';
 import { useEffect, useRef, useState } from 'react';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface HistoryHomeProps {
   onSelectGrade: (grade: number) => void;
 }
 
 export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
-  // useRef instead of state to avoid re-renders causing repeat speech
+  const { speak, cancel } = useTTS();
   const hasAnnounced = useRef(false);
   const recognitionRef = useRef<any>(null);
   const [isListening, setIsListening] = useState(false);
@@ -41,7 +41,6 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
     }, delay);
   };
 
-  // Initialize voice recognition
   useEffect(() => {
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
 
@@ -62,37 +61,26 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         console.log('Voice input detected:', transcript);
 
         if (transcript.includes('hello')) {
-          safeCancel();
-          safeSpeak('Yes, say dear.', () => {
-            setTimeout(() => startListening(), 500);
-          });
+          cancel();
+          speak('Yes, say dear.', { interrupt: true, onEnd: () => setTimeout(() => startListening(), 500) });
           return;
         }
 
         if (transcript.includes('stop speech')) {
-          safeCancel();
-          safeSpeak("Okay, I'm silance now, say me what to do?", () => {
-            setTimeout(() => startListening(), 500);
-          });
+          cancel();
+          speak("Okay, I'm silance now, say me what to do?", { interrupt: true, onEnd: () => setTimeout(() => startListening(), 500) });
           return;
         }
 
-        // Check for grade commands
         if (transcript.includes('grade 10') || transcript.includes('ten') || transcript.match(/\b10\b/)) {
-          safeCancel();
-          safeSpeak('Grade 10 selected. Loading lessons.', () => {
-            setTimeout(() => onSelectGrade(10), 400);
-          });
+          cancel();
+          speak('Grade 10 selected. Loading lessons.', { interrupt: true, onEnd: () => setTimeout(() => onSelectGrade(10), 400) });
         } else if (transcript.includes('grade 11') || transcript.includes('eleven') || transcript.match(/\b11\b/)) {
-          safeCancel();
-          safeSpeak('Grade 11 selected. Loading lessons.', () => {
-            setTimeout(() => onSelectGrade(11), 400);
-          });
+          cancel();
+          speak('Grade 11 selected. Loading lessons.', { interrupt: true, onEnd: () => setTimeout(() => onSelectGrade(11), 400) });
         } else {
-          safeCancel();
-          safeSpeak('Invalid speech. Please select Grade 10 or Grade 11.', () => {
-            setTimeout(() => startListening(), 1000);
-          });
+          cancel();
+          speak('Invalid speech. Please select Grade 10 or Grade 11.', { interrupt: true, onEnd: () => setTimeout(() => startListening(), 1000) });
         }
       };
 
@@ -103,10 +91,8 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
 
         if (event.error === 'no-speech') {
           console.log('No speech detected, asking again...');
-          safeCancel();
-          safeSpeak('No speech detected. Please say Grade 10 or Grade 11.', () => {
-            setTimeout(() => startListening(), 500);
-          });
+          cancel();
+          speak('No speech detected. Please say Grade 10 or Grade 11.', { interrupt: true, onEnd: () => setTimeout(() => startListening(), 500) });
         }
       };
 
@@ -153,69 +139,62 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
     }
   };
 
-  // Voice announcement on page load and auto-start listening
   useEffect(() => {
-    safeCancel();
+    cancel();
 
     if (!hasAnnounced.current) {
       hasAnnounced.current = true;
 
       const timer = setTimeout(() => {
-        safeSpeak(
-          'AI History Teacher. Please select your grade.',
-          () => {
+        speak('AI History Teacher. Please select your grade.', {
+          interrupt: true,
+          onEnd: () => {
             setTimeout(() => {
-              safeSpeak('Say Grade 10 or Grade 11.', () => {
-                setTimeout(() => startListening(), 500);
-              });
+              speak('Say Grade 10 or Grade 11.', { interrupt: true, onEnd: () => setTimeout(() => startListening(), 500) });
             }, 500);
-          }
-        );
+          },
+        });
       }, 500);
 
-      return () => clearTimeout(timer);
+      return () => {
+        clearTimeout(timer);
+        cancel();
+      };
     }
 
-    return () => {
-      safeCancel();
-    };
-  }, []);
+    return () => cancel();
+  }, [cancel, speak]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
       if (e.repeat) return;
 
       if (e.key === '1') {
         e.preventDefault();
-        safeCancel();
+        cancel();
         if (recognitionRef.current) {
           recognitionRef.current.abort();
           isListeningRef.current = false;
           setIsListening(false);
         }
-        safeSpeak('Grade 10 selected.', () => {
-          setTimeout(() => onSelectGrade(10), 400);
-        });
+        speak('Grade 10 selected.', { interrupt: true, onEnd: () => setTimeout(() => onSelectGrade(10), 400) });
       }
 
       if (e.key === '2') {
         e.preventDefault();
-        safeCancel();
+        cancel();
         if (recognitionRef.current) {
           recognitionRef.current.abort();
           isListeningRef.current = false;
           setIsListening(false);
         }
-        safeSpeak('Grade 11 selected.', () => {
-          setTimeout(() => onSelectGrade(11), 400);
-        });
+        speak('Grade 11 selected.', { interrupt: true, onEnd: () => setTimeout(() => onSelectGrade(11), 400) });
       }
 
       if (e.key.toLowerCase() === 'h') {
         e.preventDefault();
-        safeCancel();
-        safeSpeak('Press 1 for Grade 10. Press 2 for Grade 11. Or say Grade 10 or Grade 11.');
+        cancel();
+        speak('Press 1 for Grade 10. Press 2 for Grade 11. Or say Grade 10 or Grade 11.', { interrupt: true });
       }
 
       if (e.key === 'F1') {
@@ -227,12 +206,12 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
             isListeningRef.current = false;
             setIsListening(false);
           }
-          safeCancel();
-          safeSpeak('Microphone stopped.');
+          cancel();
+          speak('Microphone stopped.', { interrupt: true });
         } else {
           autoListenEnabledRef.current = true;
-          safeCancel();
-          safeSpeak('Listening for grade selection.');
+          cancel();
+          speak('Listening for grade selection.', { interrupt: true });
           setTimeout(() => startListening(), 500);
         }
       }
@@ -240,11 +219,10 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [onSelectGrade, isListening]);
+  }, [onSelectGrade, isListening, speak, cancel]);
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 p-4 pb-24">
-      {/* Header */}
       <div className="space-y-4 text-center">
         <div className="flex justify-center">
           <div className="rounded-full bg-orange-500 p-6">
@@ -258,7 +236,6 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         </p>
       </div>
 
-      {/* Microphone Status Indicator */}
       {isListening && (
         <Card className="bg-blue-50 border-blue-200 p-4">
           <div className="flex items-center gap-3 justify-center">
@@ -268,7 +245,6 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         </Card>
       )}
 
-      {/* Features */}
       <Card className="p-6 space-y-4">
         <div className="flex items-center gap-3">
           <Headphones className="h-6 w-6 text-secondary" />
@@ -301,7 +277,6 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         </div>
       </Card>
 
-      {/* Grade Selection */}
       <div className="space-y-3">
         <h2 className="text-center">Select Your Grade</h2>
 
@@ -330,7 +305,6 @@ export const HistoryHome = ({ onSelectGrade }: HistoryHomeProps) => {
         ))}
       </div>
 
-      {/* Info */}
       <Card className="border-secondary bg-secondary/10 p-4">
         <p className="text-center text-sm">
           Each lesson is narrated by AI and includes key topics and historical context. Say your grade or press 1 or 2 to begin.

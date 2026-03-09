@@ -444,7 +444,7 @@ export const BrailleEvaluation = ({ onBack, convertedData }: BrailleEvaluationPr
             </div>
           </Card>
 
-          <Card className="p-6 space-y-4">
+          {/* <Card className="p-6 space-y-4">
             <h2 className="font-semibold">Similarity Breakdown</h2>
             <div>
               <p>Semantic Similarity: {Math.round(semanticScore)}%</p>
@@ -458,7 +458,7 @@ export const BrailleEvaluation = ({ onBack, convertedData }: BrailleEvaluationPr
               <p>Jaccard Similarity: {Math.round(jaccardScore)}%</p>
               <Progress value={jaccardScore} />
             </div>
-          </Card>
+          </Card> */}
 
           <Card className="border-2 border-success bg-success/5 p-6">
             <div className="space-y-4">

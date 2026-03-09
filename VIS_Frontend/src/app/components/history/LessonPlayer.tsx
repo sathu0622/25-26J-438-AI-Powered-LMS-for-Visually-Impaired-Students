@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Play,
   Pause,
-  RotateCcw,
   ArrowLeft,
   Volume2,
   Loader,
@@ -15,8 +14,8 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Alert, AlertDescription } from '../ui/alert';
 import { Slider } from '../ui/slider';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
-import { API_BASE_URL } from '../../services/api';
+import { useTTS } from '../../contexts/TTSContext';
+import { API_BASE_URL } from '../../services/historyLessonService';
 
 interface LessonPlayerProps {
   topicName: string;
@@ -53,40 +52,33 @@ export const LessonPlayer = ({
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
   const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Track if this component is the currently active component
   const isComponentActiveRef = useRef(true);
+  const { speak, cancel } = useTTS();
 
-  // Mark component as active and cleanup on unmount
   useEffect(() => {
     isComponentActiveRef.current = true;
     return () => {
       isComponentActiveRef.current = false;
-      // Aggressively cancel any ongoing speech from this component on unmount
-      safeCancel();
+      cancel();
     };
-  }, []);
+  }, [cancel]);
 
-  // Generate audio when component mounts
   useEffect(() => {
-    safeCancel();
+    cancel();
     setHasAnnounced(false);
     generateAudio();
-  }, [grade, chapterIdx, topicIdx]);
+  }, [grade, chapterIdx, topicIdx, cancel]);
 
-  // Auto-play if enabled and audio is ready
   useEffect(() => {
     if (autoPlay && audioUrl && audioRef.current && !isLoading && !hasAnnounced) {
       const timer = setTimeout(() => {
         if (audioRef.current) {
-          // Ensure playback speed is set
           audioRef.current.playbackRate = playbackSpeed;
           audioRef.current.play().then(() => {
             setIsPlaying(true);
-            // safeSpeak(`Now playing: ${topicName}`);
             setHasAnnounced(true);
           }).catch(err => {
             console.error('Auto-play failed:', err);
-            // safeSpeak('Audio ready. Click play to start.');
             setHasAnnounced(true);
           });
         }
@@ -101,10 +93,7 @@ export const LessonPlayer = ({
     try {
       setIsLoading(true);
       setError(null);
-      //safeSpeak('Generating audio using AI text-to-speech model...');
 
-      // First try fetching a blob to keep existing flow.
-      // Do not set Content-Type on GET (can trigger unnecessary preflight/CORS issues).
       const response = await fetch(endpoint, {
         method: 'GET',
         cache: 'no-store',
@@ -114,18 +103,15 @@ export const LessonPlayer = ({
         throw new Error(`Failed to generate audio: ${response.statusText}`);
       }
 
-      // Create a blob URL from the audio response
       const audioBlob = await response.blob();
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(url);
-      safeSpeakIfActive(`Audio generated successfully.`);
+      speakIfActive(`Audio generated successfully.`);
     } catch (err) {
-      // Fallback: set the backend endpoint directly as audio source.
-      // This avoids fetch/blob CORS failures while still allowing playback.
       console.error('Audio generation error:', err);
       setAudioUrl(endpoint);
       setError(null);
-      safeSpeakIfActive('Audio ready. Press space to play.');
+      speakIfActive('Audio ready. Press space to play.');
     } finally {
       setIsLoading(false);
     }
@@ -135,10 +121,8 @@ export const LessonPlayer = ({
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
-        // safeSpeak('Audio paused'); // Disabled voice announcement
       } else {
         audioRef.current.play();
-        // safeSpeak('Audio playing'); // Disabled voice announcement
       }
       setIsPlaying(!isPlaying);
     }
@@ -149,7 +133,6 @@ export const LessonPlayer = ({
       audioRef.current.currentTime = 0;
       audioRef.current.play();
       setIsPlaying(true);
-      //safeSpeak('Replaying audio');
     }
   };
 
@@ -158,7 +141,6 @@ export const LessonPlayer = ({
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       setIsPlaying(false);
-      //safeSpeak('Audio stopped');
     }
   };
 
@@ -170,7 +152,6 @@ export const LessonPlayer = ({
       }
     } else {
       setIsPlaying(false);
-      // safeSpeak('Audio playback completed');
     }
   };
 
@@ -183,7 +164,6 @@ export const LessonPlayer = ({
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
-      // Set playback speed to 0.9 for clearer speech
       audioRef.current.playbackRate = playbackSpeed;
     }
   };
@@ -199,33 +179,23 @@ export const LessonPlayer = ({
   const handleSkipForward = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = Math.min(audioRef.current.currentTime + 10, duration);
-      //   safeSpeak('Skipped forward 10 seconds');
     }
   };
 
   const handleSkipBackward = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = Math.max(audioRef.current.currentTime - 10, 0);
-      //safeSpeak('Skipped backward 10 seconds');
     }
   };
 
-  const toggleRepeat = () => {
-    setIsRepeat(!isRepeat);
-    //safeSpeak(isRepeat ? 'Repeat off' : 'Repeat on');
-  };
-
-  const toggleShuffle = () => {
-    setIsShuffle(!isShuffle);
-    //safeSpeak(isShuffle ? 'Shuffle off' : 'Shuffle on');
-  };
+  const toggleRepeat = () => setIsRepeat(!isRepeat);
+  const toggleShuffle = () => setIsShuffle(!isShuffle);
 
   const handleSpeedChange = (speed: number) => {
     setPlaybackSpeed(speed);
     if (audioRef.current) {
       audioRef.current.playbackRate = speed;
     }
-    //safeSpeak(`Playback speed set to ${speed}x`);
   };
 
   const formatTime = (time: number) => {
@@ -235,33 +205,26 @@ export const LessonPlayer = ({
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
   };
 
-  // Validate that component is active before speaking (prevents interference from other components)
-  const safeSpeakIfActive = (text: string, onEnd?: () => void) => {
+  const speakIfActive = (text: string, onEnd?: () => void) => {
     if (isComponentActiveRef.current) {
-      safeSpeak(text, onEnd);
+      speak(text, { interrupt: true, onEnd: onEnd ?? (() => {}) });
     }
   };
 
   const handleVoiceCommand = (transcript: string) => {
-    // Validate this component is still active
-    if (!isComponentActiveRef.current) {
-      return;
-    }
+    if (!isComponentActiveRef.current) return;
     const normalized = transcript.toLowerCase().trim();
     const audioEl = audioRef.current;
-    if (!normalized) {
-      return;
-    }
+    if (!normalized) return;
 
-    // Stop any ongoing TTS before acting on command.
-    safeCancel();
+    cancel();
 
     if (normalized.includes('hello')) {
       if (audioEl && !audioEl.paused) {
         audioEl.pause();
         setIsPlaying(false);
       }
-      safeSpeakIfActive('Yes, say dear.');
+      speakIfActive('Yes, say dear.');
       return;
     }
 
@@ -270,7 +233,7 @@ export const LessonPlayer = ({
         audioEl.pause();
         setIsPlaying(false);
       }
-      safeSpeakIfActive("Okay, I'm silance now, say me what to do?");
+      speakIfActive("Okay, I'm silance now, say me what to do?");
       return;
     }
 
@@ -285,13 +248,12 @@ export const LessonPlayer = ({
 
     if (wrongContextRequest) {
       handleStop();
-      safeSpeakIfActive('Ok, going back.', () => {
+      speakIfActive('Ok, going back.', () => {
         setTimeout(() => onBack(), 250);
       });
       return;
     }
 
-    // Audio playback controls
     if (normalized.includes('stop') || normalized.includes('pause')) {
       if (audioEl && !audioEl.paused) {
         audioEl.pause();
@@ -318,7 +280,7 @@ export const LessonPlayer = ({
 
     if (wantsChapterPageAgain) {
       handleStop();
-      safeSpeakIfActive(`Opening Grade ${grade} chapters.`);
+      speakIfActive(`Opening Grade ${grade} chapters.`);
       setTimeout(() => onGoToGradeChapters(grade), 300);
       return;
     }
@@ -335,24 +297,21 @@ export const LessonPlayer = ({
 
     if (wantsChapters && hasGrade10) {
       handleStop();
-      safeSpeakIfActive('Opening Grade 10 chapters.');
+      speakIfActive('Opening Grade 10 chapters.');
       setTimeout(() => onGoToGradeChapters(10), 300);
       return;
     }
 
     if (wantsChapters && hasGrade11) {
       handleStop();
-      safeSpeakIfActive('Opening Grade 11 chapters.');
+      speakIfActive('Opening Grade 11 chapters.');
       setTimeout(() => onGoToGradeChapters(11), 300);
     }
   };
 
-  // Always-on voice commands for lesson navigation
   useEffect(() => {
     const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    if (!SpeechRecognition) {
-      return;
-    }
+    if (!SpeechRecognition) return;
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
@@ -361,43 +320,29 @@ export const LessonPlayer = ({
     recognition.maxAlternatives = 1;
 
     const startListening = () => {
-      if (!recognitionRef.current || isListeningRef.current) {
-        return;
-      }
-
+      if (!recognitionRef.current || isListeningRef.current) return;
       try {
         recognitionRef.current.start();
       } catch {
-        if (restartTimeoutRef.current) {
-          clearTimeout(restartTimeoutRef.current);
-        }
+        if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
         restartTimeoutRef.current = setTimeout(startListening, 800);
       }
     };
 
-    recognition.onstart = () => {
-      isListeningRef.current = true;
-    };
-
+    recognition.onstart = () => { isListeningRef.current = true; };
     recognition.onresult = (event: any) => {
       const latestIndex = event.results.length - 1;
       const transcript = event.results[latestIndex]?.[0]?.transcript || '';
       handleVoiceCommand(transcript);
     };
-
     recognition.onerror = () => {
       isListeningRef.current = false;
-      if (restartTimeoutRef.current) {
-        clearTimeout(restartTimeoutRef.current);
-      }
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
       restartTimeoutRef.current = setTimeout(startListening, 700);
     };
-
     recognition.onend = () => {
       isListeningRef.current = false;
-      if (restartTimeoutRef.current) {
-        clearTimeout(restartTimeoutRef.current);
-      }
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
       restartTimeoutRef.current = setTimeout(startListening, 700);
     };
 
@@ -405,10 +350,7 @@ export const LessonPlayer = ({
     startListening();
 
     return () => {
-      if (restartTimeoutRef.current) {
-        clearTimeout(restartTimeoutRef.current);
-      }
-
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
       if (recognitionRef.current) {
         try {
           recognitionRef.current.onstart = null;
@@ -416,69 +358,44 @@ export const LessonPlayer = ({
           recognitionRef.current.onerror = null;
           recognitionRef.current.onend = null;
           recognitionRef.current.stop();
-        } catch {
-          // Ignore cleanup errors.
-        }
+        } catch { /* ignore */ }
       }
-
       isListeningRef.current = false;
       recognitionRef.current = null;
     };
   }, [onBack, onGoToGradeChapters]);
 
-  // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Space bar to play/pause
       if (e.key === ' ') {
         e.preventDefault();
         handlePlayPause();
       }
-
-      // R key to replay
       if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         handleReplay();
       }
-
-      // Arrow Left - Skip backward
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         handleSkipBackward();
       }
-
-      // Arrow Right - Skip forward
       if (e.key === 'ArrowRight') {
         e.preventDefault();
         handleSkipForward();
       }
-
-      // T key to toggle repeat
       if (e.key === 't' || e.key === 'T') {
         e.preventDefault();
         toggleRepeat();
       }
-
-      // S key to toggle shuffle
       if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
         toggleShuffle();
       }
-
-      // Escape to go back
       if (e.key === 'Escape') {
         e.preventDefault();
-        safeCancel();
+        cancel();
         handleStop();
         onBack();
-      }
-
-      // H key for help
-      if (e.key === 'h' || e.key === 'H') {
-        e.preventDefault();
-        // safeSpeak(
-        //   `Now playing: ${topicName}. Press Space to play or pause. Press R to replay. Press Left or Right arrows to skip. Press T to toggle repeat. Press S to toggle shuffle. Press Escape to go back.`
-        //  );
       }
     };
 
@@ -488,15 +405,8 @@ export const LessonPlayer = ({
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 pb-24">
-      {/* Header */}
       <div className="flex items-center gap-4">
-        <Button 
-          onClick={onBack} 
-          variant="ghost" 
-          size="icon" 
-          aria-label="Go back"
-          title="Press ESC to go back"
-        >
+        <Button onClick={onBack} variant="ghost" size="icon" aria-label="Go back" title="Press ESC to go back">
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <div className="flex-1">
@@ -510,7 +420,6 @@ export const LessonPlayer = ({
         </div>
       </div>
 
-      {/* Content Card */}
       <Card className="p-6">
         <div className="space-y-4">
           <div className="flex items-center gap-3">
@@ -523,24 +432,21 @@ export const LessonPlayer = ({
         </div>
       </Card>
 
-      {/* Error Message */}
       {error && (
         <Alert variant="destructive">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
 
-      {/* Audio Player Controls */}
       <Card className="p-6 bg-gradient-to-br from-gray-900 to-gray-800 text-white">
         <div className="space-y-6">
-          {/* Status */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold">
                 {isLoading ? '⏳ Generating Audio...' :
                  error ? '❌ Audio Generation Failed' :
                  !audioUrl ? '⏸️ Audio Not Ready' :
-                      isPlaying ? '▶️ Now Playing' : '⏸️ Paused'}
+                 isPlaying ? '▶️ Now Playing' : '⏸️ Paused'}
               </p>
               <p className="text-xs text-gray-400">
                 {isLoading ? 'Please wait...' : 'AI Text-to-Speech'}
@@ -548,7 +454,6 @@ export const LessonPlayer = ({
             </div>
           </div>
 
-          {/* Progress Slider */}
           <div className="space-y-2">
             <Slider
               value={[duration > 0 ? (currentTime / duration) * 100 : 0]}
@@ -561,12 +466,10 @@ export const LessonPlayer = ({
             />
             <div className="flex justify-between text-xs text-gray-400">
               <span>{formatTime(currentTime)}</span>
-              {/* <span className="text-blue-400">Speed: {playbackSpeed}x</span> */}
               <span>{formatTime(duration)}</span>
             </div>
           </div>
 
-          {/* Control Buttons */}
           <div className="flex items-center justify-center gap-3">
             <Button
               onClick={toggleShuffle}
@@ -634,7 +537,6 @@ export const LessonPlayer = ({
             </Button>
           </div>
 
-          {/* Hidden audio element */}
           <audio
             ref={audioRef}
             src={audioUrl || undefined}
@@ -645,25 +547,18 @@ export const LessonPlayer = ({
             aria-label="Lesson audio player"
           />
 
-          {/* Demo Mode Label */}
           <div className="text-center text-xs text-gray-400 pt-2">
             🎙️ AI-Powered Voice Lesson
           </div>
         </div>
       </Card>
 
-      {/* Regenerate Button */}
       {audioUrl && !isLoading && (
-        <Button
-          onClick={generateAudio}
-          variant="secondary"
-          className="w-full"
-        >
+        <Button onClick={generateAudio} variant="secondary" className="w-full">
           Regenerate Audio
         </Button>
       )}
 
-      {/* Keyboard Shortcuts Help */}
       <Card className="p-4 bg-muted">
         <p className="text-xs font-semibold mb-2">⌨️ Keyboard Shortcuts:</p>
         <div className="text-xs space-y-1 text-muted-foreground">

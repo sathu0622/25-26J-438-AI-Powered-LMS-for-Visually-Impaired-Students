@@ -70,8 +70,8 @@ export const documentService = {
     documentId: string,
     articleId: string,
     question: string,
-    maxAnswerLen: number = 64,
-    scoreThreshold: number = 0.15
+    maxAnswerLen: number = 128,
+    scoreThreshold: number = 0.08
   ): Promise<QAResponse> {
     return documentApi.post<QAResponse>(`${DOCUMENT_PREFIX}/ask-question`, {
       document_id: documentId,

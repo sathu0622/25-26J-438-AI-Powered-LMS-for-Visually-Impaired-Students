@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, BookOpen, Clock } from 'lucide-react';
+import { ArrowLeft, BookOpen } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
-import { API_BASE_URL } from '../../services/api';
+import { useTTS } from '../../contexts/TTSContext';
+import { API_BASE_URL } from '../../services/historyLessonService';
 
 interface Chapter {
   id: number;
@@ -14,7 +14,7 @@ interface Chapter {
 
 interface ChapterListProps {
   grade: number;
-  onSelectChapter: (chapterId: number, chapterName: string) => void;
+  onSelectChapter: (chapterId: number, chapterName: string, chapterIdx: number) => void;
   onBack: () => void;
 }
 
@@ -28,30 +28,6 @@ const normalizeSpeechText = (text: string) => {
     .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
-};
-
-const speakSlow = (text: string, onEnd?: () => void) => {
-  safeCancel();
-
-  if (
-    typeof window !== 'undefined' &&
-    'speechSynthesis' in window &&
-    typeof window.SpeechSynthesisUtterance === 'function'
-  ) {
-    try {
-      const utterance = new window.SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      if (onEnd) {
-        utterance.onend = onEnd;
-      }
-      window.speechSynthesis.speak(utterance);
-      return;
-    } catch {
-      // Fall back to shared helper if browser API fails.
-    }
-  }
-
-  safeSpeak(text, onEnd);
 };
 
 const SPOKEN_NUMBERS: Record<string, number> = {
@@ -68,6 +44,7 @@ const SPOKEN_NUMBERS: Record<string, number> = {
 };
 
 export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps) => {
+  const { speak, cancel } = useTTS();
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +52,11 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
   const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const speakSlow = useCallback((text: string, onEnd?: () => void) => {
+    cancel();
+    speak(text, { rate: 0.9, interrupt: true, onEnd: onEnd ?? (() => {}) });
+  }, [cancel, speak]);
 
   const speakChapterList = useCallback(() => {
     if (chapters.length === 0) {
@@ -87,7 +69,7 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
       list += `${index + 1}. ${cleanChapterNameForSpeech(chapter.chapter_name)}. `;
     });
     speakSlow(list);
-  }, [chapters, grade]);
+  }, [chapters, grade, speakSlow]);
 
   const selectChapterByNumber = useCallback((chapterNumber: number) => {
     if (chapterNumber < 1 || chapterNumber > chapters.length) {
@@ -96,10 +78,11 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
     }
 
     const selectedChapter = chapters[chapterNumber - 1];
+    const chapterIdx = chapterNumber - 1;
     speakSlow(`okay, ${cleanChapterNameForSpeech(selectedChapter.chapter_name)} selected. Loading topics.`, () => {
-      setTimeout(() => onSelectChapter(selectedChapter.id, selectedChapter.chapter_name), 500);
+      setTimeout(() => onSelectChapter(selectedChapter.id, selectedChapter.chapter_name, chapterIdx), 500);
     });
-  }, [chapters, onSelectChapter]);
+  }, [chapters, onSelectChapter, speakSlow]);
 
   const getSpokenNumber = useCallback((transcript: string): number | null => {
     const normalized = transcript.toLowerCase();
@@ -142,24 +125,23 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
     }
 
     if (normalized.includes('hello')) {
-      safeCancel();
+      cancel();
       speakSlow('Yes, say dear.');
       return;
     }
 
     if (normalized.includes('stop speech')) {
-      safeCancel();
+      cancel();
       speakSlow("Okay, I'm silance now, say me what to do?");
       return;
     }
 
     if (normalized.includes('stop') || normalized.includes('pause') || normalized.includes('silent')) {
-      safeCancel();
+      cancel();
       return;
     }
 
-    // Voice commands take priority over any ongoing speech.
-    safeCancel();
+    cancel();
 
     if (normalized.includes('back') || normalized.includes('go back') || normalized.includes('escape')) {
       speakSlow('Going back.', () => {
@@ -186,14 +168,15 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
 
     const spokenChapter = getChapterBySpokenName(normalized);
     if (spokenChapter) {
+      const chapterIdx = chapters.findIndex((c) => c.id === spokenChapter.id);
       speakSlow(`okay, ${cleanChapterNameForSpeech(spokenChapter.chapter_name)} selected. Loading topics.`, () => {
-        setTimeout(() => onSelectChapter(spokenChapter.id, spokenChapter.chapter_name), 500);
+        setTimeout(() => onSelectChapter(spokenChapter.id, spokenChapter.chapter_name, chapterIdx >= 0 ? chapterIdx : 0), 500);
       });
       return;
     }
 
     speakSlow('Command not recognized. Say a chapter number or chapter name, explain, stop, help, or back.');
-  }, [chapters, chapters.length, getChapterBySpokenName, getSpokenNumber, onBack, onSelectChapter, selectChapterByNumber, speakChapterList]);
+  }, [chapters, chapters.length, cancel, getChapterBySpokenName, getSpokenNumber, onBack, onSelectChapter, selectChapterByNumber, speakChapterList, speakSlow]);
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current || isListeningRef.current) {
@@ -218,11 +201,11 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
       try {
         setLoading(true);
         const response = await fetch(`${API_BASE_URL}/api/chapters/${grade}`);
-        
+
         if (!response.ok) {
           throw new Error(`Failed to fetch chapters: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         setChapters(data.chapters);
         setError(null);
@@ -241,7 +224,7 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
   // Voice announcement
   useEffect(() => {
     if (!loading && !hasAnnounced) {
-      safeCancel();
+      cancel();
       setHasAnnounced(true);
 
       if (chapters.length === 0) {
@@ -258,10 +241,8 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
       }, 500);
     }
 
-    return () => {
-      safeCancel();
-    };
-  }, [loading, chapters, hasAnnounced, grade]);
+    return () => cancel();
+  }, [loading, chapters, hasAnnounced, grade, cancel, speakSlow]);
 
   // Always-on voice commands on chapter screen
   useEffect(() => {
@@ -337,20 +318,20 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
       const num = parseInt(e.key);
       if (num >= 1 && num <= chapters.length) {
         e.preventDefault();
-        safeCancel();
+        cancel();
         selectChapterByNumber(num);
       }
 
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
         let help = `Press a number 1 to ${chapters.length} to select a chapter. `;
-        safeCancel();
+        cancel();
         speakSlow(help);
       }
 
       if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
-        safeCancel();
+        cancel();
         speakChapterList();
       }
 
@@ -362,7 +343,7 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [chapters.length, onBack, selectChapterByNumber, speakChapterList]);
+  }, [chapters.length, onBack, selectChapterByNumber, speakChapterList, cancel, speakSlow]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
@@ -402,7 +383,7 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
               className="overflow-hidden transition-all hover:shadow-lg"
             >
               <button
-                onClick={() => onSelectChapter(chapter.id, chapter.chapter_name)}
+                onClick={() => onSelectChapter(chapter.id, chapter.chapter_name, index)}
                 className="w-full p-6 text-left"
                 aria-label={`Open ${chapter.chapter_name}`}
               >

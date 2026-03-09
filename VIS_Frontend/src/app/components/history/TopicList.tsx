@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, BookOpen, Play } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
-import { API_BASE_URL } from '../../services/api';
+import { useTTS } from '../../contexts/TTSContext';
+import { API_BASE_URL } from '../../services/historyLessonService';
 
 const SPOKEN_NUMBERS: Record<string, number> = {
   one: 1,
@@ -26,30 +26,6 @@ const normalizeSpeechText = (text: string) => {
     .trim();
 };
 
-const speakSlow = (text: string, onEnd?: () => void) => {
-  safeCancel();
-
-  if (
-    typeof window !== 'undefined' &&
-    'speechSynthesis' in window &&
-    typeof window.SpeechSynthesisUtterance === 'function'
-  ) {
-    try {
-      const utterance = new window.SpeechSynthesisUtterance(text);
-      utterance.rate = 0.9;
-      if (onEnd) {
-        utterance.onend = onEnd;
-      }
-      window.speechSynthesis.speak(utterance);
-      return;
-    } catch {
-      // Fall back to shared helper if browser API fails.
-    }
-  }
-
-  safeSpeak(text, onEnd);
-};
-
 interface Topic {
   id: number;
   topic_name: string;
@@ -66,11 +42,12 @@ interface TopicListProps {
   grade: number;
   chapterId: number;
   chapterName: string;
-  onSelectTopic: (topicId: number, topicName: string, content: string) => void;
+  onSelectTopic: (topicId: number, topicName: string, content: string, topicIdx: number) => void;
   onBack: () => void;
 }
 
 export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack }: TopicListProps) => {
+  const { speak, cancel } = useTTS();
   const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +55,11 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
   const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const speakSlow = useCallback((text: string, onEnd?: () => void) => {
+    cancel();
+    speak(text, { rate: 0.9, interrupt: true, onEnd: onEnd ?? (() => {}) });
+  }, [cancel, speak]);
 
   const speakTopicOverview = useCallback(() => {
     if (topics.length === 0) {
@@ -90,7 +72,7 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
       announcement += `${index + 1}. ${topic.topic_name}. `;
     });
     speakSlow(announcement);
-  }, [chapterName, topics]);
+  }, [chapterName, topics, speakSlow]);
 
   const getSpokenNumber = useCallback((transcript: string): number | null => {
     const normalized = transcript.toLowerCase();
@@ -108,11 +90,11 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
     return null;
   }, []);
 
-  const selectTopic = useCallback((topic: Topic) => {
+  const selectTopic = useCallback((topic: Topic, topicIdx: number) => {
     const content = topic.simplified_text || topic.original_text || topic.narrative_text || '';
 
     speakSlow(`ok,${topic.topic_name} selected. Loading lesson.`, () => {
-      setTimeout(() => onSelectTopic(topic.id, topic.topic_name, content), 500);
+      setTimeout(() => onSelectTopic(topic.id, topic.topic_name, content, topicIdx), 500);
     });
   }, [onSelectTopic]);
 
@@ -140,7 +122,7 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
     }
 
     const selectedTopic = topics[topicNumber - 1];
-    selectTopic(selectedTopic);
+    selectTopic(selectedTopic, topicNumber - 1);
   }, [selectTopic, topics]);
 
   const handleVoiceCommand = useCallback((transcript: string) => {
@@ -150,23 +132,23 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
     }
 
     if (normalized.includes('hello')) {
-      safeCancel();
+      cancel();
       speakSlow('Yes, say dear.');
       return;
     }
 
     if (normalized.includes('stop speech')) {
-      safeCancel();
+      cancel();
       speakSlow("Okay, I'm silance now, say me what to do?");
       return;
     }
 
     if (normalized.includes('stop') || normalized.includes('pause') || normalized.includes('silent')) {
-      safeCancel();
+      cancel();
       return;
     }
 
-    safeCancel();
+    cancel();
 
     if (normalized.includes('back') || normalized.includes('go back') || normalized.includes('escape')) {
       speakSlow('Going back.', () => {
@@ -193,12 +175,13 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
 
     const spokenTopic = getTopicBySpokenName(normalized);
     if (spokenTopic) {
-      selectTopic(spokenTopic);
+      const topicIdx = topics.findIndex((t) => t.id === spokenTopic.id);
+      selectTopic(spokenTopic, topicIdx >= 0 ? topicIdx : 0);
       return;
     }
 
     speakSlow('Command not recognized. Say a topic number or topic name, explain, stop, help, or back.');
-  }, [getSpokenNumber, getTopicBySpokenName, onBack, selectTopic, selectTopicByNumber, speakTopicOverview, topics.length]);
+  }, [getSpokenNumber, getTopicBySpokenName, onBack, selectTopic, selectTopicByNumber, speakTopicOverview, topics]);
 
   const startListening = useCallback(() => {
     if (!recognitionRef.current || isListeningRef.current) {
@@ -225,11 +208,11 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
         const response = await fetch(
           `${API_BASE_URL}/api/chapters/${grade}/${chapterId}/topics`
         );
-        
+
         if (!response.ok) {
           throw new Error(`Failed to fetch topics: ${response.statusText}`);
         }
-        
+
         const data = await response.json();
         setTopics(data.topics);
         setError(null);
@@ -248,7 +231,7 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
   // Voice announcement
   useEffect(() => {
     if (!loading && !hasAnnounced) {
-      safeCancel();
+      cancel();
       setHasAnnounced(true);
 
       setTimeout(() => {
@@ -256,10 +239,8 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
       }, 500);
     }
 
-    return () => {
-      safeCancel();
-    };
-  }, [loading, hasAnnounced, speakTopicOverview]);
+    return () => cancel();
+  }, [loading, hasAnnounced, speakTopicOverview, cancel]);
 
   // Always-on voice commands on topic screen
   useEffect(() => {
@@ -335,20 +316,20 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
       const num = parseInt(e.key);
       if (num >= 1 && num <= topics.length) {
         e.preventDefault();
-        safeCancel();
+        cancel();
         selectTopicByNumber(num);
       }
 
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
         let help = `Press a number 1 to ${topics.length} to select a topic. `;
-        safeCancel();
+        cancel();
         speakSlow(help);
       }
 
       if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
-        safeCancel();
+        cancel();
         speakTopicOverview();
       }
 
@@ -360,7 +341,7 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [onBack, selectTopicByNumber, speakTopicOverview, topics.length]);
+  }, [onBack, selectTopicByNumber, speakTopicOverview, topics.length, cancel, speakSlow]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
@@ -402,7 +383,7 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
               <button
                 onClick={() => {
                   const content = topic.simplified_text || topic.original_text || topic.narrative_text || '';
-                  onSelectTopic(topic.id, topic.topic_name, content);
+                  onSelectTopic(topic.id, topic.topic_name, content, index);
                 }}
                 className="w-full p-6 text-left"
                 aria-label={`Open ${topic.topic_name}`}
