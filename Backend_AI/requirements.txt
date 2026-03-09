@@ -1,0 +1,6 @@
+# Define the content for requirements.txt
+fastapi
+uvicorn
+pandas
+python-dotenv
+gtts

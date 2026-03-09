@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { Play, Pause, RotateCcw, Volume2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
-import { useTTS } from '../contexts/TTSContext';
+import { useMockSpeechSynthesis } from '../hooks/useMockSpeechSynthesis';
+import { safeCancel } from '../utils/mockSpeech';
 
 interface AudioPlayerProps {
   text: string;
@@ -11,32 +12,42 @@ interface AudioPlayerProps {
 }
 
 export const AudioPlayer = ({ text, autoPlay = false, className }: AudioPlayerProps) => {
-  const { speak, cancel, isSpeaking } = useTTS();
+  const { speak, stop, isSpeaking, isPaused, resume, pause } = useMockSpeechSynthesis();
   const [hasPlayed, setHasPlayed] = useState(false);
 
   useEffect(() => {
-    cancel();
+    // Stop any other speech first
+    safeCancel();
+    
     if (autoPlay && text && !hasPlayed) {
-      const t = setTimeout(() => {
-        speak(text, { interrupt: false });
+      setTimeout(() => {
+        speak(text);
         setHasPlayed(true);
       }, 100);
-      return () => clearTimeout(t);
     }
-    return () => cancel();
-  }, [autoPlay, text, hasPlayed, speak, cancel]);
+    
+    return () => {
+      stop();
+    };
+  }, [autoPlay, text, hasPlayed, speak, stop]);
 
   const handlePlayPause = () => {
-    if (isSpeaking) {
-      cancel();
+    if (isSpeaking && !isPaused) {
+      pause();
+    } else if (isPaused) {
+      resume();
     } else {
-      speak(text, { interrupt: false });
+      speak(text);
     }
   };
 
   const handleReplay = () => {
-    cancel();
-    setTimeout(() => speak(text, { interrupt: false }), 100);
+    stop();
+    setTimeout(() => speak(text), 100);
+  };
+
+  const handleStop = () => {
+    stop();
   };
 
   return (
@@ -46,17 +57,17 @@ export const AudioPlayer = ({ text, autoPlay = false, className }: AudioPlayerPr
         <div className="flex-1">
           <p className="text-sm text-muted-foreground">Audio Playback</p>
           <p className="text-sm">
-            {isSpeaking ? 'Playing...' : 'Ready to play'}
+            {isSpeaking ? (isPaused ? 'Paused' : 'Playing...') : 'Ready to play'}
           </p>
         </div>
         <div className="flex gap-2">
           <Button
             onClick={handlePlayPause}
             size="lg"
-            aria-label={isSpeaking ? 'Pause audio' : 'Play audio'}
+            aria-label={isSpeaking && !isPaused ? 'Pause audio' : 'Play audio'}
             className="min-h-[56px] min-w-[56px]"
           >
-            {isSpeaking ? (
+            {isSpeaking && !isPaused ? (
               <Pause className="h-6 w-6" aria-hidden="true" />
             ) : (
               <Play className="h-6 w-6" aria-hidden="true" />

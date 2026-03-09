@@ -3,7 +3,31 @@ import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { useEffect, useState } from 'react';
 import { getLessonsByGrade, Lesson } from '../../data/historyData';
-import { useTTS } from '../../contexts/TTSContext';
+import { safeSpeak, safeCancel } from '../../utils/mockSpeech';
+
+const speakSlow = (text: string, onEnd?: () => void) => {
+  safeCancel();
+
+  if (
+    typeof window !== 'undefined' &&
+    'speechSynthesis' in window &&
+    typeof window.SpeechSynthesisUtterance === 'function'
+  ) {
+    try {
+      const utterance = new window.SpeechSynthesisUtterance(text);
+      utterance.rate = 0.9;
+      if (onEnd) {
+        utterance.onend = onEnd;
+      }
+      window.speechSynthesis.speak(utterance);
+      return;
+    } catch {
+      // Fall back to shared helper if browser API fails.
+    }
+  }
+
+  safeSpeak(text, onEnd);
+};
 
 interface LessonListProps {
   grade: number;
@@ -12,37 +36,51 @@ interface LessonListProps {
 }
 
 export const LessonList = ({ grade, onSelectLesson, onBack }: LessonListProps) => {
-  const { speak, cancel } = useTTS();
   const lessons = getLessonsByGrade(grade);
   const [hasAnnounced, setHasAnnounced] = useState(false);
 
+  // Voice announcement on page load - reads all lesson titles
   useEffect(() => {
-    cancel();
+    // STOP all previous speech immediately
+    safeCancel();
+    
     if (!hasAnnounced) {
       setHasAnnounced(true);
       setTimeout(() => {
+        // Build announcement with all lesson titles and numbers
         let announcement = `Grade ${grade} Sri Lankan History. ${lessons.length} lessons available. `;
         lessons.forEach((lesson, index) => {
           announcement += `Press ${index + 1} for ${lesson.title}. `;
         });
         announcement += 'Press H for help, or Escape to go back.';
-        speak(announcement, { interrupt: true });
+        
+        speakSlow(announcement);
       }, 500);
     }
-    return () => cancel();
-  }, [hasAnnounced, lessons, grade, speak, cancel]);
+    
+    // Cleanup: stop speech when leaving page
+    return () => {
+      safeCancel();
+    };
+  }, [hasAnnounced, lessons, grade]);
 
+  // Keyboard shortcuts for number-based lesson selection
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      // Number keys 1-9 to select lessons
       const num = parseInt(e.key);
       if (num >= 1 && num <= lessons.length) {
         e.preventDefault();
         const selectedLesson = lessons[num - 1];
-        speak(
+        speakSlow(
           `${selectedLesson.title} selected. Duration ${selectedLesson.duration}. Loading lesson.`,
-          { interrupt: true, onEnd: () => setTimeout(() => onSelectLesson(selectedLesson.id), 500) }
+          () => {
+            setTimeout(() => onSelectLesson(selectedLesson.id), 500);
+          }
         );
       }
+
+      // H key to repeat help
       if (e.key === 'h' || e.key === 'H') {
         e.preventDefault();
         let help = `Press a number to select a lesson. `;
@@ -50,26 +88,33 @@ export const LessonList = ({ grade, onSelectLesson, onBack }: LessonListProps) =
           help += `${index + 1} for ${lesson.title}. `;
         });
         help += 'Press Escape to go back.';
-        cancel();
-        speak(help, { interrupt: true });
+        
+        safeCancel();
+        speakSlow(help);
       }
+
+      // L key to list all lessons again
       if (e.key === 'l' || e.key === 'L') {
         e.preventDefault();
         let list = `${lessons.length} lessons available. `;
         lessons.forEach((lesson, index) => {
           list += `Lesson ${index + 1}: ${lesson.title}. ${lesson.description}. Duration ${lesson.duration}. `;
         });
-        cancel();
-        speak(list, { interrupt: true });
+        
+        safeCancel();
+        speakSlow(list);
       }
+
+      // Escape to go back
       if (e.key === 'Escape') {
         e.preventDefault();
         onBack();
       }
     };
+
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [lessons, onSelectLesson, onBack, speak, cancel]);
+  }, [lessons, onSelectLesson, onBack]);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
