@@ -3,7 +3,7 @@ from logger_config import logger
 import torch
 
 def generate_correct_answer(question, tokenizer, model):
-    torch.manual_seed(42)
+    torch.manual_seed(42) # Same answer each time
     prompt = f"""You are an expert Sri Lankan O/L History teacher.
 Write a concise, factual exam answer for a Grade 11 student.
 - Cover only the most important historical facts
@@ -15,7 +15,7 @@ Question:
 
 Answer:
 """
-    inputs = tokenizer(prompt, return_tensors="pt")
+    inputs = tokenizer(prompt, return_tensors="pt") # Converts text into tokens
     inputs = {k: v.to(model.device) for k, v in inputs.items()}
 
     logger.info("Generating answer...")
@@ -26,14 +26,14 @@ Answer:
             do_sample=False,
             temperature=0,
             num_beams=4,
-            repetition_penalty=1.2,
-            early_stopping=True,
-            pad_token_id=tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id,
+            repetition_penalty=1.2,     #avoids repeating words
+            early_stopping=True,    #stops when complete
+            pad_token_id=tokenizer.eos_token_id,    #proper stopping
+            eos_token_id=tokenizer.eos_token_id,    #proper stopping
 )
 
     input_length = inputs["input_ids"].shape[1]
-    response = tokenizer.decode(
+    response = tokenizer.decode(    # Converts tokens back into text.
         outputs[0][input_length:],
         skip_special_tokens=True
     )
@@ -52,9 +52,13 @@ def calculate_final_score(correct, student, sbert_model):
 
     length_factor = length_penalty(correct, student)
 
-    final = (semantic * 0.65 + keyword * 0.35 + jaccard * 0.10) * length_factor
+    semantic_weighted = semantic * 0.55
+    keyword_weighted = keyword * 0.35
+    jaccard_weighted = jaccard * 0.10
 
-    return round(final, 2), semantic, keyword, jaccard
+    final = (semantic_weighted + keyword_weighted + jaccard_weighted) * length_factor
+
+    return round(final, 2), round(semantic_weighted, 2), round(keyword_weighted, 2), round(jaccard_weighted, 2)
 
 def generate_feedback(score):
     if score >= 75:

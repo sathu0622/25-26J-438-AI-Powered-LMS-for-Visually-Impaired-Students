@@ -1,6 +1,3 @@
-# router.py
-# FastAPI route definitions
-
 from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
 from braille_decoder import decode_pdf
@@ -10,10 +7,6 @@ router = APIRouter()
 
 @router.post("/decode")
 async def decode_braille(file: UploadFile = File(...)):
-    """
-    Upload a scanned Braille PDF.
-    Returns JSON with 'question' (page 1) and 'answer' (pages 2+).
-    """
     if not file.filename.lower().endswith(".pdf"):
         return JSONResponse(
             status_code=400,

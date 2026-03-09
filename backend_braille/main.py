@@ -77,10 +77,6 @@ async def evaluate_answer(request: EvaluationRequest):
 
 @app.post("/decode")
 async def decode_braille(file: UploadFile = File(...)):
-    """
-    Upload a scanned Braille PDF.
-    Returns JSON with 'question' and 'answer'.
-    """
     if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="Only PDF files are supported.")
 
@@ -100,10 +96,7 @@ async def decode_braille(file: UploadFile = File(...)):
         text = re.sub(r'\s+', ' ', text)
         return text.strip()
 
-    # ----------------------------
     # Question / Answer Split
-    # ----------------------------
-
     first_page = clean_text(all_text[0])
 
     # Try splitting by question mark first
