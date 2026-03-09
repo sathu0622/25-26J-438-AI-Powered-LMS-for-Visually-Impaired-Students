@@ -54,7 +54,7 @@ const Login: React.FC<LoginProps> = ({ onLoggedIn, onSwitchToRegister }) => {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:8000/login', {
+      const res = await fetch('http://20.2.232.102:8000/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: username.trim(), password })
