@@ -36,14 +36,36 @@ def summarize_text(text: str, source_type: str, summ_tokenizer, summ_model) -> s
         ).to(DEVICE)
 
         with torch.no_grad():
+            
+            # output_ids = summ_model.generate(
+            #     input_ids=inputs['input_ids'],
+            #     attention_mask=inputs['attention_mask'],
+            #     max_length=300 if source_type != "book" else 600,  # Longer for books
+            #     num_beams=5,
+            #     no_repeat_ngram_size=3,     # 🔥 prevents phrase repetition
+            #     repetition_penalty=2.0,     # 🔥 penalizes repeated tokens
+
+            #     early_stopping=True,
+            #     length_penalty=1.2,         # encourages proper length
+
+            #     do_sample=False             # keep deterministic (important)
+            # )
             output_ids = summ_model.generate(
                 input_ids=inputs['input_ids'],
                 attention_mask=inputs['attention_mask'],
-                max_length=300 if source_type != "book" else 600,  # Longer for books
-                num_beams=4,
-                early_stopping=True
-            )
+                max_length=300 if source_type != "book" else 600,
 
+                num_beams=5,
+                no_repeat_ngram_size=4,
+                repetition_penalty=2.0,
+                length_penalty=1.5,
+
+                early_stopping=True,
+
+                do_sample=True,          # 🔥 allow controlled randomness
+                top_p=0.9,               # 🔥 nucleus sampling
+                temperature=0.7          # 🔥 reduces weird repetition
+            )
         return summ_tokenizer.decode(output_ids[0], skip_special_tokens=True)
 
     except Exception as e:
