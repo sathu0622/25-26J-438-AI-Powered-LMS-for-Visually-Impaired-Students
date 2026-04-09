@@ -1,6 +1,50 @@
 # azure_processor.py
 from typing import Dict, Any, List, Optional  
+import re
 from config import AZURE_ENDPOINT, AZURE_KEY
+
+
+NOISE_TITLE_KEYWORDS = {
+    "advertisement", "advertisements", "advertorial", "advt", "promo",
+    "classified", "sponsored", "paid", "public notice", "tender notice",
+    "obituary", "vacancy", "for sale", "for rent", "buy now", "sale",
+    "edition", "daily", "times", "tribune", "express", "chronicle",
+    "newspaper", "press", "gazette", "today", "e-paper", "epaper"
+}
+
+
+def _normalize_text_for_match(text: str) -> str:
+    return re.sub(r"[^a-z0-9\s]", " ", text.lower()).strip()
+
+
+def _is_noise_title_candidate(text: str) -> bool:
+    """
+    Filters non-article headings such as ad labels and newspaper mastheads.
+    """
+    cleaned = text.strip()
+    if not cleaned:
+        return True
+
+    norm = _normalize_text_for_match(cleaned)
+    words = norm.split()
+    if not words:
+        return True
+
+    # Very short labels and single-word mastheads are rarely article titles.
+    if len(words) <= 2 and len(cleaned) <= 18:
+        return True
+
+    # Typical newspaper masthead / metadata patterns.
+    if any(token in norm for token in ("www.", ".com", "vol ", "issue ", "dated ", "page ")):
+        return True
+    if re.search(r"\b\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b", norm):
+        return True
+
+    # Advertisement or publication-name keywords.
+    if any(keyword in norm for keyword in NOISE_TITLE_KEYWORDS):
+        return True
+
+    return False
 
 def extract_with_azure(file_path: str) -> Dict[str, Any]:
     """
@@ -102,6 +146,8 @@ def extract_articles_exact_colab_logic(result) -> List[Dict[str, Any]]:
                     continue
 
                 if role == "title":
+                    if _is_noise_title_candidate(text):
+                        continue
                     if current_article:
                         article_list.append(current_article)
                     current_article = {
@@ -249,7 +295,9 @@ def alternative_article_grouping(result):
             
             if is_new_article and current_group:
                 # Create article from current group
-                heading = current_group[0] if len(current_group[0].split()) <= 15 else ""
+                heading = current_group[0].content.strip() if len(current_group[0].content.split()) <= 15 else ""
+                if _is_noise_title_candidate(heading):
+                    heading = ""
                 body = [p.content for p in current_group[1:]] if len(current_group) > 1 else [p.content for p in current_group]
                 
                 articles.append({
@@ -267,6 +315,8 @@ def alternative_article_grouping(result):
         # Add the last group
         if current_group:
             heading = current_group[0].content if len(current_group[0].content.split()) <= 15 else ""
+            if _is_noise_title_candidate(heading):
+                heading = ""
             body = [p.content for p in current_group[1:]] if len(current_group) > 1 else [p.content for p in current_group]
             
             articles.append({
