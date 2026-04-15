@@ -1,7 +1,12 @@
 # azure_processor.py
-from typing import Dict, Any, List, Optional  
+from typing import Dict, Any, List
 import re
-from config import AZURE_ENDPOINT, AZURE_KEY
+import json
+import tempfile
+import os
+from pathlib import Path
+from config import GEMINI_API_KEY
+from pdf2image import convert_from_path
 
 
 NOISE_TITLE_KEYWORDS = {
@@ -46,63 +51,156 @@ def _is_noise_title_candidate(text: str) -> bool:
 
     return False
 
-def extract_with_azure(file_path: str) -> Dict[str, Any]:
+def _build_gemini_prompt(resource_type: str) -> str:
+    resource = resource_type.lower()
+    if resource == "books":
+        unit_name = "chapters"
+        heading_hint = "chapter title"
+    else:
+        unit_name = "articles"
+        heading_hint = "article headline"
+
+    return (
+        "You are an OCR and document-structure extractor.\n"
+        "Read the provided page image and extract text only from the visible page.\n"
+        "Do not summarize and do not add missing content.\n"
+        f"Return strict JSON with this schema:\n"
+        "{\n"
+        '  "full_text": "all extracted text in reading order",\n'
+        f'  "{unit_name}": [\n'
+        "    {\n"
+        f'      "heading": "{heading_hint}",\n'
+        '      "subheading": "",\n'
+        '      "body": ["paragraph 1", "paragraph 2"],\n'
+        '      "full_text": "heading + body text"\n'
+        "    }\n"
+        "  ]\n"
+        "}\n"
+        "Rules:\n"
+        "- Output valid JSON only.\n"
+        "- Keep body as paragraph strings.\n"
+        "- If no structure is clear, still return one item in the list with detected text."
+    )
+
+
+def _safe_parse_json(text: str) -> Dict[str, Any]:
+    cleaned = text.strip()
+    code_block_match = re.search(r"```(?:json)?\s*(.*?)\s*```", cleaned, re.DOTALL | re.IGNORECASE)
+    if code_block_match:
+        cleaned = code_block_match.group(1).strip()
+    return json.loads(cleaned)
+
+
+def _image_bytes_from_path(path: str) -> bytes:
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def _pdf_to_temp_images(pdf_path: str) -> List[str]:
+    pages = convert_from_path(pdf_path, dpi=300)
+    temp_paths: List[str] = []
+    for page in pages:
+        tmp_path = os.path.join(tempfile.gettempdir(), f"gemini_page_{os.urandom(4).hex()}.jpg")
+        page.save(tmp_path, "JPEG", quality=95)
+        temp_paths.append(tmp_path)
+    return temp_paths
+
+
+def _normalize_units(parsed: Dict[str, Any], resource_type: str) -> List[Dict[str, Any]]:
+    resource = resource_type.lower()
+    key = "chapters" if resource == "books" else "articles"
+    units = parsed.get(key, []) or []
+
+    normalized = []
+    for i, unit in enumerate(units):
+        heading = str(unit.get("heading", "") or "").strip()
+        subheading = str(unit.get("subheading", "") or "").strip()
+        body = unit.get("body", []) or []
+        if not isinstance(body, list):
+            body = [str(body)]
+        body = [str(p).strip() for p in body if str(p).strip()]
+
+        full_text = str(unit.get("full_text", "") or "").strip()
+        if not full_text:
+            full_text = "\n".join([x for x in [heading, subheading, *body] if x])
+
+        normalized.append(
+            {
+                "heading": heading,
+                "subheading": subheading if subheading else None,
+                "body": body,
+                "full_text": full_text,
+                "article_id": f"{'chapter' if resource == 'books' else 'article'}_{i + 1}",
+            }
+        )
+    return normalized
+
+
+def extract_with_azure(file_path: str, resource_type: str = "newspapers") -> Dict[str, Any]:
     """
-    Extract text and layout using Azure Document Intelligence.
-    This is specifically for newspapers and magazines.
+    Gemini-based structured text extraction.
+    Function name kept for backward compatibility with existing pipeline code.
     """
     try:
-        from azure.ai.formrecognizer import DocumentAnalysisClient
-        from azure.core.credentials import AzureKeyCredential
-        from azure.core.exceptions import HttpResponseError
-        
-        print(f"Using Azure Document Intelligence for enhanced extraction...")
-        
-        # Initialize Azure client
-        client = DocumentAnalysisClient(
-            endpoint=AZURE_ENDPOINT,
-            credential=AzureKeyCredential(AZURE_KEY)
-        )
-        
-        # Open and analyze the file
-        with open(file_path, "rb") as f:
-            poller = client.begin_analyze_document(
-                model_id="prebuilt-layout",
-                document=f
-            )
-        
-        result = poller.result()
-        
-        # Extract all text
-        full_text = ""
-        if hasattr(result, 'content'):
-            full_text = result.content
+        import google.generativeai as genai
+    except ImportError:
+        print("google-generativeai package not installed. Falling back...")
+        return None
+
+    if not GEMINI_API_KEY:
+        print("GEMINI_API_KEY is missing. Falling back...")
+        return None
+
+    temp_images: List[str] = []
+    image_paths: List[str] = []
+    try:
+        genai.configure(api_key=GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.5-flash")
+
+        lower_path = file_path.lower()
+        if lower_path.endswith(".pdf"):
+            temp_images = _pdf_to_temp_images(file_path)
+            image_paths = temp_images
         else:
-            # Fallback: combine all paragraphs
-            paragraphs = []
-            for p in result.paragraphs:
-                paragraphs.append(p.content)
-            full_text = "\n".join(paragraphs)
-        
-        # Extract structured articles 
-        articles = extract_articles_exact_colab_logic(result)
-        
+            image_paths = [file_path]
+
+        extracted_unit_list: List[Dict[str, Any]] = []
+        all_page_text: List[str] = []
+        prompt = _build_gemini_prompt(resource_type)
+
+        for image_path in image_paths:
+            img_bytes = _image_bytes_from_path(image_path)
+            response = model.generate_content(
+                [
+                    prompt,
+                    {
+                        "mime_type": f"image/{Path(image_path).suffix.replace('.', '').lower() or 'jpeg'}",
+                        "data": img_bytes,
+                    },
+                ]
+            )
+            parsed = _safe_parse_json(response.text)
+            page_text = str(parsed.get("full_text", "") or "").strip()
+            if page_text:
+                all_page_text.append(page_text)
+
+            extracted_unit_list.extend(_normalize_units(parsed, resource_type))
+
+        full_text = "\n\n".join(all_page_text).strip()
         return {
             "full_text": full_text,
-            "articles": articles,
-            "raw_result": result,
-            "method": "azure_document_intelligence"
+            "articles": extracted_unit_list,
+            "method": "gemini_image_extraction",
         }
-        
-    except ImportError:
-        print("Azure packages not installed. Falling back to simple OCR...")
-        return None
-    except HttpResponseError as e:
-        print(f"Azure API error: {e}. Falling back to simple OCR...")
-        return None
     except Exception as e:
-        print(f"Azure processing error: {e}. Falling back to simple OCR...")
+        print(f"Gemini extraction error: {e}. Falling back...")
         return None
+    finally:
+        for tmp in temp_images:
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
 
 def extract_articles_exact_colab_logic(result) -> List[Dict[str, Any]]:
     """

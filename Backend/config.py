@@ -7,7 +7,7 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv(override=True)
 
 BASE_DIR = Path(__file__).parent
 MODEL_DIR = BASE_DIR / "Model"
@@ -44,6 +44,9 @@ CLASS_NAMES = ['Books', 'Magazine', 'Newspapers']
 # Azure Document Intelligence Configuration
 AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT")
 AZURE_KEY = os.getenv("AZURE_KEY")
+
+# Gemini API Configuration
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 # Q&A Model Configuration
 QA_MODEL_NAME = "distilbert-base-cased-distilled-squad"

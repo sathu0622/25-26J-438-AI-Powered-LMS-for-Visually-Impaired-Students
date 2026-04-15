@@ -32,74 +32,40 @@ def predict_resource_type(img_path: str, type_model) -> tuple[str, float]:
 def extract_text_with_strategy(input_path: str, resource_type: str) -> Dict[str, Any]:
     print(f"\nExtracting text for resource type: {resource_type}")
 
-    # ===========================
-    # 📰 NEWSPAPER / MAGAZINE
-    # ===========================
-    if resource_type in ["newspapers", "magazine"]:
+    # ==================================================
+    # 📰/📚 GEMINI EXTRACTION (BOOK / MAGAZINE / NEWSPAPER)
+    # ==================================================
+    if resource_type in ["newspapers", "magazine", "books"]:
+        gemini_result = extract_with_azure(input_path, resource_type=resource_type)
 
-        azure_result = extract_with_azure(input_path)
-
-        if azure_result and azure_result.get("articles"):
-            print(f"✓ Azure extraction successful")
-
-            article_texts = [
-                article.get("full_text", "")
-                for article in azure_result["articles"]
-            ]
+        if gemini_result and gemini_result.get("articles"):
+            print("✓ Gemini extraction successful")
+            article_texts = [article.get("full_text", "") for article in gemini_result["articles"]]
 
             return {
-                "full_text": azure_result["full_text"],
+                "full_text": gemini_result["full_text"],
                 "article_texts": article_texts,
-                "method": "azure",
-                "structured_articles": azure_result["articles"]
+                "method": "gemini",
+                "structured_articles": gemini_result["articles"],
             }
 
-        else:
-            print("⚠ Azure failed. Falling back to OCR")
-
-            full_text = extract_text_book(input_path)
-
-            return {
-                "full_text": full_text,
-                "article_texts": [full_text],
-                "method": "simple_ocr_fallback",
-                "structured_articles": []
-            }
-
-    # ===========================
-    # 📚 BOOKS (NEW STRUCTURED LOGIC)
-    # ===========================
-    else:
-
-        print("Using structured OCR for book")
-
+        print("⚠ Gemini extraction failed. Falling back to OCR")
         full_text = extract_text_book(input_path)
+        return {
+            "full_text": full_text,
+            "article_texts": [full_text],
+            "method": "simple_ocr_fallback",
+            "structured_articles": [],
+        }
 
-        from ocr_processor import structure_book_text
-
-        structured_book = structure_book_text(full_text)
-
-        chapters = structured_book.get("chapters", [])
-
-        if chapters:
-            print(f"✓ Structured {len(chapters)} chapters detected")
-
-            return {
-                "full_text": full_text,
-                "article_texts": [c["full_text"] for c in chapters],
-                "method": "structured_book_ocr",
-                "structured_articles": chapters
-            }
-
-        else:
-            print("⚠ No chapters detected. Returning full book as single unit")
-
-            return {
-                "full_text": full_text,
-                "article_texts": [full_text],
-                "method": "simple_ocr",
-                "structured_articles": []
-            }
+    # Other resource labels fallback
+    full_text = extract_text_book(input_path)
+    return {
+        "full_text": full_text,
+        "article_texts": [full_text],
+        "method": "simple_ocr",
+        "structured_articles": [],
+    }
 
 def process_document(
     input_path: str, 
@@ -240,7 +206,7 @@ def process_document(
             "extraction_method": extraction_method,
             "processing_info": {
                 "ocr_method": extraction_method,
-                "article_detection": extraction_method == "azure",
+                "article_detection": extraction_method == "gemini",
                 "supports_selective_summarization": len(structured_articles) > 0,
                 "supports_qa": True,  # NEW: All documents now support Q&A
                 "timestamp": datetime.now().isoformat()
