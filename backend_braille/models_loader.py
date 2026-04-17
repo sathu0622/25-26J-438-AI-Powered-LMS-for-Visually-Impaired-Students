@@ -4,6 +4,7 @@ from peft import PeftModel
 from sentence_transformers import SentenceTransformer
 from config import BASE_MODEL, LORA_MODEL_PATH, HF_TOKEN
 from logger_config import logger
+from rag_retriever import load_rag_data
 
 tokenizer = None
 model = None
@@ -20,7 +21,7 @@ def load_models():
         logger.info("Loading base model with 4-bit quantization...")
         bnb_config = BitsAndBytesConfig(    #4-bit quantization (memory optimization)
             load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_compute_dtype=torch.float32,
             bnb_4bit_use_double_quant=True, #Improves compression efficiency.
             bnb_4bit_quant_type="nf4"   #Uses NF4 quantization.
         )
@@ -40,6 +41,9 @@ def load_models():
 
         logger.info("Loading Sentence-BERT...")
         sbert = SentenceTransformer("all-MiniLM-L6-v2")
+
+        # NEW: build RAG index
+        load_rag_data(sbert)
 
         logger.info("All models loaded successfully")
     except Exception as e:
