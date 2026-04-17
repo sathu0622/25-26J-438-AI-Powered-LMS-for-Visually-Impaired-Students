@@ -69,6 +69,14 @@ FastAPI backend for document processing with OCR, grammar correction, resource t
    pip install -r requirements.txt
    ```
 
+4. **Set environment variables**:
+   - Add MongoDB connection settings in `Backend/.env`:
+   ```env
+   MONGODB_URI=mongodb://localhost:27017
+   MONGODB_DB_NAME=lms_db
+   MONGODB_FAVORITES_COLLECTION=favorite_articles
+   ```
+
 ## Running the Server
 
 ```bash
@@ -106,6 +114,23 @@ Body: file (PDF or image file)
   "summaries": ["Summary 1", "Summary 2"],
   "num_articles": 1
 }
+```
+
+### Favorite Articles (Shared Globally)
+```
+POST /favorites
+Content-Type: application/json
+Body: { "document_id": "...", "article_id": "..." }
+```
+
+```
+GET /favorites
+```
+
+```
+DELETE /favorites
+Content-Type: application/json
+Body: { "document_id": "...", "article_id": "..." }
 ```
 
 ## Model Files

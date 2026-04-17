@@ -45,6 +45,11 @@ CLASS_NAMES = ['Books', 'Magazine', 'Newspapers']
 AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT")
 AZURE_KEY = os.getenv("AZURE_KEY")
 
+# MongoDB configuration
+MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
+MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "lms_db")
+MONGODB_FAVORITES_COLLECTION = os.getenv("MONGODB_FAVORITES_COLLECTION", "favorite_articles")
+
 # Q&A Model Configuration
 QA_MODEL_NAME = "distilbert-base-cased-distilled-squad"
 

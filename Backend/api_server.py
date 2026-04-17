@@ -1,5 +1,5 @@
 # api_server.py
-from fastapi import FastAPI, File, UploadFile, HTTPException, Form, Body
+from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
@@ -8,13 +8,14 @@ import tempfile
 import subprocess
 import sys
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 
 from config import processed_documents
 from models import load_all_models
 from document_processor import process_document
 from summarizer import summarize_specific_article
 from qa_system import answer_question_for_article
+from favorite_articles import get_favorite_store
 
 # Pydantic Models
 class QARequest(BaseModel):
@@ -34,8 +35,22 @@ class QAResponse(BaseModel):
     resource_type: Optional[str] = None
     timestamp: str
 
+class FavoriteArticleRequest(BaseModel):
+    document_id: str = Field(..., description="Document ID from processing")
+    article_id: str = Field(..., description="Article ID to save as favorite")
+
+class FavoriteArticleDeleteRequest(BaseModel):
+    document_id: str = Field(..., description="Document ID of favorite article")
+    article_id: str = Field(..., description="Article ID of favorite article")
+
 # Load models globally
 models = load_all_models()
+favorite_store = None
+favorite_store_error = None
+try:
+    favorite_store = get_favorite_store()
+except Exception as exc:
+    favorite_store_error = str(exc)
 
 app = FastAPI(title="Article Detection Document Processor with Q&A", version="6.0.0")
 
@@ -61,7 +76,8 @@ async def root():
             "exact_colab_article_detection": True,
             "column_based_article_grouping": True,
             "selective_article_summarization": True,
-            "question_answering": True  # NEW FEATURE
+            "question_answering": True,
+            "favorite_articles": True
         },
         "models_loaded": {
             "resource_type": models["type_model"] is not None,
@@ -74,6 +90,9 @@ async def root():
             "POST /process": "Process a document and extract articles",
             "POST /summarize-article": "Summarize a specific article by ID or heading",
             "POST /ask-question": "Ask questions about a specific article",
+            "POST /favorites": "Add an article to favorites (shared for all users)",
+            "GET /favorites": "List all favorite articles (shared for all users)",
+            "DELETE /favorites": "Remove an article from favorites",
             "GET /articles/{document_id}": "Get article list for a processed document",
             "GET /cleanup": "Clean up old documents"
         }
@@ -287,6 +306,119 @@ async def get_articles_list(document_id: str):
         "timestamp": document_data["timestamp"],
         "supports_qa": True  # All documents support Q&A
     }
+
+@app.post("/favorites")
+async def add_favorite_article(request: FavoriteArticleRequest):
+    """Add an article to globally shared favorites."""
+    if favorite_store is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Favorites storage unavailable: {favorite_store_error}"
+        )
+
+    if request.document_id not in processed_documents:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document ID {request.document_id} not found."
+        )
+
+    document_data = processed_documents[request.document_id]
+    structured_articles = document_data.get("structured_articles", [])
+    resource_type = document_data.get("resource_type", "")
+
+    article_to_store: Dict[str, Any] = {
+        "document_id": request.document_id,
+        "article_id": request.article_id,
+        "resource_type": resource_type,
+    }
+
+    if not structured_articles:
+        if request.article_id != "full_document":
+            raise HTTPException(
+                status_code=400,
+                detail="Only 'full_document' can be favorited for this document."
+            )
+        full_text = document_data.get("full_text", "")
+        article_to_store.update(
+            {
+                "heading": "Full Document",
+                "subheading": "Complete extracted text",
+                "body_preview": full_text[:150] + "..." if len(full_text) > 150 else full_text,
+            }
+        )
+    else:
+        target_article = None
+        for article in structured_articles:
+            if article.get("article_id") == request.article_id:
+                target_article = article
+                break
+
+        if not target_article:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Article '{request.article_id}' not found in document '{request.document_id}'."
+            )
+
+        body_preview = " ".join(target_article.get("body", [])[:2])[:150]
+        if body_preview:
+            body_preview += "..."
+
+        article_to_store.update(
+            {
+                "heading": target_article.get("heading", "No heading") or "No heading",
+                "subheading": target_article.get("subheading", "") or "",
+                "body_preview": body_preview,
+            }
+        )
+
+    try:
+        saved = favorite_store.add_favorite(article_to_store)
+        return {
+            "message": "Article added to favorites",
+            "favorite": saved
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save favorite: {exc}")
+
+@app.get("/favorites")
+async def list_favorite_articles():
+    """List all globally shared favorite articles."""
+    if favorite_store is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Favorites storage unavailable: {favorite_store_error}"
+        )
+
+    try:
+        favorites = favorite_store.list_favorites()
+        return {
+            "count": len(favorites),
+            "favorites": favorites
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to load favorites: {exc}")
+
+@app.delete("/favorites")
+async def remove_favorite_article(request: FavoriteArticleDeleteRequest):
+    """Remove a favorite article from globally shared favorites."""
+    if favorite_store is None:
+        raise HTTPException(
+            status_code=503,
+            detail=f"Favorites storage unavailable: {favorite_store_error}"
+        )
+
+    try:
+        deleted_count = favorite_store.remove_favorite(
+            document_id=request.document_id,
+            article_id=request.article_id
+        )
+        if deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Favorite article not found.")
+        return {"message": "Favorite article removed"}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to remove favorite: {exc}")
 
 @app.get("/cleanup")
 async def cleanup_old_documents(hours: int = 24):
