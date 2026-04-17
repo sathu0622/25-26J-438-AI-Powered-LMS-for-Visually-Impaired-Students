@@ -39,6 +39,25 @@ export interface QAResponse {
   context_preview?: string;
 }
 
+/** GET /articles/{document_id} */
+export interface ArticlesListResponse {
+  document_id: string;
+  resource_type?: string;
+  num_articles?: number;
+  articles: Array<{
+    index: number;
+    article_id: string;
+    column?: string;
+    heading?: string;
+    subheading?: string;
+    body_preview?: string;
+    word_count?: number;
+    paragraph_count?: number;
+  }>;
+  timestamp?: string;
+  supports_qa?: boolean;
+}
+
 export const documentService = {
   /**
    * Upload and process a document
@@ -64,6 +83,28 @@ export const documentService = {
       document_id: documentId,
       article_id: articleId,
     });
+  },
+
+  /**
+   * List articles for a document still held in the processor (e.g. after /process or when reopening a favorite).
+   */
+  async getArticlesList(documentId: string): Promise<ArticlesListResponse> {
+    const encoded = encodeURIComponent(documentId);
+    return documentApi.get<ArticlesListResponse>(
+      `${DOCUMENT_PREFIX}/articles/${encoded}`
+    );
+  },
+
+  articlesResponseToArticleList(data: ArticlesListResponse): ArticleInfo[] {
+    const items = data.articles ?? [];
+    return items.map((a) => ({
+      article_id: a.article_id,
+      index: a.index,
+      heading: a.heading,
+      subheading: a.subheading,
+      column: a.column,
+      word_count: a.word_count,
+    }));
   },
 
   /**

@@ -19,8 +19,10 @@ export const DocumentModule = () => {
     selectedArticleId,
     qaMode,
     error,
+    isLoading,
     handleUpload,
     handleSelectArticle,
+    handleOpenFavorite,
     handleStartQA,
     handleBackToSummary,
   } = useDocumentModule();
@@ -42,7 +44,13 @@ export const DocumentModule = () => {
       )}
 
       {/* Upload Screen */}
-      {screen === 'upload' && <DocumentUpload onUpload={handleUpload} />}
+      {screen === 'upload' && (
+        <DocumentUpload
+          onUpload={handleUpload}
+          onOpenFavorite={handleOpenFavorite}
+          isOpeningFavorite={isLoading}
+        />
+      )}
 
       {/* Processing Screen */}
       {screen === 'processing' && uploadedFile && (
@@ -52,6 +60,7 @@ export const DocumentModule = () => {
       {/* Summary Screen */}
       {screen === 'summary' && (
         <DocumentSummary
+          documentId={documentResult?.document_id ?? ''}
           summary={documentSummary}
           onAskQuestion={handleStartQA}
           articles={documentResult?.article_list}
