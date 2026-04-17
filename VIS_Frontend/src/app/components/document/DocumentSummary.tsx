@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
-import { ZoomIn, ZoomOut, MessageSquare, Keyboard } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ZoomIn, ZoomOut, MessageSquare, Keyboard, Bookmark } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { AudioPlayer } from '../AudioPlayer';
 import { useTTS } from '../../contexts/TTSContext';
+import { addFavoriteArticle } from './favoritesApi';
 
 interface ArticleInfo {
   article_id: string;
@@ -23,6 +24,7 @@ interface DocumentSummaryProps {
 }
 
 export const DocumentSummary = ({
+  documentId,
   summary,
   onAskQuestion,
   articles,
@@ -32,6 +34,9 @@ export const DocumentSummary = ({
   const { speak, cancel } = useTTS();
   const [textSize, setTextSize] = useState(100);
   const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
+  const [favoriteStatus, setFavoriteStatus] = useState<string | null>(null);
+  const favoriteInFlightRef = useRef(false);
   const initialSpeakDoneRef = useRef(false);
   const prevSelectedArticleIdRef = useRef<string | null | undefined>(undefined);
   const hasScheduledInitialRef = useRef(false);
@@ -52,7 +57,7 @@ export const DocumentSummary = ({
     lastSpokenSummaryRef.current = trimmed;
 
     const introText =
-        'Document Summary page. Press A to replay summary, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size.';
+        'Document Summary page. Press A to replay summary, Press S to save the current article to favorites, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size.';
 
     const readSummary = () => {
       lastSpokenSummaryRef.current = trimmed;
@@ -115,14 +120,57 @@ export const DocumentSummary = ({
     });
   }, [summary, speak, cancel]);
 
+  const saveCurrentArticleToFavorites = useCallback(async () => {
+    if (!documentId || !selectedArticleId || favoriteInFlightRef.current) return;
+
+    favoriteInFlightRef.current = true;
+    setFavoriteSaving(true);
+    setFavoriteStatus(null);
+    cancel();
+
+    const heading =
+      articles?.find((a) => a.article_id === selectedArticleId)?.heading ||
+      'this article';
+
+    try {
+      await addFavoriteArticle(documentId, selectedArticleId);
+      const ok = `Saved to favorites: ${heading}.`;
+      setFavoriteStatus(ok);
+      speak(ok, { interrupt: true });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Could not save favorite.';
+      setFavoriteStatus(message);
+      speak(message, { interrupt: true });
+    } finally {
+      favoriteInFlightRef.current = false;
+      setFavoriteSaving(false);
+    }
+  }, [documentId, selectedArticleId, articles, speak, cancel]);
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest('input, textarea, select, [contenteditable="true"]')
+      ) {
+        return;
+      }
+
       // A key to replay summary
       if (e.key === 'a' || e.key === 'A') {
         e.preventDefault();
         cancel();
         speak(summary, { interrupt: true });
+        return;
+      }
+
+      // S key: save current article to favorites
+      if (e.key === 's' || e.key === 'S') {
+        if (!documentId || !selectedArticleId) return;
+        e.preventDefault();
+        void saveCurrentArticleToFavorites();
         return;
       }
 
@@ -177,7 +225,17 @@ export const DocumentSummary = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [summary, onAskQuestion, articles, onSelectArticle, speak, cancel]);
+  }, [
+    summary,
+    onAskQuestion,
+    articles,
+    onSelectArticle,
+    speak,
+    cancel,
+    documentId,
+    selectedArticleId,
+    saveCurrentArticleToFavorites,
+  ]);
 
   const increaseTextSize = () => {
     setTextSize((prev) => Math.min(prev + 10, 150));
@@ -198,7 +256,7 @@ export const DocumentSummary = ({
       <div className="space-y-2">
         <h1 className="text-2xl">Document Summary</h1>
         <p className="text-muted-foreground">
-          A to replay • V for voice question • T for text question • +/- to resize text
+          A replay • S save favorite • V voice question • T text question • +/- text size
         </p>
         {selectedArticle && (
           <p className="text-sm text-secondary">
@@ -266,6 +324,37 @@ export const DocumentSummary = ({
 
       {/* Audio Player */}
       <AudioPlayer text={summary} autoPlay={false} />
+
+      {/* Save to favorites */}
+      <Card className="p-4 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg">Favorites</h2>
+            <p className="text-sm text-muted-foreground">
+              Save the currently selected article for quick access later. Keyboard: S
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => void saveCurrentArticleToFavorites()}
+            disabled={
+              favoriteSaving || !documentId || !selectedArticleId
+            }
+            size="lg"
+            variant="secondary"
+            className="min-h-[56px] gap-2 shrink-0"
+            aria-label="Save current article to favorites. Keyboard shortcut S."
+          >
+            <Bookmark className="h-5 w-5" aria-hidden="true" />
+            {favoriteSaving ? 'Saving…' : 'Save article to favorites'}
+          </Button>
+        </div>
+        {favoriteStatus && (
+          <p className="text-sm" role="status" aria-live="polite">
+            {favoriteStatus}
+          </p>
+        )}
+      </Card>
 
       {/* Text Controls */}
       <div className="flex items-center justify-between">

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Send, Loader2, ArrowLeft, AlertCircle, X } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Send, Loader2, ArrowLeft, AlertCircle, X, Bookmark } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
@@ -8,6 +8,7 @@ import { AudioPlayer } from '../AudioPlayer';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { documentService } from '../../services/documentService';
 import { useTTS } from '../../contexts/TTSContext';
+import { addFavoriteArticle } from './favoritesApi';
 
 interface QAItem {
   question: string;
@@ -41,6 +42,9 @@ export const DocumentQA = ({
   const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
   const [qaError, setQaError] = useState<string | null>(null);
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
+  const [favoriteStatus, setFavoriteStatus] = useState<string | null>(null);
+  const favoriteInFlightRef = useRef(false);
 
   const { speak, cancel } = useTTS();
   const {
@@ -55,6 +59,32 @@ export const DocumentQA = ({
     clearError,
   } = useSpeechRecognition();
 
+  const saveArticleToFavorites = useCallback(async () => {
+    if (!documentId || !articleId || favoriteInFlightRef.current) return;
+
+    favoriteInFlightRef.current = true;
+    setFavoriteSaving(true);
+    setFavoriteStatus(null);
+    cancel();
+
+    const label = articleHeading || 'this article';
+
+    try {
+      await addFavoriteArticle(documentId, articleId);
+      const ok = `Saved to favorites: ${label}.`;
+      setFavoriteStatus(ok);
+      speak(ok, { interrupt: true });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Could not save favorite.';
+      setFavoriteStatus(message);
+      speak(message, { interrupt: true });
+    } finally {
+      favoriteInFlightRef.current = false;
+      setFavoriteSaving(false);
+    }
+  }, [documentId, articleId, articleHeading, speak, cancel]);
+
   // Auto-start voice recording when entering voice mode
   useEffect(() => {
     cancel();
@@ -62,7 +92,7 @@ export const DocumentQA = ({
     if (mode === 'voice' && !hasAutoStarted) {
       setHasAutoStarted(true);
       speak(
-        'Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press Escape to go back. Recording will start automatically in 2 seconds.',
+        'Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press S to save this article to favorites when not typing in the question box. Press Escape to go back. Recording will start automatically in 2 seconds.',
         {
           interrupt: true,
           onEnd: () => {
@@ -109,6 +139,15 @@ export const DocumentQA = ({
         }
       }
 
+      // S: save article to favorites (not while typing in the question box)
+      if (e.key === 's' || e.key === 'S') {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+        if (!documentId || !articleId) return;
+        e.preventDefault();
+        void saveArticleToFavorites();
+      }
+
       // Escape to go back
       if (e.key === 'Escape') {
         e.preventDefault();
@@ -118,7 +157,18 @@ export const DocumentQA = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isRecording, isLoading, question, currentAnswer, onBack, speak, cancel]);
+  }, [
+    isRecording,
+    isLoading,
+    question,
+    currentAnswer,
+    onBack,
+    speak,
+    cancel,
+    documentId,
+    articleId,
+    saveArticleToFavorites,
+  ]);
 
   useEffect(() => {
     if (transcript && !isListening) {
@@ -259,6 +309,34 @@ export const DocumentQA = ({
           </div>
         </Card>
       )}
+
+      <Card className="p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">Save this article</p>
+            <p className="text-sm text-muted-foreground">
+              Adds the current article to shared favorites. Shortcut: S (when not typing)
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="min-h-[48px] gap-2 shrink-0"
+            disabled={favoriteSaving || !documentId || !articleId}
+            onClick={() => void saveArticleToFavorites()}
+            aria-label="Save article to favorites. Keyboard S when not in question box."
+          >
+            <Bookmark className="h-5 w-5" aria-hidden="true" />
+            {favoriteSaving ? 'Saving…' : 'Save to favorites'}
+          </Button>
+        </div>
+        {favoriteStatus && (
+          <p className="mt-3 text-sm" role="status" aria-live="polite">
+            {favoriteStatus}
+          </p>
+        )}
+      </Card>
 
       {/* Q&A API Error */}
       {qaError && (
