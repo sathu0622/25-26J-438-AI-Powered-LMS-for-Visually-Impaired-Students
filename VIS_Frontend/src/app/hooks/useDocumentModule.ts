@@ -25,6 +25,15 @@ export interface DocumentModuleState {
   documentSummary: string;
   selectedArticleId: string | null;
 
+  /**
+   * When non-null, Q&A uses this stored passage (e.g. Mongo `full_content` from favorites)
+   * and the summary view does not call /summarize-article when switching articles.
+   */
+  qaContextFullText: string | null;
+
+  /** True when a favorite was opened with a summary but no `full_content` (Q&A may not work). */
+  favoriteStoredPassageMissing: boolean;
+
   // Q&A mode
   qaMode: 'voice' | 'text';
 
@@ -40,6 +49,8 @@ export const useDocumentModule = () => {
     documentResult: null,
     documentSummary: '',
     selectedArticleId: null,
+    qaContextFullText: null,
+    favoriteStoredPassageMissing: false,
     qaMode: 'voice',
     error: null,
   });
@@ -57,6 +68,8 @@ export const useDocumentModule = () => {
       documentResult: null,
       documentSummary: '',
       selectedArticleId: null,
+      qaContextFullText: null,
+      favoriteStoredPassageMissing: false,
     }));
 
     try {
@@ -77,6 +90,8 @@ export const useDocumentModule = () => {
         documentResult: result,
         documentSummary: initialSummary,
         selectedArticleId: defaultArticleId,
+        qaContextFullText: null,
+        favoriteStoredPassageMissing: false,
         screen: 'summary',
         isLoading: false,
       }));
@@ -110,6 +125,20 @@ export const useDocumentModule = () => {
     });
 
     if (!documentId) return;
+    let skipSummarize = false;
+
+    setState((prev) => {
+      documentId = prev.documentResult?.document_id;
+      skipSummarize =
+        typeof prev.qaContextFullText === 'string' &&
+        prev.qaContextFullText.length > 0;
+      return {
+        ...prev,
+        selectedArticleId: articleId,
+      };
+    });
+
+    if (!documentId || skipSummarize) return;
 
     try {
       const summaryData = await documentService.summarizeArticle(
@@ -138,6 +167,10 @@ export const useDocumentModule = () => {
    * Open a favorite when the document is still available on the document server (in-memory session).
    */
   const handleOpenFavorite = useCallback(async (favorite: FavoriteArticle) => {
+   * Open a favorite using persisted summary and full text from the favorites API (Mongo),
+   * without calling /articles or /summarize-article on the document service.
+   */
+  const handleOpenFavorite = useCallback((favorite: FavoriteArticle) => {
     setState((prev) => ({
       ...prev,
       error: null,
@@ -168,6 +201,32 @@ export const useDocumentModule = () => {
         document_id: listData.document_id,
         article_list: articleList,
         summaries: [{ summary: summaryData.summary || '' }],
+      const summaryText = (favorite.summary ?? '').trim();
+      const fullText = (favorite.full_content ?? '').trim();
+
+      if (!summaryText && !fullText) {
+        throw new Error(
+          'This favorite has no saved summary or article text. Save the article again from a processed document.'
+        );
+      }
+
+      const wordCount = fullText
+        ? fullText.split(/\s+/).filter(Boolean).length
+        : 0;
+
+      const documentResult: DocumentProcessResponse = {
+        document_id: favorite.document_id,
+        article_list: [
+          {
+            index: 1,
+            article_id: favorite.article_id,
+            heading: favorite.heading || 'Saved article',
+            subheading: favorite.subheading || '',
+            column: 'favorite',
+            word_count: wordCount,
+          },
+        ],
+        summaries: [{ summary: summaryText }],
       };
 
       setState({
@@ -177,6 +236,10 @@ export const useDocumentModule = () => {
         documentResult,
         documentSummary: summaryData.summary || '',
         selectedArticleId: favorite.article_id,
+        documentSummary: summaryText || 'No summary was stored for this favorite.',
+        selectedArticleId: favorite.article_id,
+        qaContextFullText: fullText || null,
+        favoriteStoredPassageMissing: Boolean(summaryText) && !fullText,
         qaMode: 'voice',
         error: null,
       });
@@ -185,6 +248,7 @@ export const useDocumentModule = () => {
         err instanceof Error
           ? err.message
           : 'Could not open this favorite. The document may have expired on the server; upload it again.';
+          : 'Could not open this favorite.';
 
       setState((prev) => ({
         ...prev,
@@ -227,6 +291,8 @@ export const useDocumentModule = () => {
       documentResult: null,
       documentSummary: '',
       selectedArticleId: null,
+      qaContextFullText: null,
+      favoriteStoredPassageMissing: false,
       qaMode: 'voice',
       error: null,
     });
