@@ -8,16 +8,16 @@ from utils import (
     length_penalty
 )
 from logger_config import logger
-from rag_retriever import retrieve_context
+from rag_retriever import retrieve_context, retrieve_topic_info
 
 # =========================
-# CACHE (IMPORTANT FIX)
+# CACHE
 # =========================
 _context_cache = {}
 
 
 # =========================
-# CLEANING FUNCTION
+# CLEAN TEXT
 # =========================
 def clean_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
@@ -27,13 +27,49 @@ def clean_text(text: str) -> str:
 
 
 # =========================
-# RAG ANSWER GENERATION
+# EXTRACT KEY POINTS
+# =========================
+def extract_key_points(text):
+    parts = re.split(r'[.;]', text)
+    return [p.strip() for p in parts if len(p.strip()) > 20]
+
+
+# =========================
+# FIND MISSING POINTS
+# =========================
+def find_missing_points(correct_answer, student_answer, sbert_model, threshold=70):
+    correct_points = extract_key_points(correct_answer)
+    student_points = extract_key_points(student_answer)
+
+    missing = []
+
+    for cp in correct_points:
+        matched = False
+
+        for sp in student_points:
+            sim = semantic_similarity(cp, sp, sbert_model)
+
+            logger.info(f"COMPARE:\nMODEL: {cp}\nSTUDENT: {sp}\nSIMILARITY: {sim}")
+
+            if sim >= threshold:
+                matched = True
+                break
+
+        if not matched:
+            missing.append(cp)
+
+    logger.info(f"MISSING POINTS: {missing}")
+
+    return missing[:3]
+
+
+# =========================
+# GENERATE MODEL ANSWER
 # =========================
 def generate_correct_answer(question, tokenizer, model):
     torch.manual_seed(42)
     np.random.seed(42)
 
-    # 🔥 CACHE FIX (VERY IMPORTANT)
     if question in _context_cache:
         context = _context_cache[question]
     else:
@@ -109,7 +145,7 @@ ANSWER:
 
 
 # =========================
-# SCORING FUNCTION
+# SCORE CALCULATION
 # =========================
 def calculate_final_score(correct, student, sbert_model):
 
@@ -120,28 +156,89 @@ def calculate_final_score(correct, student, sbert_model):
     keyword = keyword_overlap_score(correct, student)
     jaccard = jaccard_similarity(correct, student)
 
-    # FIXED WEIGHTS (more realistic for essays)
     semantic_weighted = semantic * 0.70
     keyword_weighted = keyword * 0.20
     jaccard_weighted = jaccard * 0.10
 
     length_factor = length_penalty(correct, student)
-    length_factor = max(0.85, min(1.0, length_factor))  # stability clamp
 
     final = (semantic_weighted + keyword_weighted + jaccard_weighted) * length_factor
 
-    return round(final, 2), round(semantic_weighted, 2), round(keyword_weighted, 2), round(jaccard_weighted, 2)
+    return (
+        round(final, 2),
+        round(semantic_weighted, 2),
+        round(keyword_weighted, 2),
+        round(jaccard_weighted, 2)
+    )
 
 
 # =========================
-# FEEDBACK
+# FEEDBACK GENERATION
 # =========================
-def generate_feedback(score):
+def generate_feedback(score, correct_answer, student_answer, question, sbert_model):
+
+    missing_points = find_missing_points(correct_answer, student_answer, sbert_model)
+
+    # Fetch relevant chapter and topic from RAG for further study suggestion
+    chapter, topic = retrieve_topic_info(question)
+
+    further_study = ""
+    if chapter or topic:
+        further_study += "\n\n📚 Further Study Recommendation:\n"
+        if chapter:
+            further_study += f"  • Chapter : {chapter}\n"
+        if topic:
+            further_study += f"  • Topic   : {topic}\n"
+        further_study += "  Review this section in your textbook to strengthen your understanding."
+
+    # ── PASS ──────────────────────────────────────────────────────────────────
     if score >= 75:
-        return "Excellent answer. You have demonstrated a strong and accurate understanding of the historical topic."
+        return (
+            f"Excellent answer (Score: {score}%). "
+            "You have demonstrated a strong and accurate understanding of the topic."
+            + further_study
+        )
+
+    # ── NEEDS IMPROVEMENT ─────────────────────────────────────────────────────
     elif score >= 45:
-        return "Good attempt. You have shown a basic understanding, but some key points are missing or incomplete."
-    return "Limited understanding. Revise key facts and events before attempting again."
+        feedback = (
+            f"Good attempt (Score: {score}%). "
+            "You identified some main points, but important supporting historical details are missing.\n\n"
+        )
+
+        if missing_points:
+            feedback += "Try to include the following points:\n"
+            for i, point in enumerate(missing_points, 1):
+                feedback += f"  {i}. {point}\n"
+        else:
+            feedback += (
+                "Try to include more specific historical examples, "
+                "key dates, names, and events related to the topic.\n"
+            )
+
+        feedback += "\nImprove your explanation by adding clearer supporting details."
+        feedback += further_study
+        return feedback
+
+    # ── FAIL ──────────────────────────────────────────────────────────────────
+    else:
+        feedback = (
+            f"Your answer shows limited understanding of the topic (Score: {score}%).\n\n"
+        )
+
+        if missing_points:
+            feedback += "Important points that are missing from your answer:\n"
+            for i, point in enumerate(missing_points, 1):
+                feedback += f"  {i}. {point}\n"
+        else:
+            feedback += (
+                "Your answer is missing major historical causes and supporting facts. "
+                "Make sure to cover the key events and their significance.\n"
+            )
+
+        feedback += "\nRevise the lesson thoroughly and rewrite your answer with the main points and examples."
+        feedback += further_study
+        return feedback
 
 
 # =========================
@@ -151,13 +248,11 @@ def evaluate_student_answer(question, student_answer, tokenizer, model, sbert):
 
     correct_answer = generate_correct_answer(question, tokenizer, model)
 
-    final, semantic, keyword, jaccard = calculate_final_score(
-        correct_answer,
-        student_answer,
-        sbert
-    )
+    final, semantic, keyword, jaccard = calculate_final_score(correct_answer, student_answer, sbert)
 
     status = "PASS" if final >= 75 else "NEEDS IMPROVEMENT" if final >= 45 else "FAIL"
+
+    feedback = generate_feedback(final, correct_answer, student_answer, question, sbert)
 
     return {
         "question": question,
@@ -168,5 +263,5 @@ def evaluate_student_answer(question, student_answer, tokenizer, model, sbert):
         "keyword_match": keyword,
         "jaccard_similarity": jaccard,
         "status": status,
-        "feedback": generate_feedback(final)
+        "feedback": feedback
     }
