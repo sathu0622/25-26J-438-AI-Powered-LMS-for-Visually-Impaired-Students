@@ -20,7 +20,9 @@ huggingface-hub>=0.34.0,<1.0.0
 azure-ai-formrecognizer 
 pillow
 azure-core
-pymongo
+pymongo>=4.6
+dnspython>=2.0
+certifi>=2024.0.0
 
 paddleocr>=2.7.0
 paddlepaddle>=2.6.0

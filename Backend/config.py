@@ -49,6 +49,18 @@ AZURE_KEY = os.getenv("AZURE_KEY")
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")
 MONGODB_DB_NAME = os.getenv("MONGODB_DB_NAME", "lms_db")
 MONGODB_FAVORITES_COLLECTION = os.getenv("MONGODB_FAVORITES_COLLECTION", "favorite_articles")
+# Optional: path to PEM CA bundle (overrides certifi for Atlas TLS)
+MONGODB_TLS_CA_FILE = os.getenv("MONGODB_TLS_CA_FILE", "").strip()
+# Optional: server selection timeout in ms (default 10000 for Atlas cold start / slow networks)
+MONGODB_SERVER_SELECTION_TIMEOUT_MS = int(
+    os.getenv("MONGODB_SERVER_SELECTION_TIMEOUT_MS", "10000")
+)
+# Optional: "1" only for debugging MITM/firewall issues — not for production
+MONGODB_TLS_INSECURE = os.getenv("MONGODB_TLS_INSECURE", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 # Q&A Model Configuration
 QA_MODEL_NAME = "distilbert-base-cased-distilled-squad"

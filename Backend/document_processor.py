@@ -225,7 +225,8 @@ def process_document(
             "resource_type": resource_type,
             "structured_articles": structured_articles,
             "full_text": full_text,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
+            "summaries": summaries,
         }
         
         result = {

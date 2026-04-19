@@ -8,12 +8,12 @@ import tempfile
 import subprocess
 import sys
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from config import processed_documents
 from models import load_all_models
 from document_processor import process_document
-from summarizer import summarize_specific_article
+from summarizer import summarize_specific_article, summarize_text
 from qa_system import answer_question_for_article
 from favorite_articles import get_favorite_store
 
@@ -38,6 +38,63 @@ class QAResponse(BaseModel):
 class FavoriteArticleRequest(BaseModel):
     document_id: str = Field(..., description="Document ID from processing")
     article_id: str = Field(..., description="Article ID to save as favorite")
+    summary: Optional[str] = Field(
+        None,
+        description="Optional summary text to persist (e.g. current UI summary). "
+        "If omitted, the server uses cached summary from processing/summarize-article when available.",
+    )
+
+
+def _article_full_text(article: Dict[str, Any]) -> str:
+    text = (article.get("full_text") or "").strip()
+    if text:
+        return text
+    parts: List[str] = []
+    if article.get("heading"):
+        parts.append(str(article["heading"]))
+    if article.get("subheading"):
+        parts.append(str(article["subheading"]))
+    body = article.get("body")
+    if body:
+        parts.append("\n".join(filter(None, body)))
+    return "\n".join(parts).strip()
+
+
+def _summary_from_document_cache(document_data: Dict[str, Any], article_id: str) -> str:
+    for entry in document_data.get("summaries") or []:
+        if entry.get("article_id") == article_id:
+            return (entry.get("summary") or "").strip()
+    return ""
+
+
+def _upsert_article_summary_cache(
+    document_id: str,
+    article_id: str,
+    summary: str,
+    heading: str = "",
+    subheading: str = "",
+) -> None:
+    doc = processed_documents.get(document_id)
+    if not doc:
+        return
+    summaries = doc.setdefault("summaries", [])
+    for item in summaries:
+        if item.get("article_id") == article_id:
+            item["summary"] = summary
+            if heading:
+                item["heading"] = heading
+            if subheading is not None:
+                item["subheading"] = subheading
+            return
+    summaries.append(
+        {
+            "article_id": article_id,
+            "heading": heading or "No heading",
+            "subheading": subheading or "",
+            "summary": summary,
+            "is_main": False,
+        }
+    )
 
 class FavoriteArticleDeleteRequest(BaseModel):
     document_id: str = Field(..., description="Document ID of favorite article")
@@ -177,6 +234,13 @@ async def summarize_specific_article_endpoint(
         if article_id == "full_document":
             # Summarize the full document
             summary = summarize_text(full_text, resource_type, models["summ_tokenizer"], models["summ_model"])
+            _upsert_article_summary_cache(
+                document_id,
+                article_id,
+                summary,
+                "Full Document",
+                "Complete extracted text",
+            )
             return {
                 "document_id": document_id,
                 "article_id": article_id,
@@ -211,7 +275,14 @@ async def summarize_specific_article_endpoint(
     # Add document info
     result["document_id"] = document_id
     result["resource_type"] = resource_type
-    
+    _upsert_article_summary_cache(
+        document_id,
+        result.get("article_id", article_id),
+        result.get("summary", ""),
+        result.get("heading", "") or "",
+        result.get("subheading", "") or "",
+    )
+
     return JSONResponse(content=result)
 
 @app.post("/ask-question")
@@ -339,11 +410,13 @@ async def add_favorite_article(request: FavoriteArticleRequest):
                 detail="Only 'full_document' can be favorited for this document."
             )
         full_text = document_data.get("full_text", "")
+        body_preview = full_text[:150] + "..." if len(full_text) > 150 else full_text
         article_to_store.update(
             {
                 "heading": "Full Document",
                 "subheading": "Complete extracted text",
-                "body_preview": full_text[:150] + "..." if len(full_text) > 150 else full_text,
+                "body_preview": body_preview,
+                "full_content": full_text,
             }
         )
     else:
@@ -359,6 +432,7 @@ async def add_favorite_article(request: FavoriteArticleRequest):
                 detail=f"Article '{request.article_id}' not found in document '{request.document_id}'."
             )
 
+        full_content = _article_full_text(target_article)
         body_preview = " ".join(target_article.get("body", [])[:2])[:150]
         if body_preview:
             body_preview += "..."
@@ -368,8 +442,45 @@ async def add_favorite_article(request: FavoriteArticleRequest):
                 "heading": target_article.get("heading", "No heading") or "No heading",
                 "subheading": target_article.get("subheading", "") or "",
                 "body_preview": body_preview,
+                "full_content": full_content,
             }
         )
+
+    summary_text = (request.summary or "").strip()
+    if not summary_text:
+        summary_text = _summary_from_document_cache(document_data, request.article_id)
+    if not summary_text and models.get("summ_tokenizer") and models.get("summ_model"):
+        if not structured_articles and request.article_id == "full_document":
+            ft = document_data.get("full_text", "")
+            if ft.strip():
+                summary_text = summarize_text(
+                    ft, resource_type, models["summ_tokenizer"], models["summ_model"]
+                )
+                _upsert_article_summary_cache(
+                    request.document_id,
+                    request.article_id,
+                    summary_text,
+                    "Full Document",
+                    "Complete extracted text",
+                )
+        elif structured_articles:
+            summ_result = summarize_specific_article(
+                structured_articles,
+                request.article_id,
+                resource_type,
+                models["summ_tokenizer"],
+                models["summ_model"],
+            )
+            if "error" not in summ_result:
+                summary_text = summ_result.get("summary") or ""
+                _upsert_article_summary_cache(
+                    request.document_id,
+                    request.article_id,
+                    summary_text,
+                    article_to_store.get("heading", "") or "",
+                    article_to_store.get("subheading", "") or "",
+                )
+    article_to_store["summary"] = summary_text
 
     try:
         saved = favorite_store.add_favorite(article_to_store)
