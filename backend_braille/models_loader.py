@@ -29,7 +29,7 @@ def load_models():
         base_model = AutoModelForCausalLM.from_pretrained(
             BASE_MODEL,
             quantization_config=bnb_config,
-            device_map="sequential",    # Helps load large models on limited GPU memory
+            device_map="auto",    # Helps load large models on limited GPU memory
             torch_dtype=torch.float16,  #Speeds up inference and reduces memory usage
             token=HF_TOKEN,
             low_cpu_mem_usage=True  #Optimizes CPU memory while loading the model
