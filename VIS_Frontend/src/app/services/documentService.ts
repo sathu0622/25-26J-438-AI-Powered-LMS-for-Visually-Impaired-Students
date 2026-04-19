@@ -108,6 +108,7 @@ export const documentService = {
   },
 
   /**
+   * Ask a question about the document/article
    * Ask a question about the document/article.
    * When `fullContentFromStore` is set (e.g. opened from Mongo-backed favorites), it is sent as `full_content`
    * so the document service can run Q&A on stored text without requiring the document to still be in memory.
@@ -117,6 +118,7 @@ export const documentService = {
     articleId: string,
     question: string,
     maxAnswerLen: number = 128,
+    scoreThreshold: number = 0.08
     scoreThreshold: number = 0.08,
     fullContentFromStore?: string
   ): Promise<QAResponse> {

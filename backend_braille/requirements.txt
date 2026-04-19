@@ -25,3 +25,6 @@ pymupdf>=1.23.0
 # The code will automatically work without it (no quantization)
 # For Linux/WSL, you can optionally install: pip install bitsandbytes
 
+chromadb
+pandas
+openpyxl

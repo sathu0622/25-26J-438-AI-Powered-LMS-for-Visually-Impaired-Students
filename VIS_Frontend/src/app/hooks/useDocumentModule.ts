@@ -115,6 +115,16 @@ export const useDocumentModule = () => {
    */
   const handleSelectArticle = useCallback(async (articleId: string) => {
     let documentId: string | undefined;
+
+    setState((prev) => {
+      documentId = prev.documentResult?.document_id;
+      return {
+        ...prev,
+        selectedArticleId: articleId,
+      };
+    });
+
+    if (!documentId) return;
     let skipSummarize = false;
 
     setState((prev) => {
@@ -154,6 +164,9 @@ export const useDocumentModule = () => {
   }, []);
 
   /**
+   * Open a favorite when the document is still available on the document server (in-memory session).
+   */
+  const handleOpenFavorite = useCallback(async (favorite: FavoriteArticle) => {
    * Open a favorite using persisted summary and full text from the favorites API (Mongo),
    * without calling /articles or /summarize-article on the document service.
    */
@@ -165,6 +178,29 @@ export const useDocumentModule = () => {
     }));
 
     try {
+      const listData = await documentService.getArticlesList(
+        favorite.document_id
+      );
+      const articleList = documentService.articlesResponseToArticleList(listData);
+
+      const stillThere = articleList.some(
+        (a) => a.article_id === favorite.article_id
+      );
+      if (!stillThere) {
+        throw new Error(
+          'This article is no longer available for that document on the server. Upload and process the file again, then save the favorite again.'
+        );
+      }
+
+      const summaryData = await documentService.summarizeArticle(
+        favorite.document_id,
+        favorite.article_id
+      );
+
+      const documentResult: DocumentProcessResponse = {
+        document_id: listData.document_id,
+        article_list: articleList,
+        summaries: [{ summary: summaryData.summary || '' }],
       const summaryText = (favorite.summary ?? '').trim();
       const fullText = (favorite.full_content ?? '').trim();
 
@@ -198,6 +234,8 @@ export const useDocumentModule = () => {
         uploadedFile: null,
         isLoading: false,
         documentResult,
+        documentSummary: summaryData.summary || '',
+        selectedArticleId: favorite.article_id,
         documentSummary: summaryText || 'No summary was stored for this favorite.',
         selectedArticleId: favorite.article_id,
         qaContextFullText: fullText || null,
@@ -209,6 +247,7 @@ export const useDocumentModule = () => {
       const message =
         err instanceof Error
           ? err.message
+          : 'Could not open this favorite. The document may have expired on the server; upload it again.';
           : 'Could not open this favorite.';
 
       setState((prev) => ({

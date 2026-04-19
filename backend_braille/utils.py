@@ -40,4 +40,4 @@ def length_penalty(correct, student):
     elif 90 <= length <= 150:
         return 0.75
     else:
-        return 0.4
+        return 0.2
