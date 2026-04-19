@@ -18,6 +18,10 @@ export interface FavoriteArticle {
   heading?: string;
   subheading?: string;
   body_preview?: string;
+  /** Persisted summary from the document service / Mongo (used instead of re-summarizing). */
+  summary?: string;
+  /** Full article text stored in Mongo for Q&A without relying on in-memory /process state. */
+  full_content?: string;
   resource_type?: string;
   created_at?: string;
   updated_at?: string;

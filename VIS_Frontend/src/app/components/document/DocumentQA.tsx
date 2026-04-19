@@ -25,6 +25,10 @@ interface DocumentQAProps {
   documentId: string;
   articleId: string | null;
   articleHeading?: string;
+  /** Mongo-backed passage for favorites; sent as `full_content` on /ask-question. */
+  qaContextFullText?: string | null;
+  /** Favorite opened from DB without stored full text (Q&A may require re-save). */
+  favoriteStoredPassageMissing?: boolean;
 }
 
 export const DocumentQA = ({
@@ -33,6 +37,8 @@ export const DocumentQA = ({
   documentId,
   articleId,
   articleHeading,
+  qaContextFullText = null,
+  favoriteStoredPassageMissing = false,
 }: DocumentQAProps) => {
   const [question, setQuestion] = useState('');
   const [qaHistory, setQaHistory] = useState<QAItem[]>([]);
@@ -184,12 +190,14 @@ export const DocumentQA = ({
     setQaError(null);
 
     try {
+      const passage = qaContextFullText?.trim();
       const qaData = await documentService.askQuestion(
         documentId,
         articleId,
         question,
         64,
-        0.15
+        0.15,
+        passage || undefined
       );
 
       const timestamp = new Date().toLocaleTimeString();
@@ -275,6 +283,16 @@ export const DocumentQA = ({
           </p>
         </div>
       </div>
+
+      {favoriteStoredPassageMissing && (
+        <Card className="border-amber-500/50 bg-amber-500/10 p-4">
+          <p className="text-sm leading-relaxed">
+            This favorite has no saved full article text in the database. Questions may
+            only work if the original document is still loaded on the server. Re-save the
+            favorite from a processed document to store full text for Q&A.
+          </p>
+        </Card>
+      )}
 
       {/* Speech Recognition Error */}
       {speechError && mode === 'voice' && (

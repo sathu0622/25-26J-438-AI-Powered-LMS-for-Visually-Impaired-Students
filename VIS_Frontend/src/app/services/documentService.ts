@@ -108,21 +108,28 @@ export const documentService = {
   },
 
   /**
-   * Ask a question about the document/article
+   * Ask a question about the document/article.
+   * When `fullContentFromStore` is set (e.g. opened from Mongo-backed favorites), it is sent as `full_content`
+   * so the document service can run Q&A on stored text without requiring the document to still be in memory.
    */
   async askQuestion(
     documentId: string,
     articleId: string,
     question: string,
     maxAnswerLen: number = 128,
-    scoreThreshold: number = 0.08
+    scoreThreshold: number = 0.08,
+    fullContentFromStore?: string
   ): Promise<QAResponse> {
-    return documentApi.post<QAResponse>(`${DOCUMENT_PREFIX}/ask-question`, {
+    const body: Record<string, any> = {
       document_id: documentId,
       article_id: articleId,
       question,
       max_answer_len: maxAnswerLen,
       score_threshold: scoreThreshold,
-    });
+    };
+    if (fullContentFromStore?.trim()) {
+      body.full_content = fullContentFromStore.trim();
+    }
+    return documentApi.post<QAResponse>(`${DOCUMENT_PREFIX}/ask-question`, body);
   },
 };

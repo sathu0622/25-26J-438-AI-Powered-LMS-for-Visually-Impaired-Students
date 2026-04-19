@@ -17,6 +17,8 @@ export const DocumentModule = () => {
     documentResult,
     documentSummary,
     selectedArticleId,
+    qaContextFullText,
+    favoriteStoredPassageMissing,
     qaMode,
     error,
     isLoading,
@@ -77,8 +79,11 @@ export const DocumentModule = () => {
           documentId={documentResult?.document_id ?? ''}
           articleId={selectedArticleId ?? null}
           articleHeading={documentResult?.article_list?.find(
-            (article: any) => article.article_id === selectedArticleId
+            (article: { article_id?: string }) =>
+              article.article_id === selectedArticleId
           )?.heading}
+          qaContextFullText={qaContextFullText}
+          favoriteStoredPassageMissing={favoriteStoredPassageMissing}
         />
       )}
     </>
