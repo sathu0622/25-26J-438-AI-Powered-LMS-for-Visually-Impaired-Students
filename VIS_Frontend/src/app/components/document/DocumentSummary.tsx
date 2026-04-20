@@ -16,7 +16,9 @@ interface ArticleInfo {
 }
 
 interface DocumentSummaryProps {
+  documentId: string;
   summary: string;
+  syllabusMatchMessage?: string | null;
   onAskQuestion: (mode: 'voice' | 'text') => void;
   articles?: ArticleInfo[];
   selectedArticleId?: string | null;
@@ -26,6 +28,7 @@ interface DocumentSummaryProps {
 export const DocumentSummary = ({
   documentId,
   summary,
+  syllabusMatchMessage = null,
   onAskQuestion,
   articles,
   selectedArticleId,
@@ -42,6 +45,7 @@ export const DocumentSummary = ({
   const hasScheduledInitialRef = useRef(false);
   /** Track last spoken summary so we only read when API returns new content (not the stale one). */
   const lastSpokenSummaryRef = useRef<string>('');
+  const lastSpokenSyllabusRef = useRef<string>('');
 
   // Single initial voice sequence: intro → articles (if any) → "Reading summary..." → summary (once on mount)
   useEffect(() => {
@@ -119,6 +123,15 @@ export const DocumentSummary = ({
       onEnd: () => speak(trimmed, { interrupt: false }),
     });
   }, [summary, speak, cancel]);
+
+  // Announce syllabus topic only when article is in syllabus (non-empty message).
+  useEffect(() => {
+    const msg = (syllabusMatchMessage || '').trim();
+    if (!msg) return;
+    if (msg === lastSpokenSyllabusRef.current) return;
+    lastSpokenSyllabusRef.current = msg;
+    speak(msg, { interrupt: false });
+  }, [syllabusMatchMessage, speak]);
 
   const saveCurrentArticleToFavorites = useCallback(async () => {
     if (!documentId || !selectedArticleId || favoriteInFlightRef.current) return;
@@ -324,6 +337,15 @@ export const DocumentSummary = ({
 
       {/* Audio Player */}
       <AudioPlayer text={summary} autoPlay={false} />
+
+      {/* Syllabus Classification (shown only if article belongs to syllabus) */}
+      {syllabusMatchMessage && (
+        <Card className="border-emerald-500/50 bg-emerald-500/10 p-4">
+          <p className="text-sm leading-relaxed" role="status" aria-live="polite">
+            {syllabusMatchMessage}
+          </p>
+        </Card>
+      )}
 
       {/* Save to favorites */}
       <Card className="p-4 space-y-3">

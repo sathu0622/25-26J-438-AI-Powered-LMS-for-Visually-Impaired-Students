@@ -39,6 +39,28 @@ export interface QAResponse {
   context_preview?: string;
 }
 
+export interface SyllabusMatchResponse {
+  document_id: string;
+  article_id: string;
+  resource_type?: string;
+  result: {
+    in_syllabus: boolean;
+    confidence: number;
+    match: {
+      chapter: string;
+      grade_topic: string;
+      original_text: string;
+    } | null;
+    alternatives: Array<{
+      chapter: string;
+      grade_topic: string;
+      confidence: number;
+    }>;
+    method?: string;
+  };
+  timestamp?: string;
+}
+
 /** GET /articles/{document_id} */
 export interface ArticlesListResponse {
   document_id: string;
@@ -118,7 +140,6 @@ export const documentService = {
     articleId: string,
     question: string,
     maxAnswerLen: number = 128,
-    scoreThreshold: number = 0.08
     scoreThreshold: number = 0.08,
     fullContentFromStore?: string
   ): Promise<QAResponse> {
@@ -133,5 +154,20 @@ export const documentService = {
       body.full_content = fullContentFromStore.trim();
     }
     return documentApi.post<QAResponse>(`${DOCUMENT_PREFIX}/ask-question`, body);
+  },
+
+  /**
+   * Classify an article against the syllabus and return topic/chapter match.
+   */
+  async matchSyllabus(
+    documentId: string,
+    articleId: string,
+    threshold: number = 0.12
+  ): Promise<SyllabusMatchResponse> {
+    return documentApi.post<SyllabusMatchResponse>(`${DOCUMENT_PREFIX}/syllabus-match`, {
+      document_id: documentId,
+      article_id: articleId,
+      threshold,
+    });
   },
 };
