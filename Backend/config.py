@@ -7,7 +7,7 @@ from typing import Dict, Any
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv(override=True)
 
 BASE_DIR = Path(__file__).parent
 MODEL_DIR = BASE_DIR / "Model"
@@ -42,8 +42,9 @@ IMG_SIZE = (224, 224)
 CLASS_NAMES = ['Books', 'Magazine', 'Newspapers']
 
 # Azure Document Intelligence Configuration
-AZURE_ENDPOINT = os.getenv("AZURE_ENDPOINT")
-AZURE_KEY = os.getenv("AZURE_KEY")
+AZURE_ENDPOINT = (os.getenv("AZURE_ENDPOINT") or "").strip()
+AZURE_KEY = (os.getenv("AZURE_KEY") or "").strip()
+GEMINI_API_KEY = (os.getenv("GEMINI_API_KEY") or "").strip()
 
 # MongoDB configuration
 MONGODB_URI = os.getenv("MONGODB_URI", "mongodb://localhost:27017")

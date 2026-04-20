@@ -13,6 +13,7 @@ from pdf2image import convert_from_path
 from config import IMG_SIZE, CLASS_NAMES, processed_documents
 from ocr_processor import extract_text_book
 from azure_processor import extract_with_azure
+from gemini_extractor import extract_with_gemini
 from summarizer import summarize_text, summarize_specific_article
 
 def predict_resource_type(img_path: str, type_model) -> tuple[str, float]:
@@ -31,6 +32,13 @@ def predict_resource_type(img_path: str, type_model) -> tuple[str, float]:
 
 def extract_text_with_strategy(input_path: str, resource_type: str) -> Dict[str, Any]:
     print(f"\nExtracting text for resource type: {resource_type}")
+
+    # Gemini first for all supported document types (PDF + images),
+    # while preserving the existing fallback pipeline.
+    gemini_result = extract_with_gemini(input_path, resource_type)
+    if gemini_result and gemini_result.get("full_text"):
+        print("✓ Gemini extraction successful")
+        return gemini_result
 
     # ===========================
     # 📰 NEWSPAPER / MAGAZINE
