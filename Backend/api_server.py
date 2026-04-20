@@ -8,6 +8,7 @@ import tempfile
 import subprocess
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 
 from config import processed_documents
@@ -16,6 +17,7 @@ from document_processor import process_document
 from summarizer import summarize_specific_article, summarize_text
 from qa_system import answer_question_for_article
 from favorite_articles import get_favorite_store
+from syllabus_matcher import SyllabusMatcher
 
 # Pydantic Models
 class QARequest(BaseModel):
@@ -100,6 +102,12 @@ class FavoriteArticleDeleteRequest(BaseModel):
     document_id: str = Field(..., description="Document ID of favorite article")
     article_id: str = Field(..., description="Article ID of favorite article")
 
+
+class SyllabusMatchRequest(BaseModel):
+    document_id: str = Field(..., description="Document ID from processing")
+    article_id: str = Field(..., description="Article ID to classify against syllabus")
+    threshold: float = Field(0.12, ge=0.0, le=1.0, description="Minimum confidence to mark as in syllabus")
+
 # Load models globally
 models = load_all_models()
 favorite_store = None
@@ -108,6 +116,10 @@ try:
     favorite_store = get_favorite_store()
 except Exception as exc:
     favorite_store_error = str(exc)
+
+syllabus_matcher = SyllabusMatcher(
+    Path(__file__).parent / "syllabus" / "Gr 10 11.xlsx"
+)
 
 app = FastAPI(title="Article Detection Document Processor with Q&A", version="6.0.0")
 
@@ -147,6 +159,7 @@ async def root():
             "POST /process": "Process a document and extract articles",
             "POST /summarize-article": "Summarize a specific article by ID or heading",
             "POST /ask-question": "Ask questions about a specific article",
+            "POST /syllabus-match": "Identify if an article belongs to syllabus chapter/topic",
             "POST /favorites": "Add an article to favorites (shared for all users)",
             "GET /favorites": "List all favorite articles (shared for all users)",
             "DELETE /favorites": "Remove an article from favorites",
@@ -329,6 +342,64 @@ async def ask_question_endpoint(
             status_code=500,
             detail=f"Internal server error: {str(e)[:100]}"
         )
+
+
+@app.post("/syllabus-match")
+async def syllabus_match_endpoint(request: SyllabusMatchRequest):
+    """Match one extracted article against chapter-wise syllabus from Excel."""
+    if request.document_id not in processed_documents:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Document ID {request.document_id} not found."
+        )
+
+    if syllabus_matcher.error:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Syllabus matcher unavailable: {syllabus_matcher.error}"
+        )
+
+    document_data = processed_documents[request.document_id]
+    structured_articles = document_data.get("structured_articles", [])
+    full_text = document_data.get("full_text", "")
+    target_article: Dict[str, Any]
+
+    if structured_articles:
+        target_article = next(
+            (a for a in structured_articles if a.get("article_id") == request.article_id),
+            {}
+        )
+        if not target_article:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Article '{request.article_id}' not found in document '{request.document_id}'."
+            )
+        article_text = _article_full_text(target_article)
+        heading = target_article.get("heading", "") or ""
+    else:
+        if request.article_id != "full_document":
+            raise HTTPException(
+                status_code=400,
+                detail="Only 'full_document' is valid for this document."
+            )
+        article_text = full_text
+        heading = "Full Document"
+
+    match_result = syllabus_matcher.match_article(
+        article_text=article_text,
+        article_heading=heading,
+        threshold=request.threshold,
+    )
+    if "error" in match_result:
+        raise HTTPException(status_code=400, detail=match_result["error"])
+
+    return {
+        "document_id": request.document_id,
+        "article_id": request.article_id,
+        "resource_type": document_data.get("resource_type", ""),
+        "result": match_result,
+        "timestamp": datetime.now().isoformat(),
+    }
 
 @app.get("/articles/{document_id}")
 async def get_articles_list(document_id: str):
