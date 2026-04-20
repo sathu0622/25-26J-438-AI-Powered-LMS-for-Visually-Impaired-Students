@@ -48,14 +48,11 @@ export const LessonPlayer = ({
   const [duration, setDuration] = useState(0);
   const [isRepeat, setIsRepeat] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
-  const [playbackSpeed, setPlaybackSpeed] = useState(0.8);
+  const [playbackSpeed, setPlaybackSpeed] = useState(0.9);
   const recognitionRef = useRef<any>(null);
   const isListeningRef = useRef(false);
   const restartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isComponentActiveRef = useRef(true);
-  const shouldAnnounceLoadRef = useRef(false);
-  const isGeneratingRef = useRef(false);
-  const lastParamsRef = useRef<{ grade: number; chapterIdx: number; topicIdx: number } | null>(null);
   const { speak, cancel } = useTTS();
 
   useEffect(() => {
@@ -67,22 +64,10 @@ export const LessonPlayer = ({
   }, [cancel]);
 
   useEffect(() => {
-    // Only generate if params changed and we're not already generating
-    const paramsChanged = !lastParamsRef.current ||
-      lastParamsRef.current.grade !== grade ||
-      lastParamsRef.current.chapterIdx !== chapterIdx ||
-      lastParamsRef.current.topicIdx !== topicIdx;
-
-    if (paramsChanged && !isGeneratingRef.current) {
-      isGeneratingRef.current = true;
-      lastParamsRef.current = { grade, chapterIdx, topicIdx };
-      cancel();
-      setHasAnnounced(false);
-      generateAudio().finally(() => {
-        isGeneratingRef.current = false;
-      });
-    }
-  }, [grade, chapterIdx, topicIdx]);
+    cancel();
+    setHasAnnounced(false);
+    generateAudio();
+  }, [grade, chapterIdx, topicIdx, cancel]);
 
   useEffect(() => {
     if (autoPlay && audioUrl && audioRef.current && !isLoading && !hasAnnounced) {
@@ -121,7 +106,7 @@ export const LessonPlayer = ({
       const audioBlob = await response.blob();
       const url = URL.createObjectURL(audioBlob);
       setAudioUrl(url);
-      shouldAnnounceLoadRef.current = true;
+      speakIfActive(`Audio generated successfully.`);
     } catch (err) {
       console.error('Audio generation error:', err);
       setAudioUrl(endpoint);
@@ -180,10 +165,6 @@ export const LessonPlayer = ({
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
       audioRef.current.playbackRate = playbackSpeed;
-      if (shouldAnnounceLoadRef.current) {
-        shouldAnnounceLoadRef.current = false;
-        speakIfActive('Audio generated successfully.');
-      }
     }
   };
 

@@ -32,7 +32,7 @@ ttsRouter.post('/tts', async (req, res) => {
     const audioBuffer = await synthesize(client, { ...input, lang });
     const audioBase64 = audioBuffer.toString('base64');
 
-    console.log('[TTS] Audio generated successfully. audio_base64 length=%d', audioBase64.length);
+    console.log('[TTS] Response: 200 OK, audio_base64 length=%d', audioBase64.length);
     res.json({
       audio_base64: audioBase64,
       content_type: 'audio/mp3',

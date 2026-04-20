@@ -22,6 +22,7 @@ GRADE11_CSV = os.path.join(DATA_DIR, "grade11_dataset.csv")
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "generated_output")
 MODEL_BASE_NAME = "google/flan-t5-small"
 MODEL_ADAPTER_DIR = os.path.join(PROJECT_DIR, "models", "lesson_multitask_lora")
+MODEL_PTH_PATH = os.path.join(MODEL_ADAPTER_DIR, "best_adapter.pth")
 
 # Mandatory external endpoint for this project.
 API_URL = "https://25-26-j-438-ai-powered-lms-for-visu.vercel.app/api/tts"
@@ -51,9 +52,25 @@ class LessonMultitaskModel:
             self._loaded = True
             return
 
+        print(f"[model] loading base model: {self.base_model}")
         tokenizer = AutoTokenizer.from_pretrained(self.base_model)
         base = AutoModelForSeq2SeqLM.from_pretrained(self.base_model)
+        print(f"[model] loading adapter directory: {self.adapter_dir}")
         model = PeftModel.from_pretrained(base, self.adapter_dir)
+
+        if os.path.isfile(MODEL_PTH_PATH):
+            print(f"[model] loading .pth checkpoint: {MODEL_PTH_PATH}")
+            adapter_state = torch.load(MODEL_PTH_PATH, map_location="cpu")
+            if isinstance(adapter_state, dict) and "adapter_state_dict" in adapter_state:
+                adapter_state = adapter_state["adapter_state_dict"]
+            if isinstance(adapter_state, dict):
+                missing_keys, unexpected_keys = model.load_state_dict(adapter_state, strict=False)
+                print(f"[model] .pth loaded: missing={len(missing_keys)} unexpected={len(unexpected_keys)}")
+            else:
+                print("[model] .pth file did not contain a state dict; skipping direct load")
+        else:
+            print(f"[model] .pth checkpoint not found: {MODEL_PTH_PATH}")
+
         model.eval()
 
         if torch.cuda.is_available():
@@ -537,12 +554,18 @@ def generate_audio_for_selection(
     lesson_data = get_lesson_data_by_indices(grade, chapter_idx, topic_idx).copy()
 
     if use_model:
+        print(f"[model] using model name: {MODEL_BASE_NAME}")
+        print(f"[model] using checkpoint file: {MODEL_PTH_PATH}")
+        print(
+            f"[model] preparing lesson model for audio generation: grade={grade}, chapter={chapter_idx}, topic={topic_idx}"
+        )
         topic_name = str(lesson_data.get("Grade/Topic", "")).strip()
         chapter_name = str(lesson_data.get("chapter", "")).strip()
         source_text = str(lesson_data.get("original_text") or lesson_data.get("simplified_text") or "")
 
         multitask_model = LessonMultitaskModel(adapter_dir=model_adapter_dir)
         if multitask_model.is_ready:
+            print("[model] lesson model is ready; generating narrative, emotion, and sound effects")
             predicted = multitask_model.generate_fields(
                 chapter=chapter_name,
                 topic=topic_name,
