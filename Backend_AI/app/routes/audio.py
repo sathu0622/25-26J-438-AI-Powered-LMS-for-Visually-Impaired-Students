@@ -3,19 +3,15 @@ from fastapi.responses import FileResponse
 import os
 from app.services.tts_service import tts_service
 from local_main import generate_audio_for_selection
+from datetime import datetime, timedelta
 
 
 router = APIRouter(prefix="/api/audio", tags=["audio"])
 
-
-def _get_generation_time() -> float:
-    """Read delay from env and clamp to [0, 10] seconds."""
-    raw_value = os.getenv("AUDIO_GENERATION_TIME", "1.5")
-    try:
-        delay = float(raw_value)
-    except ValueError:
-        delay = 1.5
-    return max(0.0, min(delay, 10.0))
+# Cache for recent audio generation requests to prevent duplicates
+# Format: {(grade, chapter_idx, topic_idx): (file_path, timestamp)}
+_audio_cache = {}
+CACHE_DURATION = timedelta(seconds=30)  # Cache for 30 seconds
 
 
 @router.post("/generate")
@@ -73,12 +69,22 @@ async def get_chapter_audio(
         Generated audio file for the topic with atmospheric sound effects
     """
     try:
-        print(f"📚 Requested audio for: grade={grade}, chapter={chapter_idx}, topic={topic_idx}")
+        cache_key = (grade, chapter_idx, topic_idx)
+        now = datetime.now()
         
-
-        # Optional short delay to preserve loading-state UX parity.
-        import asyncio
-        await asyncio.sleep(_get_generation_time())
+        # Check if we have a cached version
+        if cache_key in _audio_cache:
+            cached_path, cached_time = _audio_cache[cache_key]
+            if now - cached_time < CACHE_DURATION and os.path.exists(cached_path):
+                # Return cached audio without regenerating
+                return FileResponse(
+                    path=cached_path,
+                    media_type="audio/wav",
+                    filename=f"lesson_{grade}_{chapter_idx}_{topic_idx}.wav"
+                )
+        
+        # Generate new audio
+        print(f"📚 Requested audio for: grade={grade}, chapter={chapter_idx}, topic={topic_idx}")
 
         audio_path = generate_audio_for_selection(
             grade=grade,
@@ -88,6 +94,9 @@ async def get_chapter_audio(
             emotion_intensity=emotion_intensity,
             use_model=use_model,
         )
+        
+        # Cache the result
+        _audio_cache[cache_key] = (audio_path, now)
         
         print(f"✅ Audio generated successfully: {audio_path}")
         

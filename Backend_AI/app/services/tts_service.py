@@ -11,7 +11,6 @@ class TTSService:
     def __init__(self):
         self.device = "cpu"
         self.model = None
-        self.load_model()
         
         # Map emotions to TTS adjustments
         self.emotion_prefixes = {
@@ -46,34 +45,12 @@ class TTSService:
             'construction': '[Construction sounds]'
         }
     
-    def load_model(self):
-        """Load the trained TTS model"""
-        model_path = "app/models/AI_History_Teacher_System.pth"
-        
-        try:
-            if os.path.exists(model_path):
-                if torch is None:
-                    print("⚠ PyTorch is not installed. Will use gTTS fallback.")
-                    return False
-                    
-                print(f"Loading trained model from {model_path}...")
-                checkpoint = torch.load(model_path, map_location=self.device)
-                self.model = checkpoint
-                print("✓ Model loaded successfully")
-                return True
-            else:
-                print(f"⚠ Model file not found at {model_path}")
-                print("Will use gTTS fallback for audio generation")
-                return False
-        except Exception as e:
-            print(f"Error loading model: {e}")
-            print("Will use gTTS fallback for audio generation")
-            return False
+    
     
     def generate_audio(self, text: str, output_path: str = "temp_audio.wav", 
                       emotion: str = "", sound_effects: str = "") -> str:
         """
-        Generate audio from text using trained model or fallback to gTTS
+        Generate audio from text using gTTS
         
         Args:
             text: Content to convert to speech
@@ -88,12 +65,8 @@ class TTSService:
             # Enhance text with emotion and sound effects
             enhanced_text = self._enhance_text_with_effects(text, emotion, sound_effects)
             
-            if self.model:
-                # Use trained model if available
-                return self._generate_with_trained_model(enhanced_text, output_path)
-            else:
-                # Fallback to gTTS
-                return self._generate_with_gtts(enhanced_text, output_path)
+            # Use gTTS for audio generation
+            return self._generate_with_gtts(enhanced_text, output_path)
         except Exception as e:
             print(f"Error in generate_audio: {e}")
             # Final fallback to gTTS with basic text
@@ -157,22 +130,6 @@ class TTSService:
         
         print(f"✨ Enhanced with emotion: {emotion}, sound effects: {sound_effects}")
         return enhanced_text
-    
-    def _generate_with_trained_model(self, text: str, output_path: str) -> str:
-        """Generate audio using the trained model"""
-        try:
-            # Placeholder: The exact usage depends on your model architecture
-            # This assumes the model can generate audio from text
-            
-            print(f"Generating audio with trained model...")
-            
-            # If your model is a custom TTS model, you would use it here
-            # For now, using gTTS as the model might need special inference code
-            return self._generate_with_gtts(text, output_path)
-            
-        except Exception as e:
-            print(f"Error with trained model: {e}")
-            return self._generate_with_gtts(text, output_path)
     
     def _generate_with_gtts(self, text: str, output_path: str) -> str:
         """Fallback: Generate audio using Google Text-to-Speech"""
