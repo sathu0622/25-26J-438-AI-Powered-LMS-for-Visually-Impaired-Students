@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 from dataclasses import dataclass
 from typing import Dict, List
@@ -49,7 +50,23 @@ def build_examples(df: pd.DataFrame) -> List[Dict[str, str]]:
     return examples
 
 
-def split_examples(examples: List[Dict[str, str]], val_ratio: float, seed: int) -> (pd.DataFrame, pd.DataFrame):
+def filter_rows(df: pd.DataFrame, chapter_query: str = "", topic_query: str = "") -> pd.DataFrame:
+    filtered = df.copy()
+
+    if chapter_query:
+        filtered = filtered[
+            filtered["chapter"].astype(str).str.contains(chapter_query, case=False, na=False)
+        ]
+
+    if topic_query:
+        filtered = filtered[
+            filtered["Grade/Topic"].astype(str).str.contains(topic_query, case=False, na=False)
+        ]
+
+    return filtered.reset_index(drop=True)
+
+
+def split_examples(examples: List[Dict[str, str]], val_ratio: float, seed: int) -> tuple[pd.DataFrame, pd.DataFrame]:
     df = pd.DataFrame(examples)
     if df.empty:
         raise ValueError("No training examples created. Check dataset columns and content.")
@@ -117,6 +134,7 @@ def train(args):
         AutoModelForSeq2SeqLM,
         AutoTokenizer,
         DataCollatorForSeq2Seq,
+        EarlyStoppingCallback,
         Seq2SeqTrainer,
         Seq2SeqTrainingArguments,
     )
@@ -125,7 +143,25 @@ def train(args):
     grade10 = load_grade_csv(args.grade10_csv)
     grade11 = load_grade_csv(args.grade11_csv)
 
-    all_examples = build_examples(grade10) + build_examples(grade11)
+    chapter_query = (args.focus_chapter or "").strip()
+    topic_query = (args.focus_topic or "").strip()
+
+    if args.focus_grade == "10":
+        selected_df = filter_rows(grade10, chapter_query=chapter_query, topic_query=topic_query)
+        all_examples = build_examples(selected_df)
+    elif args.focus_grade == "11":
+        selected_df = filter_rows(grade11, chapter_query=chapter_query, topic_query=topic_query)
+        all_examples = build_examples(selected_df)
+    else:
+        selected_grade10 = filter_rows(grade10, chapter_query=chapter_query, topic_query=topic_query)
+        selected_grade11 = filter_rows(grade11, chapter_query=chapter_query, topic_query=topic_query)
+        all_examples = build_examples(selected_grade10) + build_examples(selected_grade11)
+
+    if not all_examples:
+        raise ValueError(
+            "No training examples after filtering. Check --focus-grade/--focus-chapter/--focus-topic values."
+        )
+
     train_df, val_df = split_examples(all_examples, val_ratio=args.val_ratio, seed=args.seed)
 
     if args.max_train_samples > 0:
@@ -157,23 +193,34 @@ def train(args):
     data_collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model)
 
     fp16 = torch.cuda.is_available()
-    training_args = Seq2SeqTrainingArguments(
-        output_dir=args.output_dir,
-        per_device_train_batch_size=args.batch_size,
-        per_device_eval_batch_size=args.batch_size,
-        gradient_accumulation_steps=args.grad_accum,
-        learning_rate=args.learning_rate,
-        num_train_epochs=args.epochs,
-        logging_steps=20,
-        save_steps=100,
-        eval_steps=100,
-        eval_strategy="steps",
-        save_strategy="steps",
-        predict_with_generate=False,
-        report_to="none",
-        fp16=fp16,
-        dataloader_num_workers=0,
-    )
+    training_kwargs = {
+        "output_dir": args.output_dir,
+        "per_device_train_batch_size": args.batch_size,
+        "per_device_eval_batch_size": args.batch_size,
+        "gradient_accumulation_steps": args.grad_accum,
+        "learning_rate": args.learning_rate,
+        "num_train_epochs": args.epochs,
+        "logging_steps": 20,
+        "save_steps": 100,
+        "eval_steps": 100,
+        "save_strategy": "steps",
+        "load_best_model_at_end": True,
+        "metric_for_best_model": "eval_loss",
+        "greater_is_better": False,
+        "save_total_limit": args.save_total_limit,
+        "predict_with_generate": False,
+        "report_to": "none",
+        "fp16": fp16,
+        "dataloader_num_workers": 0,
+    }
+
+    init_varnames = Seq2SeqTrainingArguments.__init__.__code__.co_varnames
+    if "evaluation_strategy" in init_varnames:
+        training_kwargs["evaluation_strategy"] = "steps"
+    else:
+        training_kwargs["eval_strategy"] = "steps"
+
+    training_args = Seq2SeqTrainingArguments(**training_kwargs)
 
     trainer = Seq2SeqTrainer(
         model=model,
@@ -181,6 +228,7 @@ def train(args):
         train_dataset=train_ds,
         eval_dataset=val_ds,
         data_collator=data_collator,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=args.early_stopping_patience)],
     )
 
     trainer.train()
@@ -189,8 +237,54 @@ def train(args):
     model.save_pretrained(args.adapter_dir)
     tokenizer.save_pretrained(args.adapter_dir)
 
+    adapter_state = {
+        k: v.detach().cpu()
+        for k, v in model.state_dict().items()
+        if "lora" in k.lower() or "adapter" in k.lower()
+    }
+
+    best_checkpoint_path = trainer.state.best_model_checkpoint
+    ckpt_payload = {
+        "base_model": args.base_model,
+        "adapter_dir": args.adapter_dir,
+        "best_checkpoint": best_checkpoint_path,
+        "focus_grade": args.focus_grade,
+        "focus_chapter": chapter_query,
+        "focus_topic": topic_query,
+        "train_rows": len(train_df),
+        "val_rows": len(val_df),
+        "adapter_state_dict": adapter_state,
+    }
+
+    pth_path = os.path.join(args.adapter_dir, "best_adapter.pth")
+    ckpt_path = os.path.join(args.adapter_dir, "best_model.ckpt")
+    torch.save(adapter_state, pth_path)
+    torch.save(ckpt_payload, ckpt_path)
+
+    metadata_path = os.path.join(args.adapter_dir, "training_metadata.json")
+    with open(metadata_path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "base_model": args.base_model,
+                "best_checkpoint": best_checkpoint_path,
+                "focus_grade": args.focus_grade,
+                "focus_chapter": chapter_query,
+                "focus_topic": topic_query,
+                "train_rows": len(train_df),
+                "val_rows": len(val_df),
+                "arguments": vars(args),
+            },
+            f,
+            ensure_ascii=True,
+            indent=2,
+        )
+
     print("Training completed.")
     print(f"Adapter saved to: {args.adapter_dir}")
+    print(f"Best adapter .pth: {pth_path}")
+    print(f"Best checkpoint .ckpt: {ckpt_path}")
+    print(f"Metadata: {metadata_path}")
+    print(f"Best trainer checkpoint: {best_checkpoint_path}")
     print(f"Train examples: {train_csv}")
     print(f"Val examples: {val_csv}")
 
@@ -213,6 +307,12 @@ def parse_args():
     parser.add_argument("--val-ratio", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-train-samples", type=int, default=0)
+
+    parser.add_argument("--focus-grade", choices=["10", "11", "all"], default="all")
+    parser.add_argument("--focus-chapter", default="")
+    parser.add_argument("--focus-topic", default="")
+    parser.add_argument("--early-stopping-patience", type=int, default=2)
+    parser.add_argument("--save-total-limit", type=int, default=3)
 
     parser.add_argument("--lora-r", type=int, default=16)
     parser.add_argument("--lora-alpha", type=int, default=32)
