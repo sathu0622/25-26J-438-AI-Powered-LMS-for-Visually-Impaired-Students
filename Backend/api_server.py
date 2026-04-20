@@ -106,7 +106,7 @@ class FavoriteArticleDeleteRequest(BaseModel):
 class SyllabusMatchRequest(BaseModel):
     document_id: str = Field(..., description="Document ID from processing")
     article_id: str = Field(..., description="Article ID to classify against syllabus")
-    threshold: float = Field(0.12, ge=0.0, le=1.0, description="Minimum confidence to mark as in syllabus")
+    threshold: float = Field(0.5, ge=0.0, le=1.0, description="Minimum confidence to mark as in syllabus")
 
 # Load models globally
 models = load_all_models()
@@ -393,11 +393,33 @@ async def syllabus_match_endpoint(request: SyllabusMatchRequest):
     if "error" in match_result:
         raise HTTPException(status_code=400, detail=match_result["error"])
 
+    confidence = float(match_result.get("confidence", 0.0) or 0.0)
+    # Enforce a backend minimum so low-confidence matches are never exposed as in-syllabus.
+    effective_threshold = max(request.threshold, 0.5)
+    is_under_subject = confidence > effective_threshold
+
+    if is_under_subject:
+        response_result = {
+            "in_syllabus": True,
+            "confidence": confidence,
+            "match": match_result.get("match"),
+            "method": match_result.get("method", "unknown"),
+            "message": "Content is under this subject.",
+        }
+    else:
+        response_result = {
+            "in_syllabus": False,
+            "confidence": confidence,
+            "match": None,
+            "method": match_result.get("method", "unknown"),
+            "message": "Content is not under the subject.",
+        }
+
     return {
         "document_id": request.document_id,
         "article_id": request.article_id,
         "resource_type": document_data.get("resource_type", ""),
-        "result": match_result,
+        "result": response_result,
         "timestamp": datetime.now().isoformat(),
     }
 
