@@ -4,3 +4,14 @@ uvicorn
 pandas
 python-dotenv
 gtts
+nltk
+numpy
+requests
+soundfile
+pydub
+torch
+torchaudio
+transformers
+peft
+sentencepiece
+accelerate

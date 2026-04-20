@@ -6,7 +6,7 @@
 const env = (import.meta as any).env;
 
 const VITE_API_URL_HISTORY =
-  env?.VITE_API_URL_HISTORY || 'http://localhost:8004';
+  env?.VITE_API_URL_HISTORY || 'http://localhost:8003';
 
 /** Base URL for the history/lessons backend (chapters, topics, audio). */
 export const API_BASE_URL = VITE_API_URL_HISTORY;
