@@ -1,4 +1,10 @@
-from typing import Dict
+import os
+try:
+    import torch
+except ImportError:
+    torch = None
+from pathlib import Path
+from typing import Optional, Dict
 
 
 class TTSService:

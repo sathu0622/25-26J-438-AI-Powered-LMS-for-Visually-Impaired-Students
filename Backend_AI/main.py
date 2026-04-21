@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import os
 import socket
-import asyncio
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -12,11 +11,6 @@ load_dotenv()
 from app.routes.lessons import router as lessons_router
 from app.routes.chapters import router as chapters_router
 from app.routes.audio import router as audio_router
-
-if os.name == "nt":
-    # Windows Proactor loop can emit noisy ConnectionResetError traces when clients
-    # close ranged-media connections (common with browser audio players).
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 app = FastAPI(title="AI History Teacher API")
 
