@@ -87,8 +87,8 @@ export const LessonPlayer = ({
     }
   }, [audioUrl, autoPlay, isLoading, topicName, hasAnnounced, playbackSpeed]);
 
-  const generateAudio = async () => {
-    const endpoint = `${API_BASE_URL}/api/audio/chapter/${grade}/${chapterIdx}/${topicIdx}?t=${Date.now()}`;
+  const generateAudio = async (forceRegenerate = false) => {
+    const endpoint = `${API_BASE_URL}/api/audio/chapter/${grade}/${chapterIdx}/${topicIdx}${forceRegenerate ? '?force_regenerate=true' : ''}`;
 
     try {
       setIsLoading(true);
@@ -96,7 +96,6 @@ export const LessonPlayer = ({
 
       const response = await fetch(endpoint, {
         method: 'GET',
-        cache: 'no-store',
       });
 
       if (!response.ok) {
@@ -554,7 +553,7 @@ export const LessonPlayer = ({
       </Card>
 
       {audioUrl && !isLoading && (
-        <Button onClick={generateAudio} variant="secondary" className="w-full">
+        <Button onClick={() => generateAudio(true)} variant="secondary" className="w-full">
           Regenerate Audio
         </Button>
       )}
