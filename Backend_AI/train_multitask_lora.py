@@ -92,19 +92,22 @@ class SimpleSeq2SeqDataset:
 def encode_dataframe(df: pd.DataFrame, tokenizer, max_source_len: int, max_target_len: int) -> SimpleSeq2SeqDataset:
     rows: List[Seq2SeqRow] = []
     for _, r in df.iterrows():
-        tokenized = tokenizer(
+        tokenized_source = tokenizer(
             text=str(r["input_text"]),
-            text_target=str(r["target_text"]),
             truncation=True,
             max_length=max_source_len,
-            max_target_length=max_target_len,
+        )
+        tokenized_target = tokenizer(
+            text=str(r["target_text"]),
+            truncation=True,
+            max_length=max_target_len,
         )
 
         rows.append(
             Seq2SeqRow(
-                input_ids=tokenized["input_ids"],
-                attention_mask=tokenized["attention_mask"],
-                labels=tokenized["labels"],
+                input_ids=tokenized_source["input_ids"],
+                attention_mask=tokenized_source["attention_mask"],
+                labels=tokenized_target["input_ids"],
             )
         )
 

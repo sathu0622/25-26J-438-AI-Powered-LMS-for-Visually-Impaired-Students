@@ -88,7 +88,14 @@ export const LessonPlayer = ({
   }, [audioUrl, autoPlay, isLoading, topicName, hasAnnounced, playbackSpeed]);
 
   const generateAudio = async (forceRegenerate = false) => {
-    const endpoint = `${API_BASE_URL}/api/audio/chapter/${grade}/${chapterIdx}/${topicIdx}${forceRegenerate ? '?force_regenerate=true' : ''}`;
+    const params = new URLSearchParams({
+      sound_mode: 'With Effects',
+      use_model: 'true',
+    });
+    if (forceRegenerate) {
+      params.set('force_regenerate', 'true');
+    }
+    const endpoint = `${API_BASE_URL}/api/audio/chapter/${grade}/${chapterIdx}/${topicIdx}?${params.toString()}`;
 
     try {
       setIsLoading(true);

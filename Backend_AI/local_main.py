@@ -89,6 +89,38 @@ class LessonMultitaskModel:
 
         return self._tokenizer.decode(out[0], skip_special_tokens=True).strip()
 
+    def _split_text_for_generation(self, text: str, max_chars: int = 700) -> List[str]:
+        clean_text = (text or "").strip()
+        if not clean_text:
+            return []
+
+        sentences = nltk.sent_tokenize(clean_text)
+        if not sentences:
+            return [clean_text[:max_chars]]
+
+        chunks: List[str] = []
+        current_chunk: List[str] = []
+        current_len = 0
+
+        for sentence in sentences:
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+
+            sentence_len = len(sentence) + 1
+            if current_chunk and (current_len + sentence_len) > max_chars:
+                chunks.append(" ".join(current_chunk))
+                current_chunk = [sentence]
+                current_len = sentence_len
+            else:
+                current_chunk.append(sentence)
+                current_len += sentence_len
+
+        if current_chunk:
+            chunks.append(" ".join(current_chunk))
+
+        return chunks
+
     def generate_fields(self, chapter: str, topic: str, source_text: str) -> Dict[str, str]:
         source_text = (source_text or "").strip()
         prompt_context = (
@@ -97,10 +129,29 @@ class LessonMultitaskModel:
             f"source: {source_text[:900]}"
         )
 
-        narrative = self._infer(
-            f"task: narrate\n{prompt_context}\n"
-            "instruction: create a clear, friendly narration for visually impaired students."
-        )
+        chunks = self._split_text_for_generation(source_text, max_chars=700)
+        generated_chunks: List[str] = []
+        for idx, chunk in enumerate(chunks):
+            chunk_prompt = (
+                f"chapter: {chapter}\n"
+                f"topic: {topic}\n"
+                f"part: {idx + 1}/{len(chunks)}\n"
+                f"source: {chunk}"
+            )
+            generated_chunk = self._infer(
+                f"task: narrate\n{chunk_prompt}\n"
+                "instruction: rewrite this part in clear, friendly narration for visually impaired students. Keep key facts from this part."
+                ,
+                max_new_tokens=256,
+            )
+            if generated_chunk:
+                generated_chunks.append(generated_chunk)
+
+        narrative = " ".join(generated_chunks).strip()
+        # Guardrail: if model output is too short, use original text instead of truncating lesson audio.
+        if not narrative or len(narrative) < max(120, int(len(source_text) * 0.65)):
+            narrative = source_text
+
         emotion = self._infer(
             f"task: emotion\n{prompt_context}\n"
             "instruction: output one emotion label only."
@@ -303,6 +354,22 @@ def maybe_resample_effect(effect: AudioSegment, sample_rate: int) -> AudioSegmen
     if effect.frame_rate != sample_rate:
         return effect.set_frame_rate(sample_rate)
     return effect
+
+
+def _extract_valid_sound_effects(raw_effects: str, sounds_dir: str) -> List[str]:
+    raw_items = [item.strip() for item in str(raw_effects or "").split(",") if item.strip()]
+    if not raw_items:
+        return []
+
+    available_effects = set()
+    if os.path.isdir(sounds_dir):
+        for filename in os.listdir(sounds_dir):
+            base_name, ext = os.path.splitext(filename)
+            if ext.lower() in {".mp3", ".wav", ".ogg"}:
+                available_effects.add(base_name.strip())
+
+    valid_effects = [item for item in raw_items if item in available_effects]
+    return list(dict.fromkeys(valid_effects))
 
 
 def build_audio(
@@ -539,7 +606,7 @@ def generate_audio_for_selection(
     if use_model:
         topic_name = str(lesson_data.get("Grade/Topic", "")).strip()
         chapter_name = str(lesson_data.get("chapter", "")).strip()
-        source_text = str(lesson_data.get("original_text") or lesson_data.get("simplified_text") or "")
+        source_text = str(lesson_data.get("simplified_text") or lesson_data.get("original_text") or "")
 
         multitask_model = LessonMultitaskModel(adapter_dir=model_adapter_dir)
         if multitask_model.is_ready:
@@ -551,15 +618,13 @@ def generate_audio_for_selection(
 
             if predicted.get("narrative_text"):
                 lesson_data["simplified_text"] = predicted["narrative_text"]
-            if predicted.get("emotion"):
+            predicted_emotion = str(predicted.get("emotion", "")).strip()
+            if predicted_emotion and len(predicted_emotion) <= 40 and "," not in predicted_emotion:
                 lesson_data["emotion"] = predicted["emotion"]
-            if predicted.get("sound_effects"):
-                lesson_data["sound_effects"] = predicted["sound_effects"]
-                lesson_data["sound_effects_list"] = [
-                    item.strip()
-                    for item in str(predicted["sound_effects"]).split(",")
-                    if item.strip()
-                ]
+            predicted_effects = _extract_valid_sound_effects(predicted.get("sound_effects", ""), SOUNDS_DIR)
+            if predicted_effects:
+                lesson_data["sound_effects"] = ",".join(predicted_effects)
+                lesson_data["sound_effects_list"] = predicted_effects
 
     tts_model = ApiTTSWrapper(api_url)
     sound_mixer = SoundEffectsMixer(SOUNDS_DIR)
