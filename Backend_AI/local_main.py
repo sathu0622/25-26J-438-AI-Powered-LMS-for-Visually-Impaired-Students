@@ -22,6 +22,7 @@ GRADE11_CSV = os.path.join(DATA_DIR, "grade11_dataset.csv")
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "generated_output")
 MODEL_BASE_NAME = "google/flan-t5-small"
 MODEL_ADAPTER_DIR = os.path.join(PROJECT_DIR, "models", "lesson_multitask_lora")
+BEST_MODEL_FILENAME = "best_model.pth"
 
 # Mandatory external endpoint for this project.
 API_URL = "https://25-26-j-438-ai-powered-lms-for-visu.vercel.app/api/tts"
@@ -40,16 +41,21 @@ class LessonMultitaskModel:
             return
 
         if not os.path.isdir(self.adapter_dir):
-            self._loaded = True
-            return
+            raise FileNotFoundError(f"Model adapter directory not found: {self.adapter_dir}")
+
+        best_model_path = os.path.join(self.adapter_dir, BEST_MODEL_FILENAME)
+        if not os.path.exists(best_model_path):
+            raise FileNotFoundError(
+                f"Required model file not found: {best_model_path}. "
+                "Audio generation cannot continue without best_model.pth."
+            )
 
         try:
             from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
             from peft import PeftModel
             import torch
-        except Exception:
-            self._loaded = True
-            return
+        except Exception as exc:
+            raise RuntimeError("Failed to import model libraries for inference.") from exc
 
         tokenizer = AutoTokenizer.from_pretrained(self.base_model)
         base = AutoModelForSeq2SeqLM.from_pretrained(self.base_model)
