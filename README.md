@@ -41,8 +41,6 @@ Article Segmentation (Newspapers)
 FLAN-T5 + LoRA Summarization
           ↓
 JSON Output (Voice-ready)
-
-
 ---
 
 ## 🛠️ Technologies Used
