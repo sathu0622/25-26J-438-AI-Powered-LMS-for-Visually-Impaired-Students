@@ -1,0 +1,47 @@
+name: Deploy FastAPI to Azure VM
+
+on:
+  push:
+    branches:
+      - AI-Powered-System-for-Voice-Based-Resource-Type-Summarization-of-Historical-Content-for-VIS
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VM_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.VM_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VM
+        run: |
+          ssh ${{ secrets.VM_USER }}@${{ secrets.VM_HOST }} << 'EOF'
+          
+          echo "🚀 Connected to VM"
+
+          cd /home/azureuser/25-26J-438-AI-Powered-LMS-for-Visually-Impaired-Students
+
+          echo "📥 Pulling latest code..."
+          git pull origin AI-Powered-System-for-Voice-Based-Resource-Type-Summarization-of-Historical-Content-for-VIS
+
+          echo "🐍 Activating virtual environment..."
+          cd Backend
+          source myenv/bin/activate
+
+          echo "📦 Installing dependencies..."
+          pip install -r requirements.txt
+
+          echo "🔄 Restarting service..."
+          sudo systemctl restart fastapi-backend
+
+          echo "✅ Deployment completed!"
+          
+          EOF
