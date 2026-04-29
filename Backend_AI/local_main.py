@@ -22,33 +22,61 @@ GRADE11_CSV = os.path.join(DATA_DIR, "grade11_dataset.csv")
 OUTPUT_DIR = os.path.join(PROJECT_DIR, "generated_output")
 MODEL_BASE_NAME = "google/flan-t5-small"
 MODEL_ADAPTER_DIR = os.path.join(PROJECT_DIR, "models", "lesson_multitask_lora")
-BEST_MODEL_FILENAME = "best_model.pth"
+# HuggingFace Hub repo that holds the LoRA adapter (best_model.pth was moved here
+# because it exceeds GitHub's 100 MB file-size limit).
+HF_ADAPTER_REPO_ID = "pcsplus/lesson-multitask-lora"
 
 # Mandatory external endpoint for this project.
 API_URL = "https://25-26-j-438-ai-powered-lms-for-visu.vercel.app/api/tts"
 
 
 class LessonMultitaskModel:
-    def __init__(self, base_model: str = MODEL_BASE_NAME, adapter_dir: str = MODEL_ADAPTER_DIR):
+    """Multitask LoRA model that is loaded either from a local adapter directory
+    or directly from HuggingFace Hub (``pcsplus/lesson-multitask-lora``).
+
+    Priority order:
+    1. Local adapter directory (``models/lesson_multitask_lora``) – used when
+       all required PEFT config/weights are present on disk.
+    2. HuggingFace Hub  (``HF_ADAPTER_REPO_ID``) – downloaded automatically
+       the first time and cached by the HF Hub library (``~/.cache/huggingface``).
+    """
+
+    def __init__(
+        self,
+        base_model: str = MODEL_BASE_NAME,
+        adapter_dir: str = MODEL_ADAPTER_DIR,
+        hf_repo_id: str = HF_ADAPTER_REPO_ID,
+    ):
         self.base_model = base_model
         self.adapter_dir = adapter_dir
+        self.hf_repo_id = hf_repo_id
         self._loaded = False
         self._tokenizer = None
         self._model = None
 
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _local_adapter_is_valid(adapter_dir: str) -> bool:
+        """Return True when *adapter_dir* contains the PEFT config and weights."""
+        if not os.path.isdir(adapter_dir):
+            return False
+        config_file = os.path.join(adapter_dir, "adapter_config.json")
+        # Accept either safetensors or legacy pytorch bin weights.
+        has_weights = any(
+            os.path.exists(os.path.join(adapter_dir, name))
+            for name in (
+                "adapter_model.safetensors",
+                "adapter_model.bin",
+            )
+        )
+        return os.path.exists(config_file) and has_weights
+
     def _load(self) -> None:
         if self._loaded:
             return
-
-        if not os.path.isdir(self.adapter_dir):
-            raise FileNotFoundError(f"Model adapter directory not found: {self.adapter_dir}")
-
-        best_model_path = os.path.join(self.adapter_dir, BEST_MODEL_FILENAME)
-        if not os.path.exists(best_model_path):
-            raise FileNotFoundError(
-                f"Required model file not found: {best_model_path}. "
-                "Audio generation cannot continue without best_model.pth."
-            )
 
         try:
             from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
@@ -57,9 +85,24 @@ class LessonMultitaskModel:
         except Exception as exc:
             raise RuntimeError("Failed to import model libraries for inference.") from exc
 
+        # ---- Determine adapter source --------------------------------
+        if self._local_adapter_is_valid(self.adapter_dir):
+            adapter_source = self.adapter_dir
+            print(f"[LessonMultitaskModel] Loading adapter from local directory: {adapter_source}")
+        else:
+            # Fall back to HuggingFace Hub.  PeftModel.from_pretrained accepts
+            # a Hub repo ID directly; the weights are downloaded and cached
+            # automatically via huggingface_hub.
+            adapter_source = self.hf_repo_id
+            print(
+                f"[LessonMultitaskModel] Local adapter not found at '{self.adapter_dir}'.\n"
+                f"  → Downloading adapter from HuggingFace Hub: {adapter_source}"
+            )
+
+        # ---- Load tokenizer and model --------------------------------
         tokenizer = AutoTokenizer.from_pretrained(self.base_model)
         base = AutoModelForSeq2SeqLM.from_pretrained(self.base_model)
-        model = PeftModel.from_pretrained(base, self.adapter_dir)
+        model = PeftModel.from_pretrained(base, adapter_source)
         model.eval()
 
         if torch.cuda.is_available():

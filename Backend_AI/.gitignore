@@ -143,10 +143,10 @@ Desktop.ini
 generated_audio_*.wav
 chapter_audio_*.wav
 
-# Model checkpoints (if too large)
-# Uncomment if you don't want to commit the model
-# *.pth
-# *.pt
+# Model checkpoints – large files are stored on HuggingFace Hub instead.
+# See: https://huggingface.co/pcsplus/lesson-multitask-lora
+*.pth
+*.pt
 # *.pkl
 
 # Temporary files

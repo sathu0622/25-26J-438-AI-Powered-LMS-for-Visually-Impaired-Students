@@ -1,4 +1,4 @@
-# Production dependencies for Railway deployment
+# Production dependencies for Azure / Railway deployment
 fastapi>=0.104.0
 uvicorn[standard]>=0.24.0
 pandas>=2.0.0
@@ -16,3 +16,4 @@ transformers>=4.40.0
 peft>=0.10.0
 sentencepiece>=0.2.0
 accelerate>=0.30.0
+huggingface_hub>=0.23.0
