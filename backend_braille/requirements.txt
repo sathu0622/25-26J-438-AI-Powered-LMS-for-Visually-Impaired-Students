@@ -7,24 +7,20 @@ peft>=0.7.0
 sentence-transformers>=2.2.2
 scikit-learn>=1.3.0
 accelerate>=0.25.0
+safetensors>=0.4.0
 huggingface-hub>=0.19.0
 python-multipart>=0.0.6
-# dotenv support for environment variables (HF_TOKEN etc.)
 python-dotenv>=1.0.0
-huggingface_hub
 
-# Image / PDF processing libraries used by braille_decoder.py
-#   opencv for contour detection, numpy for arrays,
-#   Pillow for image handling, pymupdf (imported as fitz) for PDF reading
+# Image / PDF processing (braille_decoder.py): opencv, numpy, Pillow, pymupdf (fitz)
 opencv-python>=4.8.0
 numpy>=1.26.0
 Pillow>=10.0.0
 pymupdf>=1.23.0
 
-# Note: bitsandbytes is not available on Windows
-# The code will automatically work without it (no quantization)
-# For Linux/WSL, you can optionally install: pip install bitsandbytes
+# RAG corpus loading (rag_retriever.py)
+pandas>=2.0.0
 
-chromadb
-pandas
-openpyxl
+# 4-bit quantization in models_loader.py (BitsAndBytesConfig). Often unavailable or limited on Windows;
+# install manually when using CUDA on Linux/WSL: pip install bitsandbytes
+bitsandbytes>=0.43.0; sys_platform != "win32"
