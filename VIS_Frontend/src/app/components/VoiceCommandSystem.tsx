@@ -1,8 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Mic, HelpCircle, X } from 'lucide-react';
+import { Mic, MicOff, HelpCircle, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
-import { useTTS } from '../contexts/TTSContext';
 
 interface VoiceCommandSystemProps {
   onNavigate: (route: string) => void;
@@ -10,7 +9,6 @@ interface VoiceCommandSystemProps {
 }
 
 export const VoiceCommandSystem = ({ onNavigate, currentPage }: VoiceCommandSystemProps) => {
-  const { speak, cancel } = useTTS();
   const [isListening, setIsListening] = useState(false);
   const [lastCommand, setLastCommand] = useState('');
   const [showHelp, setShowHelp] = useState(false);
@@ -50,9 +48,13 @@ export const VoiceCommandSystem = ({ onNavigate, currentPage }: VoiceCommandSyst
   ];
 
   const speakText = useCallback((text: string) => {
-    cancel();
-    speak(text, { interrupt: true });
-  }, [speak, cancel]);
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+    utterance.volume = 1.0;
+    window.speechSynthesis.speak(utterance);
+  }, []);
 
   const processCommand = useCallback((transcript: string) => {
     const normalizedCommand = transcript.toLowerCase().trim();
@@ -136,84 +138,84 @@ export const VoiceCommandSystem = ({ onNavigate, currentPage }: VoiceCommandSyst
   }, [processCommand, speakText]);
 
   // Announce current page on mount or change
-  useEffect(() => {
-    const pageNames: Record<string, string> = {
-      'home': 'Home page - Main menu',
-      'document-upload': 'Document Upload and Q&A module',
-      'braille': 'Braille Answer Sheet Evaluation module',
-      'quiz': 'Voice-Enabled Quiz System module',
-      'history': 'Audio History Learning module',
-    };
+  // useEffect(() => {
+  //   const pageNames: Record<string, string> = {
+  //     'home': 'Home page - Main menu',
+  //     'document-upload': 'Document Upload and Q&A module',
+  //     'braille': 'Braille Answer Sheet Evaluation module',
+  //     'quiz': 'Voice-Enabled Quiz System module',
+  //     'history': 'Audio History Learning module',
+  //   };
 
-    const announcement = pageNames[currentPage] || 'Page loaded';
-    setTimeout(() => {
-      speakText(`${announcement}. Press F1 for voice commands, or H for help.`);
-    }, 500);
-  }, [currentPage, speakText]);
+  //   const announcement = pageNames[currentPage] || 'Page loaded';
+  //   setTimeout(() => {
+  //     speakText(`${announcement}. Press F1 for voice commands, or H for help.`);
+  //   }, 500);
+  // }, [currentPage, speakText]);
 
-  // Global keyboard shortcuts
-  useEffect(() => {
-    const handleKeyPress = (e: KeyboardEvent) => {
-      // Escape - Close modals
-      if (e.key === 'Escape') {
-        if (showCommandPicker) {
-          setShowCommandPicker(false);
-          return;
-        }
-        if (showHelp) {
-          setShowHelp(false);
-          return;
-        }
-      }
+  // // Global keyboard shortcuts
+  // useEffect(() => {
+  //   const handleKeyPress = (e: KeyboardEvent) => {
+  //     // Escape - Close modals
+  //     if (e.key === 'Escape') {
+  //       if (showCommandPicker) {
+  //         setShowCommandPicker(false);
+  //         return;
+  //       }
+  //       if (showHelp) {
+  //         setShowHelp(false);
+  //         return;
+  //       }
+  //     }
 
-      // F1 - Voice command
-      if (e.key === 'F1') {
-        e.preventDefault();
-        startVoiceCommand();
-        return;
-      }
+  //     // F1 - Voice command
+  //     if (e.key === 'F1') {
+  //       e.preventDefault();
+  //       startVoiceCommand();
+  //       return;
+  //     }
 
-      // H - Help
-      if (e.key === 'h' || e.key === 'H') {
-        if (!e.target || (e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
-          e.preventDefault();
-          setShowHelp(true);
-          speakText('Showing keyboard shortcuts and voice commands help');
-        }
-        return;
-      }
+  //     // H - Help
+  //     if (e.key === 'h' || e.key === 'H') {
+  //       if (!e.target || (e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+  //         e.preventDefault();
+  //         setShowHelp(true);
+  //         speakText('Showing keyboard shortcuts and voice commands help');
+  //       }
+  //       return;
+  //     }
 
-      // Alt + Number shortcuts
-      if (e.altKey) {
-        e.preventDefault();
-        switch (e.key) {
-          case '1':
-            speakText('Going to document upload');
-            onNavigate('document-upload');
-            break;
-          case '2':
-            speakText('Going to braille evaluation');
-            onNavigate('braille');
-            break;
-          case '3':
-            speakText('Going to quiz system');
-            onNavigate('quiz');
-            break;
-          case '4':
-            speakText('Going to history lessons');
-            onNavigate('history');
-            break;
-          case '0':
-            speakText('Going to home page');
-            onNavigate('home');
-            break;
-        }
-      }
-    };
+  //     // Alt + Number shortcuts
+  //     if (e.altKey) {
+  //       e.preventDefault();
+  //       switch (e.key) {
+  //         case '1':
+  //           speakText('Going to document upload');
+  //           onNavigate('document-upload');
+  //           break;
+  //         case '2':
+  //           speakText('Going to braille evaluation');
+  //           onNavigate('braille');
+  //           break;
+  //         case '3':
+  //           speakText('Going to quiz system');
+  //           onNavigate('quiz');
+  //           break;
+  //         case '4':
+  //           speakText('Going to history lessons');
+  //           onNavigate('history');
+  //           break;
+  //         case '0':
+  //           speakText('Going to home page');
+  //           onNavigate('home');
+  //           break;
+  //       }
+  //     }
+  //   };
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [onNavigate, startVoiceCommand, speakText, showHelp, showCommandPicker]);
+  //   window.addEventListener('keydown', handleKeyPress);
+  //   return () => window.removeEventListener('keydown', handleKeyPress);
+  // }, [onNavigate, startVoiceCommand, speakText, showHelp, showCommandPicker]);
 
   return (
     <>
