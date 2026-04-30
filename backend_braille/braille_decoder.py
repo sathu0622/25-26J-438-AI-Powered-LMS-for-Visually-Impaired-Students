@@ -83,7 +83,7 @@ def any_near(dot_set, cx, cy, r):
             return True
     return False
 
-
+#groups detected dot columns into pairs to form Braille cells.
 def pair_columns(col_xs, intra, tol=6):
     xs = sorted(col_xs); cells = []; used = [False] * len(xs); i = 0
     while i < len(xs):
