@@ -13,6 +13,7 @@ from braille_decoder import decode_pdf
 import torch
 import tempfile
 import re
+import gc
 
 
 @asynccontextmanager
@@ -63,6 +64,10 @@ async def evaluate_answer(request: EvaluationRequest):
 
     if not models_loader.model or not models_loader.sbert:
         raise HTTPException(status_code=503, detail="Models not loaded yet")
+
+    # cleanup (optional but OK here)
+    gc.collect()
+    torch.cuda.empty_cache()
 
     result = evaluate_student_answer(
         request.question,

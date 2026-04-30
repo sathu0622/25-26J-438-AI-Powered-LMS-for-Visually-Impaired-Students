@@ -413,8 +413,9 @@ export const DocumentUpload = ({
 
         <TabsContent value="upload" className="mt-4 space-y-6 outline-none">
           <Card
-            className={`border-2 border-dashed p-8 transition-all ${isDragging ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
+            className={`border-2 border-dashed p-8 transition-all ${
+              isDragging ? 'border-primary bg-primary/5' : 'border-border'
+            }`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -508,22 +509,22 @@ export const DocumentUpload = ({
                   <Volume2 className="h-5 w-5" aria-hidden="true" />
                   Listen to titles
                 </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="lg"
-                  className="min-h-[52px] gap-2 shrink-0 w-full sm:w-auto"
-                  disabled={favoritesLoading || isOpeningFavorite}
-                  onClick={() => void loadFavorites({ announceResult: true })}
-                  aria-label="Refresh favorite articles list"
-                >
-                  {favoritesLoading ? (
-                    <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <RefreshCw className="h-5 w-5" aria-hidden="true" />
-                  )}
-                  {favoritesLoading ? 'Loading…' : 'Refresh list'}
-                </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="lg"
+                className="min-h-[52px] gap-2 shrink-0 w-full sm:w-auto"
+                disabled={favoritesLoading || isOpeningFavorite}
+                onClick={() => void loadFavorites({ announceResult: true })}
+                aria-label="Refresh favorite articles list"
+              >
+                {favoritesLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+                ) : (
+                  <RefreshCw className="h-5 w-5" aria-hidden="true" />
+                )}
+                {favoritesLoading ? 'Loading…' : 'Refresh list'}
+              </Button>
               </div>
             </div>
 
@@ -663,3 +664,4 @@ export const DocumentUpload = ({
     </div>
   );
 };
+

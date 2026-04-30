@@ -29,6 +29,7 @@ export const API_BASE_URL = VITE_API_URL_HISTORY;
 type ApiClient = {
   baseURL: string;
   request<T>(endpoint: string, options?: RequestInit & { method?: string }): Promise<T>;
+  get<T>(endpoint: string): Promise<T>;
   postFormData<T>(endpoint: string, formData: FormData): Promise<T>;
   post<T>(endpoint: string, data: Record<string, any>): Promise<T>;
   postForm<T>(endpoint: string, data: Record<string, string>): Promise<T>;
@@ -59,6 +60,10 @@ function createApi(baseURL: string): ApiClient {
       }
 
       return response.json();
+    },
+
+    async get<T>(endpoint: string): Promise<T> {
+      return this.request<T>(endpoint, { method: 'GET' });
     },
 
     async postFormData<T>(endpoint: string, formData: FormData): Promise<T> {
