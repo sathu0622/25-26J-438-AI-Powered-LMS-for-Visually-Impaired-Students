@@ -10,7 +10,7 @@ _model = None
 _df = None
 
 
-def load_rag_data(sbert_model, csv_path="data/history_dataset.csv"):
+def load_rag_data(sbert_model, csv_path="history_dataset.csv"):
     """
     Build embeddings from your dataset once at startup.
     """
