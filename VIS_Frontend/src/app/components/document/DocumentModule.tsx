@@ -17,10 +17,15 @@ export const DocumentModule = () => {
     documentResult,
     documentSummary,
     selectedArticleId,
+    syllabusMatchMessage,
+    qaContextFullText,
+    favoriteStoredPassageMissing,
     qaMode,
     error,
+    isLoading,
     handleUpload,
     handleSelectArticle,
+    handleOpenFavorite,
     handleStartQA,
     handleBackToSummary,
   } = useDocumentModule();
@@ -42,7 +47,13 @@ export const DocumentModule = () => {
       )}
 
       {/* Upload Screen */}
-      {screen === 'upload' && <DocumentUpload onUpload={handleUpload} />}
+      {screen === 'upload' && (
+        <DocumentUpload
+          onUpload={handleUpload}
+          onOpenFavorite={handleOpenFavorite}
+          isOpeningFavorite={isLoading}
+        />
+      )}
 
       {/* Processing Screen */}
       {screen === 'processing' && uploadedFile && (
@@ -52,7 +63,9 @@ export const DocumentModule = () => {
       {/* Summary Screen */}
       {screen === 'summary' && (
         <DocumentSummary
+          documentId={documentResult?.document_id ?? ''}
           summary={documentSummary}
+          syllabusMatchMessage={syllabusMatchMessage}
           onAskQuestion={handleStartQA}
           articles={documentResult?.article_list}
           selectedArticleId={selectedArticleId}
@@ -68,8 +81,11 @@ export const DocumentModule = () => {
           documentId={documentResult?.document_id ?? ''}
           articleId={selectedArticleId ?? null}
           articleHeading={documentResult?.article_list?.find(
-            (article: any) => article.article_id === selectedArticleId
+            (article: { article_id?: string }) =>
+              article.article_id === selectedArticleId
           )?.heading}
+          qaContextFullText={qaContextFullText}
+          favoriteStoredPassageMissing={favoriteStoredPassageMissing}
         />
       )}
     </>
