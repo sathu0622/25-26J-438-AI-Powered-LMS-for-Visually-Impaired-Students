@@ -7,6 +7,7 @@ import { useState, useCallback } from 'react';
 import {
   documentService,
   DocumentProcessResponse,
+  SyllabusMatchResponse,
 } from '../services/documentService';
 import type { FavoriteArticle } from '../components/document/favoritesApi';
 
@@ -24,6 +25,7 @@ export interface DocumentModuleState {
   documentResult: DocumentProcessResponse | null;
   documentSummary: string;
   selectedArticleId: string | null;
+  syllabusMatchMessage: string | null;
 
   /**
    * When non-null, Q&A uses this stored passage (e.g. Mongo `full_content` from favorites)
@@ -49,11 +51,47 @@ export const useDocumentModule = () => {
     documentResult: null,
     documentSummary: '',
     selectedArticleId: null,
+    syllabusMatchMessage: null,
     qaContextFullText: null,
     favoriteStoredPassageMissing: false,
     qaMode: 'voice',
     error: null,
   });
+
+  /**
+   * Build friendly syllabus text for students (shown only when in-syllabus).
+   */
+  const toSyllabusMessage = useCallback((data: SyllabusMatchResponse): string | null => {
+    if (!data?.result?.in_syllabus || !data.result.match) return null;
+    const topic = data.result.match.grade_topic?.trim();
+    const chapter = data.result.match.chapter?.trim();
+    if (topic && chapter) {
+      return `This article is under syllabus topic "${topic}" (Chapter: ${chapter}).`;
+    }
+    if (topic) {
+      return `This article is under syllabus topic "${topic}".`;
+    }
+    if (chapter) {
+      return `This article is under syllabus chapter "${chapter}".`;
+    }
+    return null;
+  }, []);
+
+  /**
+   * Fetch syllabus classification for the selected article.
+   * If article is not in syllabus (or unavailable), nothing is shown.
+   */
+  const resolveSyllabusMessage = useCallback(
+    async (documentId: string, articleId: string): Promise<string | null> => {
+      try {
+        const matchData = await documentService.matchSyllabus(documentId, articleId);
+        return toSyllabusMessage(matchData);
+      } catch {
+        return null;
+      }
+    },
+    [toSyllabusMessage]
+  );
 
   /**
    * Upload a document and start processing
@@ -68,6 +106,7 @@ export const useDocumentModule = () => {
       documentResult: null,
       documentSummary: '',
       selectedArticleId: null,
+      syllabusMatchMessage: null,
       qaContextFullText: null,
       favoriteStoredPassageMissing: false,
     }));
@@ -84,12 +123,17 @@ export const useDocumentModule = () => {
       // Get default article
       const defaultArticleId =
         result.article_list?.[0]?.article_id || 'full_document';
+      const syllabusMessage = await resolveSyllabusMessage(
+        result.document_id,
+        defaultArticleId
+      );
 
       setState((prev) => ({
         ...prev,
         documentResult: result,
         documentSummary: initialSummary,
         selectedArticleId: defaultArticleId,
+        syllabusMatchMessage: syllabusMessage,
         qaContextFullText: null,
         favoriteStoredPassageMissing: false,
         screen: 'summary',
@@ -108,7 +152,7 @@ export const useDocumentModule = () => {
         isLoading: false,
       }));
     }
-  }, []);
+  }, [resolveSyllabusMessage]);
 
   /**
    * Select an article and fetch its summary
@@ -121,6 +165,7 @@ export const useDocumentModule = () => {
       return {
         ...prev,
         selectedArticleId: articleId,
+        syllabusMatchMessage: null,
       };
     });
 
@@ -135,6 +180,7 @@ export const useDocumentModule = () => {
       return {
         ...prev,
         selectedArticleId: articleId,
+        syllabusMatchMessage: null,
       };
     });
 
@@ -145,10 +191,13 @@ export const useDocumentModule = () => {
         documentId,
         articleId
       );
+      const syllabusMessage = await resolveSyllabusMessage(documentId, articleId);
 
       setState((prev) => ({
         ...prev,
         documentSummary: summaryData.summary || '',
+        syllabusMatchMessage:
+          prev.selectedArticleId === articleId ? syllabusMessage : prev.syllabusMatchMessage,
       }));
     } catch (err) {
       const message =
@@ -161,14 +210,10 @@ export const useDocumentModule = () => {
         error: message,
       }));
     }
-  }, []);
+  }, [resolveSyllabusMessage]);
 
   /**
-   * Open a favorite when the document is still available on the document server (in-memory session).
-   */
-  const handleOpenFavorite = useCallback(async (favorite: FavoriteArticle) => {
-   * Open a favorite using persisted summary and full text from the favorites API (Mongo),
-   * without calling /articles or /summarize-article on the document service.
+   * Open a favorite using persisted summary and full text from favorites storage.
    */
   const handleOpenFavorite = useCallback((favorite: FavoriteArticle) => {
     setState((prev) => ({
@@ -178,29 +223,6 @@ export const useDocumentModule = () => {
     }));
 
     try {
-      const listData = await documentService.getArticlesList(
-        favorite.document_id
-      );
-      const articleList = documentService.articlesResponseToArticleList(listData);
-
-      const stillThere = articleList.some(
-        (a) => a.article_id === favorite.article_id
-      );
-      if (!stillThere) {
-        throw new Error(
-          'This article is no longer available for that document on the server. Upload and process the file again, then save the favorite again.'
-        );
-      }
-
-      const summaryData = await documentService.summarizeArticle(
-        favorite.document_id,
-        favorite.article_id
-      );
-
-      const documentResult: DocumentProcessResponse = {
-        document_id: listData.document_id,
-        article_list: articleList,
-        summaries: [{ summary: summaryData.summary || '' }],
       const summaryText = (favorite.summary ?? '').trim();
       const fullText = (favorite.full_content ?? '').trim();
 
@@ -234,10 +256,9 @@ export const useDocumentModule = () => {
         uploadedFile: null,
         isLoading: false,
         documentResult,
-        documentSummary: summaryData.summary || '',
-        selectedArticleId: favorite.article_id,
         documentSummary: summaryText || 'No summary was stored for this favorite.',
         selectedArticleId: favorite.article_id,
+        syllabusMatchMessage: null,
         qaContextFullText: fullText || null,
         favoriteStoredPassageMissing: Boolean(summaryText) && !fullText,
         qaMode: 'voice',
@@ -247,7 +268,6 @@ export const useDocumentModule = () => {
       const message =
         err instanceof Error
           ? err.message
-          : 'Could not open this favorite. The document may have expired on the server; upload it again.';
           : 'Could not open this favorite.';
 
       setState((prev) => ({
@@ -291,6 +311,7 @@ export const useDocumentModule = () => {
       documentResult: null,
       documentSummary: '',
       selectedArticleId: null,
+      syllabusMatchMessage: null,
       qaContextFullText: null,
       favoriteStoredPassageMissing: false,
       qaMode: 'voice',

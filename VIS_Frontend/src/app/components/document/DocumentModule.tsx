@@ -17,6 +17,7 @@ export const DocumentModule = () => {
     documentResult,
     documentSummary,
     selectedArticleId,
+    syllabusMatchMessage,
     qaContextFullText,
     favoriteStoredPassageMissing,
     qaMode,
@@ -64,6 +65,7 @@ export const DocumentModule = () => {
         <DocumentSummary
           documentId={documentResult?.document_id ?? ''}
           summary={documentSummary}
+          syllabusMatchMessage={syllabusMatchMessage}
           onAskQuestion={handleStartQA}
           articles={documentResult?.article_list}
           selectedArticleId={selectedArticleId}
