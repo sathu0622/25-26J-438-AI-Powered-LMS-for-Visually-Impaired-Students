@@ -36,7 +36,6 @@ export const DocumentSummary = ({
 }: DocumentSummaryProps) => {
   const { speak, cancel } = useTTS();
   const [textSize, setTextSize] = useState(100);
-  const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
   const [favoriteSaving, setFavoriteSaving] = useState(false);
   const [favoriteStatus, setFavoriteStatus] = useState<string | null>(null);
   const favoriteInFlightRef = useRef(false);
@@ -46,6 +45,132 @@ export const DocumentSummary = ({
   /** Track last spoken summary so we only read when API returns new content (not the stale one). */
   const lastSpokenSummaryRef = useRef<string>('');
   const lastSpokenSyllabusRef = useRef<string>('');
+  const narrationStepRef = useRef<
+    'idle' | 'intro' | 'articles' | 'syllabus' | 'summary' | 'done'
+  >('idle');
+  const hasArticlesNarrationRef = useRef(false);
+  const summaryNarrationTextRef = useRef('');
+  const articlesNarrationTextRef = useRef('');
+  const pendingSyllabusRef = useRef('');
+  const narrationSessionRef = useRef(0);
+
+  const speakNarrationStep = useCallback((sessionId: number) => {
+    if (sessionId !== narrationSessionRef.current) return;
+    const step = narrationStepRef.current;
+
+    if (step === 'intro') {
+      const introText =
+        'Document Summary page. Press A to replay summary, Press N to skip current voice and go to next, Press S to save the current article to favorites, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size.';
+
+      speak(introText, {
+        interrupt: true,
+        onEnd: () => {
+          if (sessionId !== narrationSessionRef.current) return;
+          if (hasArticlesNarrationRef.current) {
+            narrationStepRef.current = 'articles';
+          } else if (pendingSyllabusRef.current.trim()) {
+            narrationStepRef.current = 'syllabus';
+          } else {
+            narrationStepRef.current = 'summary';
+          }
+          speakNarrationStep(sessionId);
+        },
+      });
+      return;
+    }
+
+    if (step === 'articles') {
+      speak(articlesNarrationTextRef.current, {
+        interrupt: true,
+        onEnd: () => {
+          if (sessionId !== narrationSessionRef.current) return;
+          narrationStepRef.current = pendingSyllabusRef.current.trim()
+            ? 'syllabus'
+            : 'summary';
+          speakNarrationStep(sessionId);
+        },
+      });
+      return;
+    }
+
+    if (step === 'syllabus') {
+      const msg = pendingSyllabusRef.current.trim();
+      if (!msg) {
+        narrationStepRef.current = 'summary';
+        speakNarrationStep(sessionId);
+        return;
+      }
+      if (msg === lastSpokenSyllabusRef.current) {
+        pendingSyllabusRef.current = '';
+        narrationStepRef.current = 'summary';
+        speakNarrationStep(sessionId);
+        return;
+      }
+      lastSpokenSyllabusRef.current = msg;
+      pendingSyllabusRef.current = '';
+      speak(msg, {
+        interrupt: true,
+        onEnd: () => {
+          if (sessionId !== narrationSessionRef.current) return;
+          narrationStepRef.current = 'summary';
+          speakNarrationStep(sessionId);
+        },
+      });
+      return;
+    }
+
+    if (step === 'summary') {
+      lastSpokenSummaryRef.current = summaryNarrationTextRef.current;
+      speak('Reading the latest summary for the selected article.', {
+        interrupt: true,
+        onEnd: () => {
+          if (sessionId !== narrationSessionRef.current) return;
+          speak(summaryNarrationTextRef.current, {
+            interrupt: false,
+            onEnd: () => {
+              if (sessionId !== narrationSessionRef.current) return;
+              narrationStepRef.current = 'done';
+            },
+          });
+        },
+      });
+    }
+  }, [speak]);
+
+  const skipToNextNarration = useCallback(() => {
+    const step = narrationStepRef.current;
+    if (step === 'idle' || step === 'done') return;
+
+    narrationSessionRef.current += 1;
+    const sessionId = narrationSessionRef.current;
+    cancel();
+    if (step === 'intro') {
+      if (hasArticlesNarrationRef.current) {
+        narrationStepRef.current = 'articles';
+      } else if (pendingSyllabusRef.current.trim()) {
+        narrationStepRef.current = 'syllabus';
+      } else {
+        narrationStepRef.current = 'summary';
+      }
+      speakNarrationStep(sessionId);
+      return;
+    }
+    if (step === 'articles') {
+      narrationStepRef.current = pendingSyllabusRef.current.trim()
+        ? 'syllabus'
+        : 'summary';
+      speakNarrationStep(sessionId);
+      return;
+    }
+    if (step === 'syllabus') {
+      narrationStepRef.current = 'summary';
+      speakNarrationStep(sessionId);
+      return;
+    }
+    if (step === 'summary') {
+      narrationStepRef.current = 'done';
+    }
+  }, [cancel, speakNarrationStep]);
 
   // Single initial voice sequence: intro → articles (if any) → "Reading summary..." → summary (once on mount)
   useEffect(() => {
@@ -55,48 +180,43 @@ export const DocumentSummary = ({
       return () => cancel();
     }
     hasScheduledInitialRef.current = true;
-    setHasAutoPlayed(true);
     initialSpeakDoneRef.current = true;
     const trimmed = summary.trim();
     lastSpokenSummaryRef.current = trimmed;
 
-    const introText =
-        'Document Summary page. Press A to replay summary, Press S to save the current article to favorites, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size.';
-
-    const readSummary = () => {
-      lastSpokenSummaryRef.current = trimmed;
-      speak('Reading the latest summary for the selected article.', {
-        interrupt: true,
-        onEnd: () => speak(trimmed, { interrupt: false }),
+    summaryNarrationTextRef.current = trimmed;
+    if (articles && articles.length > 0) {
+      const parts: string[] = [];
+      parts.push(`There are ${articles.length} articles in this document.`);
+      articles.forEach((article, index) => {
+        const number = index + 1;
+        const heading = article.heading || `Article ${number}`;
+        parts.push(`Number ${number} article: ${heading}.`);
       });
+      parts.push(
+        'To summarize an article, press the number key that matches the article. For example, press 1 for article 1, press 2 for article 2, and so on.'
+      );
+      hasArticlesNarrationRef.current = true;
+      articlesNarrationTextRef.current = parts.join(' ');
+    } else {
+      hasArticlesNarrationRef.current = false;
+      articlesNarrationTextRef.current = '';
+    }
+
+    const timer = setTimeout(() => {
+      narrationSessionRef.current += 1;
+      const sessionId = narrationSessionRef.current;
+      narrationStepRef.current = 'intro';
+      speakNarrationStep(sessionId);
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      narrationSessionRef.current += 1;
+      narrationStepRef.current = 'idle';
+      cancel();
     };
-
-    const runIntro = () => {
-      if (articles && articles.length > 0) {
-        const parts: string[] = [];
-        parts.push(`There are ${articles.length} articles in this document.`);
-        articles.forEach((article, index) => {
-          const number = index + 1;
-          const heading = article.heading || `Article ${number}`;
-          parts.push(`Number ${number} article: ${heading}.`);
-        });
-        parts.push(
-          'To summarize an article, press the number key that matches the article. For example, press 1 for article 1, press 2 for article 2, and so on.'
-        );
-        const articlesText = parts.join(' ');
-        speak(introText, {
-          interrupt: true,
-          onEnd: () => speak(articlesText, { interrupt: true, onEnd: readSummary }),
-        });
-      } else {
-        speak(introText, { interrupt: true, onEnd: readSummary });
-      }
-    };
-
-    setTimeout(runIntro, 500);
-
-    return () => cancel();
-  }, [hasAutoPlayed, articles, summary, speak, cancel]);
+  }, [articles, summary, speak, cancel, speakNarrationStep]);
 
   // When user selects a different article: only say "Loading summary" — do NOT read the old summary
   useEffect(() => {
@@ -116,22 +236,28 @@ export const DocumentSummary = ({
     const trimmed = summary.trim();
     if (!trimmed || !initialSpeakDoneRef.current) return;
     if (trimmed === lastSpokenSummaryRef.current) return;
-    lastSpokenSummaryRef.current = trimmed;
+
+    narrationSessionRef.current += 1;
+    const sessionId = narrationSessionRef.current;
     cancel();
-    speak('Reading the latest summary for the selected article.', {
-      interrupt: true,
-      onEnd: () => speak(trimmed, { interrupt: false }),
-    });
-  }, [summary, speak, cancel]);
+    summaryNarrationTextRef.current = trimmed;
+    narrationStepRef.current = pendingSyllabusRef.current.trim()
+      ? 'syllabus'
+      : 'summary';
+    speakNarrationStep(sessionId);
+  }, [summary, cancel, speakNarrationStep]);
 
   // Announce syllabus topic only when article is in syllabus (non-empty message).
   useEffect(() => {
     const msg = (syllabusMatchMessage || '').trim();
-    if (!msg) return;
-    if (msg === lastSpokenSyllabusRef.current) return;
-    lastSpokenSyllabusRef.current = msg;
-    speak(msg, { interrupt: false });
-  }, [syllabusMatchMessage, speak]);
+    if (!msg) {
+      // Reset so the same message can be announced again after article changes.
+      lastSpokenSyllabusRef.current = '';
+      pendingSyllabusRef.current = '';
+      return;
+    }
+    pendingSyllabusRef.current = msg;
+  }, [syllabusMatchMessage]);
 
   const saveCurrentArticleToFavorites = useCallback(async () => {
     if (!documentId || !selectedArticleId || favoriteInFlightRef.current) return;
@@ -176,6 +302,13 @@ export const DocumentSummary = ({
         e.preventDefault();
         cancel();
         speak(summary, { interrupt: true });
+        return;
+      }
+
+      // N key: skip current narration and move to next spoken step
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        skipToNextNarration();
         return;
       }
 
@@ -248,6 +381,7 @@ export const DocumentSummary = ({
     documentId,
     selectedArticleId,
     saveCurrentArticleToFavorites,
+    skipToNextNarration,
   ]);
 
   const increaseTextSize = () => {
@@ -269,7 +403,7 @@ export const DocumentSummary = ({
       <div className="space-y-2">
         <h1 className="text-2xl">Document Summary</h1>
         <p className="text-muted-foreground">
-          A replay • S save favorite • V voice question • T text question • +/- text size
+          A replay • N skip voice • S save favorite • V voice question • T text question • +/- text size
         </p>
         {selectedArticle && (
           <p className="text-sm text-secondary">
