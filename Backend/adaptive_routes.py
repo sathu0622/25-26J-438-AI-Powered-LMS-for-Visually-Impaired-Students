@@ -15,8 +15,6 @@ from sentence_transformers import util
 from dotenv import load_dotenv
 
 
-# Lightweight 2PL adaptive quiz using a static item bank loaded from QuizDataset.csv
-
 # These will be set by main.py
 sbert_model = None
 llm = None  # Injected Llama model for distractor generation

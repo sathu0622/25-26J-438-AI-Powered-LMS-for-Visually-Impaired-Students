@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTTS } from './contexts/TTSContext';
 import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
@@ -31,7 +31,7 @@ import { LessonPlayer } from './components/history/LessonPlayer';
 import { UserProfilePage } from './components/UserProfilePage';
 
 // ✅ NEW: Import quizService instead of local data
-import { quizService, QuizSetListItem, QuizSetSummary, GenerateQuestionResponse } from './services/quizService';
+import { quizService, QuizSetListItem, QuizSetSummary, GenerateQuestionResponse, QuizSetNextQuestionResponse } from './services/quizService';
 import { pastPaperService, PastPaperQuestion, PastPaperQuestionResult, PastPaperEvaluateResponse } from './services/pastPaperService';
 import { adaptiveService, AdaptiveItem, AdaptiveAnswerResponse } from './services/adaptiveService';
 import { freeTextService, isAbortError, FreeTextQuestion as FreeTextQuestionType, FreeTextAnswerResponse, FreeTextSummary as FreeTextSummaryType, FreeTextNextResponse } from './services/freeTextService';
@@ -72,6 +72,9 @@ export function App() {
   const [evaluationResult, setEvaluationResult] = useState<any>(null);
   const [questionNumber, setQuestionNumber] = useState(1);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [quizTotalQuestions, setQuizTotalQuestions] = useState(10);
+  const [quizPendingNext, setQuizPendingNext] = useState<QuizSetNextQuestionResponse | null>(null);
+  const [quizLoadingNext, setQuizLoadingNext] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const [quizSummary, setQuizSummary] = useState<QuizSetSummary | null>(null);
   const [savedQuizSets, setSavedQuizSets] = useState<QuizSetListItem[]>([]);
@@ -268,6 +271,9 @@ export function App() {
         setQuizSetId(quizSet.set_id);
         setAttemptId(quizSet.attempt_id);
         setQuizQuestions(quizSet.questions);
+        setQuizTotalQuestions(quizSet.total_questions || 10);
+        setQuizPendingNext(null);
+        setQuizLoadingNext(false);
         setPastPaperQuestions([]); // Clear past paper questions
         setCurrentQuestion(quizSet.questions[0]);
         setCurrentQuestionIndex(0);
@@ -341,6 +347,19 @@ export function App() {
       setEvaluationResult(result);
       if (result.correct) setCorrectCount((prev) => prev + 1);
       setQuizScreen('feedback');
+
+      if (quizMode === 'generative' && quizSetId && attemptId) {
+        setQuizLoadingNext(true);
+        setQuizPendingNext(null);
+        try {
+          const nextRes = await quizService.getNextQuizSetQuestion(quizSetId, attemptId, quizUser);
+          setQuizPendingNext(nextRes);
+        } catch (preloadError) {
+          console.error('Failed to pre-load next quiz question', preloadError);
+        } finally {
+          setQuizLoadingNext(false);
+        }
+      }
     } catch (err) {
       console.error('Failed to submit answer', err);
     }
@@ -348,9 +367,9 @@ export function App() {
 
   const handleQuizNext = async () => {
     const nextIndex = currentQuestionIndex + 1;
-    
+
     // Check quiz length based on quiz mode
-    const totalQuestions = quizMode === 'pastpaper' ? pastPaperQuestions.length : quizQuestions.length;
+    const totalQuestions = quizMode === 'pastpaper' ? pastPaperQuestions.length : quizTotalQuestions;
     
     if (nextIndex >= totalQuestions) {
       await handleQuizComplete();
@@ -370,7 +389,27 @@ export function App() {
         year: nextPastPaperQuestion.year
       });
     } else {
-      setCurrentQuestion(quizQuestions[nextIndex]);
+      let nextPayload: QuizSetNextQuestionResponse | null = quizPendingNext;
+
+      if (!nextPayload && quizSetId && attemptId && quizUser) {
+        try {
+          nextPayload = await quizService.getNextQuizSetQuestion(quizSetId, attemptId, quizUser);
+        } catch (err) {
+          console.error('Failed to load next quiz question', err);
+          return;
+        }
+      }
+
+      if (!nextPayload) return;
+
+      setQuizPendingNext(null);
+      setQuizTotalQuestions(nextPayload.total_questions || quizTotalQuestions);
+      setCurrentQuestion(nextPayload.current_question);
+      setQuizQuestions((prev) => {
+        const exists = prev.some((q) => q.question === nextPayload?.current_question.question);
+        if (exists) return prev;
+        return [...prev, nextPayload.current_question];
+      });
     }
     
     setCurrentAnswer('');
@@ -450,6 +489,9 @@ export function App() {
     setSelectedTopic('');
     setQuestionNumber(1);
     setCurrentQuestionIndex(0);
+    setQuizTotalQuestions(10);
+    setQuizPendingNext(null);
+    setQuizLoadingNext(false);
     setCorrectCount(0);
     setQuizSummary(null);
     setQuizSetId(null);
@@ -953,7 +995,7 @@ export function App() {
           <QuizQuestion
             question={currentQuestion}
             questionNumber={questionNumber}
-            totalQuestions={quizQuestions.length || 10}
+            totalQuestions={quizTotalQuestions || 10}
             onSubmit={handleQuizSubmit}
             onSkip={handleQuizSkip}
             onBack={handleQuizHome}
@@ -969,7 +1011,8 @@ export function App() {
             onNext={handleQuizNext}
             onGoHome={handleQuizHome}
             onBack={handleQuizHome}
-            isLastQuestion={questionNumber === quizQuestions.length}
+            isLastQuestion={questionNumber === quizTotalQuestions}
+            isLoadingNext={quizLoadingNext}
           />
         )}
 
@@ -977,7 +1020,7 @@ export function App() {
           <QuizSummary
             summary={quizSummary}
             correctCount={correctCount}
-            totalQuestions={quizQuestions.length}
+            totalQuestions={quizTotalQuestions}
             onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
             onGoHome={handleQuizHome}
             onStartNew={() => setQuizScreen('start')}

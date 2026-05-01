@@ -14,7 +14,7 @@ interface AdaptiveSummaryProps {
 
 export const AdaptiveSummary = ({ correctCount, total, finalTheta, onRestart, onHome }: AdaptiveSummaryProps) => {
   const { speak, cancel } = useTTS();
-  const summaryText = `You answered ${correctCount} out of ${total} questions. Estimated ability theta is ${finalTheta.toFixed(2)}.`;
+  const summaryText = `You answered ${correctCount} out of ${total} questions.`;
 
   useEffect(() => {
     speak(summaryText, { interrupt: true });
@@ -44,10 +44,7 @@ export const AdaptiveSummary = ({ correctCount, total, finalTheta, onRestart, on
             <p className="text-xs text-muted-foreground">Correct</p>
             <p className="text-2xl font-semibold">{correctCount}</p>
           </Card>
-          <Card className="p-4 text-center border-muted bg-muted/40">
-            <p className="text-xs text-muted-foreground">Ability θ</p>
-            <p className="text-2xl font-semibold">{finalTheta.toFixed(2)}</p>
-          </Card>
+         
         </div>
       </Card>
 
