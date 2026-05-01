@@ -344,85 +344,178 @@ async def ask_question_endpoint(
         )
 
 
+# @app.post("/syllabus-match")
+# async def syllabus_match_endpoint(request: SyllabusMatchRequest):
+#     """Match one extracted article against chapter-wise syllabus from Excel."""
+#     if request.document_id not in processed_documents:
+#         raise HTTPException(
+#             status_code=404,
+#             detail=f"Document ID {request.document_id} not found."
+#         )
+
+#     if syllabus_matcher.error:
+#         raise HTTPException(
+#             status_code=500,
+#             detail=f"Syllabus matcher unavailable: {syllabus_matcher.error}"
+#         )
+
+#     document_data = processed_documents[request.document_id]
+#     structured_articles = document_data.get("structured_articles", [])
+#     full_text = document_data.get("full_text", "")
+#     target_article: Dict[str, Any]
+
+#     if structured_articles:
+#         target_article = next(
+#             (a for a in structured_articles if a.get("article_id") == request.article_id),
+#             {}
+#         )
+#         if not target_article:
+#             raise HTTPException(
+#                 status_code=404,
+#                 detail=f"Article '{request.article_id}' not found in document '{request.document_id}'."
+#             )
+#         article_text = _article_full_text(target_article)
+#         heading = target_article.get("heading", "") or ""
+#     else:
+#         if request.article_id != "full_document":
+#             raise HTTPException(
+#                 status_code=400,
+#                 detail="Only 'full_document' is valid for this document."
+#             )
+#         article_text = full_text
+#         heading = "Full Document"
+
+#     match_result = syllabus_matcher.match_article(
+#         article_text=article_text,
+#         article_heading=heading,
+#         threshold=request.threshold,
+#     )
+#     if "error" in match_result:
+#         raise HTTPException(status_code=400, detail=match_result["error"])
+
+#     confidence = float(match_result.get("confidence", 0.0) or 0.0)
+#     # Enforce a backend minimum so low-confidence matches are never exposed as in-syllabus.
+#     effective_threshold = max(request.threshold, 0.5)
+#     is_under_subject = confidence > effective_threshold
+
+#     if is_under_subject:
+#         response_result = {
+#             "in_syllabus": True,
+#             "confidence": confidence,
+#             "match": match_result.get("match"),
+#             "method": match_result.get("method", "unknown"),
+#             "message": "Content is under this subject.",
+#         }
+#     else:
+#         response_result = {
+#             "in_syllabus": False,
+#             "confidence": confidence,
+#             "match": None,
+#             "method": match_result.get("method", "unknown"),
+#             "message": "Content is not under the subject.",
+#         }
+
+#     return {
+#         "document_id": request.document_id,
+#         "article_id": request.article_id,
+#         "resource_type": document_data.get("resource_type", ""),
+#         "result": response_result,
+#         "timestamp": datetime.now().isoformat(),
+#     }
+
 @app.post("/syllabus-match")
 async def syllabus_match_endpoint(request: SyllabusMatchRequest):
-    """Match one extracted article against chapter-wise syllabus from Excel."""
+    """
+    Check whether a specific article from a processed document
+    falls under any topic in the syllabus.
+ 
+    Returns in_syllabus: true/false with the matched chapter and confidence.
+    """
+ 
+    # ------------------------------------------------------------------ #
+    # 1. Validate document exists
+    # ------------------------------------------------------------------ #
     if request.document_id not in processed_documents:
         raise HTTPException(
             status_code=404,
-            detail=f"Document ID {request.document_id} not found."
+            detail=f"Document ID '{request.document_id}' not found.",
         )
-
+ 
+    # ------------------------------------------------------------------ #
+    # 2. Validate syllabus matcher is ready
+    # ------------------------------------------------------------------ #
     if syllabus_matcher.error:
         raise HTTPException(
             status_code=500,
-            detail=f"Syllabus matcher unavailable: {syllabus_matcher.error}"
+            detail=f"Syllabus matcher unavailable: {syllabus_matcher.error}",
         )
-
-    document_data = processed_documents[request.document_id]
+ 
+    # ------------------------------------------------------------------ #
+    # 3. Extract article text
+    # ------------------------------------------------------------------ #
+    document_data: Dict[str, Any] = processed_documents[request.document_id]
     structured_articles = document_data.get("structured_articles", [])
     full_text = document_data.get("full_text", "")
-    target_article: Dict[str, Any]
-
+ 
     if structured_articles:
         target_article = next(
             (a for a in structured_articles if a.get("article_id") == request.article_id),
-            {}
+            None,
         )
-        if not target_article:
+        if target_article is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"Article '{request.article_id}' not found in document '{request.document_id}'."
+                detail=(
+                    f"Article '{request.article_id}' not found "
+                    f"in document '{request.document_id}'."
+                ),
             )
         article_text = _article_full_text(target_article)
         heading = target_article.get("heading", "") or ""
     else:
+        # Document has no structured articles – only "full_document" is valid
         if request.article_id != "full_document":
             raise HTTPException(
                 status_code=400,
-                detail="Only 'full_document' is valid for this document."
+                detail=(
+                    "This document has no structured articles. "
+                    "Use article_id='full_document' instead."
+                ),
             )
         article_text = full_text
         heading = "Full Document"
-
+ 
+    # ------------------------------------------------------------------ #
+    # 4. Run syllabus matching
+    #    Threshold comes from the request (default handled inside matcher).
+    #    No artificial floor – the caller decides the sensitivity.
+    # ------------------------------------------------------------------ #
     match_result = syllabus_matcher.match_article(
         article_text=article_text,
         article_heading=heading,
-        threshold=request.threshold,
+        threshold=request.threshold,   # pass through as-is
     )
+ 
     if "error" in match_result:
         raise HTTPException(status_code=400, detail=match_result["error"])
-
-    confidence = float(match_result.get("confidence", 0.0) or 0.0)
-    # Enforce a backend minimum so low-confidence matches are never exposed as in-syllabus.
-    effective_threshold = max(request.threshold, 0.5)
-    is_under_subject = confidence > effective_threshold
-
-    if is_under_subject:
-        response_result = {
-            "in_syllabus": True,
-            "confidence": confidence,
-            "match": match_result.get("match"),
-            "method": match_result.get("method", "unknown"),
-            "message": "Content is under this subject.",
-        }
-    else:
-        response_result = {
-            "in_syllabus": False,
-            "confidence": confidence,
-            "match": None,
-            "method": match_result.get("method", "unknown"),
-            "message": "Content is not under the subject.",
-        }
-
+ 
+    # ------------------------------------------------------------------ #
+    # 5. Build response
+    # ------------------------------------------------------------------ #
     return {
         "document_id": request.document_id,
         "article_id": request.article_id,
         "resource_type": document_data.get("resource_type", ""),
-        "result": response_result,
+        "result": {
+            "in_syllabus":  match_result["in_syllabus"],
+            "confidence":   match_result["confidence"],
+            "match":        match_result["match"],           # None if not in syllabus
+            "alternatives": match_result["alternatives"],
+            "message":      match_result["message"],
+        },
         "timestamp": datetime.now().isoformat(),
     }
-
+    
 @app.get("/articles/{document_id}")
 async def get_articles_list(document_id: str):
     """Get the list of articles for a previously processed document."""
