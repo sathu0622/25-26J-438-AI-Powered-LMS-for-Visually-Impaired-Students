@@ -12,6 +12,8 @@ The backend automatically:
 
 ---
 
+
+
 ## 🎯 Key Features
 
 - 📄 Supports **PDF and Image documents**
@@ -39,8 +41,6 @@ Article Segmentation (Newspapers)
 FLAN-T5 + LoRA Summarization
           ↓
 JSON Output (Voice-ready)
-
-
 ---
 
 ## 🛠️ Technologies Used
