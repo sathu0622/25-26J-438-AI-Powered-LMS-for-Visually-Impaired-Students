@@ -10,6 +10,19 @@ tokenizer = None
 model = None
 sbert = None
 
+
+def _bnb_max_memory():
+    """Leave VRAM headroom for LoRA, Sentence-BERT, and CUDA; CPU bucket enables partial offload."""
+    max_memory = {}
+    if torch.cuda.is_available():
+        for idx in range(torch.cuda.device_count()):
+            total = torch.cuda.get_device_properties(idx).total_memory
+            gb = max(int(total / (1024**3) * 0.88), 1)
+            max_memory[idx] = f"{gb}GiB"
+    max_memory["cpu"] = "96GiB"
+    return max_memory
+
+
 def load_models():
     """Load LLaMA + LoRA + Sentence-BERT"""
     global tokenizer, model, sbert
@@ -19,20 +32,23 @@ def load_models():
         tokenizer.pad_token = tokenizer.eos_token
 
         logger.info("Loading base model with 4-bit quantization...")
-        bnb_config = BitsAndBytesConfig(    #4-bit quantization (memory optimization)
+        # Mixed GPU/CPU placement requires fp32 CPU offload flag or the 4-bit loader raises.
+        bnb_config = BitsAndBytesConfig(
             load_in_4bit=True,
-            bnb_4bit_compute_dtype=torch.float32,
-            bnb_4bit_use_double_quant=True, #Improves compression efficiency.
-            bnb_4bit_quant_type="nf4"   #Uses NF4 quantization.
+            bnb_4bit_compute_dtype=torch.float16,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+            llm_int8_enable_fp32_cpu_offload=True,
         )
 
         base_model = AutoModelForCausalLM.from_pretrained(
             BASE_MODEL,
             quantization_config=bnb_config,
-            device_map="auto",    # Helps load large models on limited GPU memory
-            torch_dtype=torch.float16,  #Speeds up inference and reduces memory usage
+            device_map="auto",
+            max_memory=_bnb_max_memory(),
+            dtype=torch.float16,
             token=HF_TOKEN,
-            low_cpu_mem_usage=True  #Optimizes CPU memory while loading the model
+            low_cpu_mem_usage=True,
         )
 
         logger.info("Loading LoRA adapter...")
