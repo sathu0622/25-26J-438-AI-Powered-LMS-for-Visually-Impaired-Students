@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CheckCircle2, XCircle, AlertCircle, ArrowRight, Loader2, Home, Play } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -18,6 +18,7 @@ interface QuizFeedbackProps {
   onGoHome: () => void;
   onBack?: () => void;
   isLastQuestion?: boolean;
+  isLoadingNext?: boolean;
 }
 
 
@@ -29,6 +30,7 @@ export const QuizFeedback = ({
   onGoHome,
   onBack,
   isLastQuestion = false,
+  isLoadingNext = false,
 }: QuizFeedbackProps & { onGoHome: () => void }) => {
   const { speak, cancel } = useTTS();
   const isCorrect = result.score>=60;
@@ -141,8 +143,12 @@ export const QuizFeedback = ({
             {/* Navigation Buttons */}
             <div className="flex flex-col gap-4 mt-6">
               <Button size="lg" className="font-semibold" onClick={onNext}>
-                {isLastQuestion ? 'See Summary' : 'Next Question'}
-                <ArrowRight className="ml-2 h-5 w-5" />
+                {isLastQuestion ? 'See Summary' : isLoadingNext ? 'Preparing Next Question...' : 'Next Question'}
+                {isLoadingNext && !isLastQuestion ? (
+                  <Loader2 className="ml-2 h-5 w-5 animate-spin" />
+                ) : (
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                )}
               </Button>
               <Button variant="outline" size="lg" className="font-semibold" onClick={onGoHome}>
                 <Home className="mr-2 h-5 w-5" /> Select Another Chapter

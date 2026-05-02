@@ -4,7 +4,7 @@ import { Card } from '../ui/card';
 import { useTTS } from '../../contexts/TTSContext';
 
 interface QuizLoadingProps {
-  mode: 'generative' | 'pastpaper' | 'adaptive';
+  mode: 'generative' | 'pastpaper' | 'adaptive' | 'timed';
   topic: string;
   onCancel?: () => void;
 }
@@ -28,6 +28,9 @@ export const QuizLoading = ({ mode, topic, onCancel }: QuizLoadingProps) => {
             break;
           case 'adaptive':
             message = `Preparing adaptive quiz for ${topic}. Setting up personalized difficulty adjustment. This may take 5 to 15 seconds. Please wait. Press Escape or B to cancel.`;
+            break;
+          case 'timed':
+            message = `Preparing your timed quiz with twenty questions mixed from different chapters and building multiple choice options. This may take one to several minutes depending on server load. Please wait. Press Escape or B to cancel.`;
             break;
         }
         speak(message, { interrupt: true });
@@ -62,6 +65,14 @@ export const QuizLoading = ({ mode, topic, onCancel }: QuizLoadingProps) => {
           subtitle: 'Setting up personalized difficulty adjustment',
           description: 'The system is calibrating question difficulty based on your performance to provide an optimal learning experience.',
           estimatedTime: '5-15 seconds'
+        };
+      case 'timed':
+        return {
+          icon: <Clock className="h-12 w-12 text-amber-600 animate-pulse" />,
+          title: 'Building Timed Quiz',
+          subtitle: 'Selecting questions and creating answer choices',
+          description: 'We are choosing twenty bank questions across chapters and generating three distractors each for multiple choice.',
+          estimatedTime: 'one to several minutes'
         };
       default:
         return {
@@ -137,10 +148,12 @@ export const QuizLoading = ({ mode, topic, onCancel }: QuizLoadingProps) => {
         {/* Animated Progress Indicator */}
         <div className="space-y-2">
           <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
-            <div className="bg-gradient-to-r from-primary to-primary/80 h-full rounded-full animate-pulse" 
-                 style={{
-                   animation: 'loading-progress 2s ease-in-out infinite',
-                 }}>
+            <div
+              className="bg-gradient-to-r from-primary to-primary/80 h-full rounded-full"
+              style={{
+                animation: 'quiz-loading-bar 2s ease-in-out infinite',
+              }}
+            >
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
@@ -171,13 +184,15 @@ export const QuizLoading = ({ mode, topic, onCancel }: QuizLoadingProps) => {
         )}
       </Card>
 
-      <style jsx>{`
-        @keyframes loading-progress {
+      <style>
+        {`
+        @keyframes quiz-loading-bar {
           0% { width: 0%; }
           50% { width: 70%; }
           100% { width: 100%; }
         }
-      `}</style>
+      `}
+      </style>
     </div>
   );
 };
