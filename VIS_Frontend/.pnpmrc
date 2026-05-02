@@ -1,0 +1,6 @@
+# pnpm configuration
+registry=https://registry.npmjs.org/
+fetch-retries=5
+fetch-retry-mintimeout=10000
+fetch-retry-maxtimeout=60000
+strict-ssl=true
