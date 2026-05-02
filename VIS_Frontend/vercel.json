@@ -1,10 +1,8 @@
 {
   "framework": "vite",
-  "nodeVersion": "20.x",
   "installCommand": "corepack enable pnpm && pnpm install --no-frozen-lockfile",
   "buildCommand": "pnpm run build",
   "outputDirectory": "dist",
-  "env": ["PNPM_HOME"],
   "rewrites": [
     {
       "source": "/(.*)",
