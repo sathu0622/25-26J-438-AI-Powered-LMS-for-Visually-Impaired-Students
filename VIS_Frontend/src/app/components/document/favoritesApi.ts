@@ -93,3 +93,4 @@ export async function addFavoriteArticle(
   }
 
   return res.json();
+}
