@@ -32,3 +32,7 @@ datasets>=2.20.0
 layoutparser>=0.3.4
 pandas>=2.2.0
 openpyxl>=3.1.0
+
+sentence-transformers 
+faiss-cpu
+tf-keras>=2.16.0
