@@ -136,6 +136,11 @@ class TTSService:
         try:
             from gtts import gTTS
             
+            # Text normalization for clearer speech
+            import re
+            text = text.replace("e.g.", "for example")
+            text = re.sub(r"\betc\b\.?", "etcetera", text, flags=re.IGNORECASE)
+
             # Truncate text if too long (gTTS limitation)
             max_chars = 3000
             if len(text) > max_chars:

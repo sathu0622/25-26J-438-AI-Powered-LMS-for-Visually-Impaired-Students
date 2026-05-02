@@ -46,6 +46,14 @@ export function addTTSStateListener(listener: StateListener): () => void {
   return () => stateListeners.delete(listener);
 }
 
+/** Normalize text for clearer speech (e.g., expand abbreviations). */
+function normalizeText(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\betc\b\.?/gi, 'etcetera')
+    .replace(/\be\.g\b\.?/gi, 'example is');
+}
+
 /** Backend TTS: POST /api/tts, body { text?, ssml?, lang }, response { audio_base64, content_type }. */
 async function fetchGoogleTTS(payload: {
   text?: string;
@@ -164,8 +172,9 @@ export async function speak(text: string, options: SpeakOptions = {}): Promise<v
   const onEnd = options.onEnd ?? (() => {});
 
   if (interrupt) cancel();
-
-  const trimmed = text?.trim();
+  
+  const normalized = normalizeText(text);
+  const trimmed = normalized?.trim();
   if (!trimmed) {
     onEnd();
     return;

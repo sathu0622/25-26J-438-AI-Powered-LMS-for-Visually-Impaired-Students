@@ -38,13 +38,29 @@ const VOICE_NAMES = {
 };
 
 export async function synthesize(ttsClient, { text, ssml, lang = 'en-IN' }) {
+  // Text normalization for clearer speech
+  let normalizedText = text || '';
+  let normalizedSsml = ssml || '';
+
+  if (normalizedText) {
+    normalizedText = normalizedText
+      .replace(/\betc\b\.?/gi, 'etcetera')
+      .replace(/\be\.g\b\.?/gi, 'example is');
+  }
+
+  if (normalizedSsml) {
+    normalizedSsml = normalizedSsml
+      .replace(/\betc\b\.?/gi, 'etcetera')
+      .replace(/\be\.g\b\.?/gi, 'example is');
+  }
+
   const languageCode = lang === 'en-GB' ? 'en-GB' : 'en-IN';
   const voiceName = VOICE_NAMES[languageCode];
 
   console.log('[TTS] Synthesizing:', { languageCode, voiceName, input: ssml ? 'ssml' : 'text' });
 
   const request = {
-    input: ssml ? { ssml } : { text: text || '' },
+    input: normalizedSsml ? { ssml: normalizedSsml } : { text: normalizedText },
     voice: { languageCode, name: voiceName },
     audioConfig: { audioEncoding: 'MP3', speakingRate: 0.95, pitch: 0, volumeGainDb: 0 },
   };

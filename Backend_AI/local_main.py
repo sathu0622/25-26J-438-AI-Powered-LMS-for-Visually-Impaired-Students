@@ -429,7 +429,10 @@ def build_audio(
     emotion_intensity: float,
 ) -> str:
     sample_rate = get_sample_rate(tts_model)
-    text_to_speak = str(lesson_data.get("simplified_text", "")).replace("e.g.", "example is")
+    text_to_speak = str(lesson_data.get("simplified_text", ""))
+    # Text normalization for clearer speech
+    text_to_speak = text_to_speak.replace("e.g.", "example is")
+    text_to_speak = re.sub(r"\betc\b\.?", "etcetera", text_to_speak, flags=re.IGNORECASE)
 
     if not text_to_speak.strip():
         raise ValueError("simplified_text is empty for selected lesson.")
