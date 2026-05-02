@@ -21,11 +21,11 @@ RUN python -c "import nltk; nltk.download('punkt', quiet=True); nltk.download('p
 COPY . .
 
 # ── Azure App Service / Container Apps injects PORT env var
-ENV PORT=8000
+ENV PORT=8004
 ENV HOST=0.0.0.0
 
 # ── Expose the port (documentation only; Azure uses $PORT)
-EXPOSE 8000
+EXPOSE 8004
 
 # ── Start the FastAPI app
 CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
