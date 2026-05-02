@@ -7,14 +7,29 @@
 const env = (import.meta as any).env;
 
 const VITE_API_URL_DOCUMENT =
-  env?.VITE_API_URL_DOCUMENT || env?.VITE_API_URL || 'http://localhost:8000';
+  env?.VITE_API_URL_DOCUMENT || env?.VITE_API_URL || 'http://localhost:8003';
 const VITE_API_URL_BRAILLE =
-  env?.VITE_API_URL_BRAILLE || 'http://localhost:8000';
+  env?.VITE_API_URL_BRAILLE || 'http://localhost:8003';
+const VITE_API_URL_HISTORY =
+  env?.VITE_API_URL_HISTORY || 'http://localhost:8004';
 const VITE_API_URL_QUIZ = env?.VITE_API_URL_QUIZ || 'http://localhost:8000';
+
+
+export const apiBaseUrls = {
+  document: VITE_API_URL_DOCUMENT,
+  braille: VITE_API_URL_BRAILLE,
+  history: VITE_API_URL_HISTORY,
+  quiz: VITE_API_URL_QUIZ,
+};
+
+// Export API_BASE_URL for easy access (points to history service)
+export const API_BASE_URL = VITE_API_URL_HISTORY;
+
 
 type ApiClient = {
   baseURL: string;
   request<T>(endpoint: string, options?: RequestInit & { method?: string }): Promise<T>;
+  get<T>(endpoint: string): Promise<T>;
   postFormData<T>(endpoint: string, formData: FormData): Promise<T>;
   post<T>(endpoint: string, data: Record<string, any>): Promise<T>;
   postForm<T>(endpoint: string, data: Record<string, string>): Promise<T>;
@@ -45,6 +60,10 @@ function createApi(baseURL: string): ApiClient {
       }
 
       return response.json();
+    },
+
+    async get<T>(endpoint: string): Promise<T> {
+      return this.request<T>(endpoint, { method: 'GET' });
     },
 
     async postFormData<T>(endpoint: string, formData: FormData): Promise<T> {

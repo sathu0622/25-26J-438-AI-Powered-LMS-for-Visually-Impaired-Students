@@ -1,0 +1,24 @@
+name: Deploy Backend to Azure VM
+
+on:
+  push:
+    branches:
+      - main   # or your branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Connect and Deploy
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.AZURE_HOST }}
+          username: ${{ secrets.AZURE_USER }}
+          key: ${{ secrets.AZURE_SSH_KEY }}
+          script: |
+            cd /home/azureuser/newAIHistory
+            git pull
+            source myenv/bin/activate
+            pip install -r requirements.txt
+            sudo systemctl restart lms-ai-backend

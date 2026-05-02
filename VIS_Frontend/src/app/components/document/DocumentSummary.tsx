@@ -1,9 +1,10 @@
-import { useState, useEffect, useRef } from 'react';
-import { ZoomIn, ZoomOut, MessageSquare, Keyboard } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { ZoomIn, ZoomOut, MessageSquare, Keyboard, Bookmark } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { AudioPlayer } from '../AudioPlayer';
 import { useTTS } from '../../contexts/TTSContext';
+import { addFavoriteArticle } from './favoritesApi';
 
 interface ArticleInfo {
   article_id: string;
@@ -15,7 +16,9 @@ interface ArticleInfo {
 }
 
 interface DocumentSummaryProps {
+  documentId: string;
   summary: string;
+  syllabusMatchMessage?: string | null;
   onAskQuestion: (mode: 'voice' | 'text') => void;
   articles?: ArticleInfo[];
   selectedArticleId?: string | null;
@@ -23,7 +26,9 @@ interface DocumentSummaryProps {
 }
 
 export const DocumentSummary = ({
+  documentId,
   summary,
+  syllabusMatchMessage = null,
   onAskQuestion,
   articles,
   selectedArticleId,
@@ -31,12 +36,141 @@ export const DocumentSummary = ({
 }: DocumentSummaryProps) => {
   const { speak, cancel } = useTTS();
   const [textSize, setTextSize] = useState(100);
-  const [hasAutoPlayed, setHasAutoPlayed] = useState(false);
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
+  const [favoriteStatus, setFavoriteStatus] = useState<string | null>(null);
+  const favoriteInFlightRef = useRef(false);
   const initialSpeakDoneRef = useRef(false);
   const prevSelectedArticleIdRef = useRef<string | null | undefined>(undefined);
   const hasScheduledInitialRef = useRef(false);
   /** Track last spoken summary so we only read when API returns new content (not the stale one). */
   const lastSpokenSummaryRef = useRef<string>('');
+  const lastSpokenSyllabusRef = useRef<string>('');
+  const narrationStepRef = useRef<
+    'idle' | 'intro' | 'articles' | 'syllabus' | 'summary' | 'done'
+  >('idle');
+  const hasArticlesNarrationRef = useRef(false);
+  const summaryNarrationTextRef = useRef('');
+  const articlesNarrationTextRef = useRef('');
+  const pendingSyllabusRef = useRef('');
+  const narrationSessionRef = useRef(0);
+
+  const speakNarrationStep = useCallback((sessionId: number) => {
+    if (sessionId !== narrationSessionRef.current) return;
+    const step = narrationStepRef.current;
+
+    if (step === 'intro') {
+      const introText =
+        'Document Summary page. Press A to replay summary, Press N to skip current voice and go to next, Press S to save the current article to favorites, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size.';
+
+      speak(introText, {
+        interrupt: true,
+        onEnd: () => {
+          if (sessionId !== narrationSessionRef.current) return;
+          if (hasArticlesNarrationRef.current) {
+            narrationStepRef.current = 'articles';
+          } else if (pendingSyllabusRef.current.trim()) {
+            narrationStepRef.current = 'syllabus';
+          } else {
+            narrationStepRef.current = 'summary';
+          }
+          speakNarrationStep(sessionId);
+        },
+      });
+      return;
+    }
+
+    if (step === 'articles') {
+      speak(articlesNarrationTextRef.current, {
+        interrupt: true,
+        onEnd: () => {
+          if (sessionId !== narrationSessionRef.current) return;
+          narrationStepRef.current = pendingSyllabusRef.current.trim()
+            ? 'syllabus'
+            : 'summary';
+          speakNarrationStep(sessionId);
+        },
+      });
+      return;
+    }
+
+    if (step === 'syllabus') {
+      const msg = pendingSyllabusRef.current.trim();
+      if (!msg) {
+        narrationStepRef.current = 'summary';
+        speakNarrationStep(sessionId);
+        return;
+      }
+      if (msg === lastSpokenSyllabusRef.current) {
+        pendingSyllabusRef.current = '';
+        narrationStepRef.current = 'summary';
+        speakNarrationStep(sessionId);
+        return;
+      }
+      lastSpokenSyllabusRef.current = msg;
+      pendingSyllabusRef.current = '';
+      speak(msg, {
+        interrupt: true,
+        onEnd: () => {
+          if (sessionId !== narrationSessionRef.current) return;
+          narrationStepRef.current = 'summary';
+          speakNarrationStep(sessionId);
+        },
+      });
+      return;
+    }
+
+    if (step === 'summary') {
+      lastSpokenSummaryRef.current = summaryNarrationTextRef.current;
+      speak('Reading the latest summary for the selected article.', {
+        interrupt: true,
+        onEnd: () => {
+          if (sessionId !== narrationSessionRef.current) return;
+          speak(summaryNarrationTextRef.current, {
+            interrupt: false,
+            onEnd: () => {
+              if (sessionId !== narrationSessionRef.current) return;
+              narrationStepRef.current = 'done';
+            },
+          });
+        },
+      });
+    }
+  }, [speak]);
+
+  const skipToNextNarration = useCallback(() => {
+    const step = narrationStepRef.current;
+    if (step === 'idle' || step === 'done') return;
+
+    narrationSessionRef.current += 1;
+    const sessionId = narrationSessionRef.current;
+    cancel();
+    if (step === 'intro') {
+      if (hasArticlesNarrationRef.current) {
+        narrationStepRef.current = 'articles';
+      } else if (pendingSyllabusRef.current.trim()) {
+        narrationStepRef.current = 'syllabus';
+      } else {
+        narrationStepRef.current = 'summary';
+      }
+      speakNarrationStep(sessionId);
+      return;
+    }
+    if (step === 'articles') {
+      narrationStepRef.current = pendingSyllabusRef.current.trim()
+        ? 'syllabus'
+        : 'summary';
+      speakNarrationStep(sessionId);
+      return;
+    }
+    if (step === 'syllabus') {
+      narrationStepRef.current = 'summary';
+      speakNarrationStep(sessionId);
+      return;
+    }
+    if (step === 'summary') {
+      narrationStepRef.current = 'done';
+    }
+  }, [cancel, speakNarrationStep]);
 
   // Single initial voice sequence: intro → articles (if any) → "Reading summary..." → summary (once on mount)
   useEffect(() => {
@@ -46,48 +180,43 @@ export const DocumentSummary = ({
       return () => cancel();
     }
     hasScheduledInitialRef.current = true;
-    setHasAutoPlayed(true);
     initialSpeakDoneRef.current = true;
     const trimmed = summary.trim();
     lastSpokenSummaryRef.current = trimmed;
 
-    const introText =
-        'Document Summary page. Press A to replay summary, Press V for voice question, Press T for text question, Press Plus to increase text size, Press Minus to decrease text size.';
-
-    const readSummary = () => {
-      lastSpokenSummaryRef.current = trimmed;
-      speak('Reading the latest summary for the selected article.', {
-        interrupt: true,
-        onEnd: () => speak(trimmed, { interrupt: false }),
+    summaryNarrationTextRef.current = trimmed;
+    if (articles && articles.length > 0) {
+      const parts: string[] = [];
+      parts.push(`There are ${articles.length} articles in this document.`);
+      articles.forEach((article, index) => {
+        const number = index + 1;
+        const heading = article.heading || `Article ${number}`;
+        parts.push(`Number ${number} article: ${heading}.`);
       });
+      parts.push(
+        'To summarize an article, press the number key that matches the article. For example, press 1 for article 1, press 2 for article 2, and so on.'
+      );
+      hasArticlesNarrationRef.current = true;
+      articlesNarrationTextRef.current = parts.join(' ');
+    } else {
+      hasArticlesNarrationRef.current = false;
+      articlesNarrationTextRef.current = '';
+    }
+
+    const timer = setTimeout(() => {
+      narrationSessionRef.current += 1;
+      const sessionId = narrationSessionRef.current;
+      narrationStepRef.current = 'intro';
+      speakNarrationStep(sessionId);
+    }, 500);
+
+    return () => {
+      clearTimeout(timer);
+      narrationSessionRef.current += 1;
+      narrationStepRef.current = 'idle';
+      cancel();
     };
-
-    const runIntro = () => {
-      if (articles && articles.length > 0) {
-        const parts: string[] = [];
-        parts.push(`There are ${articles.length} articles in this document.`);
-        articles.forEach((article, index) => {
-          const number = index + 1;
-          const heading = article.heading || `Article ${number}`;
-          parts.push(`Number ${number} article: ${heading}.`);
-        });
-        parts.push(
-          'To summarize an article, press the number key that matches the article. For example, press 1 for article 1, press 2 for article 2, and so on.'
-        );
-        const articlesText = parts.join(' ');
-        speak(introText, {
-          interrupt: true,
-          onEnd: () => speak(articlesText, { interrupt: true, onEnd: readSummary }),
-        });
-      } else {
-        speak(introText, { interrupt: true, onEnd: readSummary });
-      }
-    };
-
-    setTimeout(runIntro, 500);
-
-    return () => cancel();
-  }, [hasAutoPlayed, articles, summary, speak, cancel]);
+  }, [articles, summary, speak, cancel, speakNarrationStep]);
 
   // When user selects a different article: only say "Loading summary" — do NOT read the old summary
   useEffect(() => {
@@ -107,22 +236,87 @@ export const DocumentSummary = ({
     const trimmed = summary.trim();
     if (!trimmed || !initialSpeakDoneRef.current) return;
     if (trimmed === lastSpokenSummaryRef.current) return;
-    lastSpokenSummaryRef.current = trimmed;
+
+    narrationSessionRef.current += 1;
+    const sessionId = narrationSessionRef.current;
     cancel();
-    speak('Reading the latest summary for the selected article.', {
-      interrupt: true,
-      onEnd: () => speak(trimmed, { interrupt: false }),
-    });
-  }, [summary, speak, cancel]);
+    summaryNarrationTextRef.current = trimmed;
+    narrationStepRef.current = pendingSyllabusRef.current.trim()
+      ? 'syllabus'
+      : 'summary';
+    speakNarrationStep(sessionId);
+  }, [summary, cancel, speakNarrationStep]);
+
+  // Announce syllabus topic only when article is in syllabus (non-empty message).
+  useEffect(() => {
+    const msg = (syllabusMatchMessage || '').trim();
+    if (!msg) {
+      // Reset so the same message can be announced again after article changes.
+      lastSpokenSyllabusRef.current = '';
+      pendingSyllabusRef.current = '';
+      return;
+    }
+    pendingSyllabusRef.current = msg;
+  }, [syllabusMatchMessage]);
+
+  const saveCurrentArticleToFavorites = useCallback(async () => {
+    if (!documentId || !selectedArticleId || favoriteInFlightRef.current) return;
+
+    favoriteInFlightRef.current = true;
+    setFavoriteSaving(true);
+    setFavoriteStatus(null);
+    cancel();
+
+    const heading =
+      articles?.find((a) => a.article_id === selectedArticleId)?.heading ||
+      'this article';
+
+    try {
+      await addFavoriteArticle(documentId, selectedArticleId);
+      const ok = `Saved to favorites: ${heading}.`;
+      setFavoriteStatus(ok);
+      speak(ok, { interrupt: true });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'Could not save favorite.';
+      setFavoriteStatus(message);
+      speak(message, { interrupt: true });
+    } finally {
+      favoriteInFlightRef.current = false;
+      setFavoriteSaving(false);
+    }
+  }, [documentId, selectedArticleId, articles, speak, cancel]);
 
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target?.closest('input, textarea, select, [contenteditable="true"]')
+      ) {
+        return;
+      }
+
       // A key to replay summary
       if (e.key === 'a' || e.key === 'A') {
         e.preventDefault();
         cancel();
         speak(summary, { interrupt: true });
+        return;
+      }
+
+      // N key: skip current narration and move to next spoken step
+      if (e.key === 'n' || e.key === 'N') {
+        e.preventDefault();
+        skipToNextNarration();
+        return;
+      }
+
+      // S key: save current article to favorites
+      if (e.key === 's' || e.key === 'S') {
+        if (!documentId || !selectedArticleId) return;
+        e.preventDefault();
+        void saveCurrentArticleToFavorites();
         return;
       }
 
@@ -177,7 +371,18 @@ export const DocumentSummary = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [summary, onAskQuestion, articles, onSelectArticle, speak, cancel]);
+  }, [
+    summary,
+    onAskQuestion,
+    articles,
+    onSelectArticle,
+    speak,
+    cancel,
+    documentId,
+    selectedArticleId,
+    saveCurrentArticleToFavorites,
+    skipToNextNarration,
+  ]);
 
   const increaseTextSize = () => {
     setTextSize((prev) => Math.min(prev + 10, 150));
@@ -198,7 +403,7 @@ export const DocumentSummary = ({
       <div className="space-y-2">
         <h1 className="text-2xl">Document Summary</h1>
         <p className="text-muted-foreground">
-          A to replay • V for voice question • T for text question • +/- to resize text
+          A replay • N skip voice • S save favorite • V voice question • T text question • +/- text size
         </p>
         {selectedArticle && (
           <p className="text-sm text-secondary">
@@ -266,6 +471,46 @@ export const DocumentSummary = ({
 
       {/* Audio Player */}
       <AudioPlayer text={summary} autoPlay={false} />
+
+      {/* Syllabus Classification (shown only if article belongs to syllabus) */}
+      {syllabusMatchMessage && (
+        <Card className="border-emerald-500/50 bg-emerald-500/10 p-4">
+          <p className="text-sm leading-relaxed" role="status" aria-live="polite">
+            {syllabusMatchMessage}
+          </p>
+        </Card>
+      )}
+
+      {/* Save to favorites */}
+      <Card className="p-4 space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg">Favorites</h2>
+            <p className="text-sm text-muted-foreground">
+              Save the currently selected article for quick access later. Keyboard: S
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => void saveCurrentArticleToFavorites()}
+            disabled={
+              favoriteSaving || !documentId || !selectedArticleId
+            }
+            size="lg"
+            variant="secondary"
+            className="min-h-[56px] gap-2 shrink-0"
+            aria-label="Save current article to favorites. Keyboard shortcut S."
+          >
+            <Bookmark className="h-5 w-5" aria-hidden="true" />
+            {favoriteSaving ? 'Saving…' : 'Save article to favorites'}
+          </Button>
+        </div>
+        {favoriteStatus && (
+          <p className="text-sm" role="status" aria-live="polite">
+            {favoriteStatus}
+          </p>
+        )}
+      </Card>
 
       {/* Text Controls */}
       <div className="flex items-center justify-between">

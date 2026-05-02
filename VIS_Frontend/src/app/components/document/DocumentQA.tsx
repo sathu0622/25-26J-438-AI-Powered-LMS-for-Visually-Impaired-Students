@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Send, Loader2, ArrowLeft, AlertCircle, X } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Send, Loader2, ArrowLeft, AlertCircle, X, Bookmark } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { Textarea } from '../ui/textarea';
@@ -8,6 +8,7 @@ import { AudioPlayer } from '../AudioPlayer';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition';
 import { documentService } from '../../services/documentService';
 import { useTTS } from '../../contexts/TTSContext';
+import { addFavoriteArticle } from './favoritesApi';
 
 interface QAItem {
   question: string;
@@ -24,6 +25,10 @@ interface DocumentQAProps {
   documentId: string;
   articleId: string | null;
   articleHeading?: string;
+  /** Mongo-backed passage for favorites; sent as `full_content` on /ask-question. */
+  qaContextFullText?: string | null;
+  /** Favorite opened from DB without stored full text (Q&A may require re-save). */
+  favoriteStoredPassageMissing?: boolean;
 }
 
 export const DocumentQA = ({
@@ -32,6 +37,8 @@ export const DocumentQA = ({
   documentId,
   articleId,
   articleHeading,
+  qaContextFullText = null,
+  favoriteStoredPassageMissing = false,
 }: DocumentQAProps) => {
   const [question, setQuestion] = useState('');
   const [qaHistory, setQaHistory] = useState<QAItem[]>([]);
@@ -41,12 +48,14 @@ export const DocumentQA = ({
   const [recordingTimer, setRecordingTimer] = useState<NodeJS.Timeout | null>(null);
   const [hasAutoStarted, setHasAutoStarted] = useState(false);
   const [qaError, setQaError] = useState<string | null>(null);
+  const [favoriteSaving, setFavoriteSaving] = useState(false);
+  const [favoriteStatus, setFavoriteStatus] = useState<string | null>(null);
+  const favoriteInFlightRef = useRef(false);
 
   const { speak, cancel } = useTTS();
   const {
     isListening,
     transcript,
-    interimTranscript,
     startListening,
     stopListening,
     resetTranscript,
@@ -55,44 +64,51 @@ export const DocumentQA = ({
     clearError,
   } = useSpeechRecognition();
 
-  // Auto-start voice recording when entering voice mode
-  useEffect(() => {
+  const saveArticleToFavorites = useCallback(async () => {
+    if (!documentId || !articleId || favoriteInFlightRef.current) return;
+    favoriteInFlightRef.current = true;
+    setFavoriteSaving(true);
+    setFavoriteStatus(null);
     cancel();
 
+    const label = articleHeading || 'this article';
+    try {
+      await addFavoriteArticle(documentId, articleId);
+      const ok = `Saved to favorites: ${label}.`;
+      setFavoriteStatus(ok);
+      speak(ok, { interrupt: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not save favorite.';
+      setFavoriteStatus(message);
+      speak(message, { interrupt: true });
+    } finally {
+      favoriteInFlightRef.current = false;
+      setFavoriteSaving(false);
+    }
+  }, [documentId, articleId, articleHeading, speak, cancel]);
+
+  useEffect(() => {
+    cancel();
     if (mode === 'voice' && !hasAutoStarted) {
       setHasAutoStarted(true);
       speak(
-        'Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press Escape to go back. Recording will start automatically in 2 seconds.',
-        {
-          interrupt: true,
-          onEnd: () => {
-            setTimeout(() => handleVoiceToggle(), 500);
-          },
-        }
+        'Ask a Question page. Press Space or Enter to record or submit your question. Press R to re-record. Press A to replay answer after receiving it. Press S to save this article to favorites when not typing in the question box. Press Escape to go back. Recording will start automatically in 2 seconds.',
+        { interrupt: true, onEnd: () => setTimeout(() => handleVoiceToggle(), 500) }
       );
     }
-
     return () => cancel();
   }, [mode]);
 
-  // Keyboard shortcuts for voice recording
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Space or Enter to toggle recording (when not in textarea)
       if ((e.key === ' ' || e.key === 'Enter') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
         e.preventDefault();
         if (!isLoading) {
-          if (question.trim() && !isRecording) {
-            // Submit question if we have text
-            handleAsk();
-          } else {
-            // Toggle recording
-            handleVoiceToggle();
-          }
+          if (question.trim() && !isRecording) handleAsk();
+          else handleVoiceToggle();
         }
       }
 
-      // R key to start recording
       if (e.key === 'r' || e.key === 'R') {
         if (!isLoading && !isRecording && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
           e.preventDefault();
@@ -100,7 +116,6 @@ export const DocumentQA = ({
         }
       }
 
-      // A key to replay answer audio
       if ((e.key === 'a' || e.key === 'A') && currentAnswer) {
         if (e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
           e.preventDefault();
@@ -109,7 +124,14 @@ export const DocumentQA = ({
         }
       }
 
-      // Escape to go back
+      if (e.key === 's' || e.key === 'S') {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+        if (!documentId || !articleId) return;
+        e.preventDefault();
+        void saveArticleToFavorites();
+      }
+
       if (e.key === 'Escape') {
         e.preventDefault();
         onBack();
@@ -118,58 +140,46 @@ export const DocumentQA = ({
 
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [isRecording, isLoading, question, currentAnswer, onBack, speak, cancel]);
+  }, [isRecording, isLoading, question, currentAnswer, onBack, speak, cancel, documentId, articleId, saveArticleToFavorites]);
 
   useEffect(() => {
-    if (transcript && !isListening) {
-      setQuestion(transcript);
-    }
+    if (transcript && !isListening) setQuestion(transcript);
   }, [transcript, isListening]);
 
   const handleAsk = async () => {
     if (!question.trim() || !documentId || !articleId) return;
-
     setIsLoading(true);
     setCurrentAnswer(null);
     setQaError(null);
 
     try {
-      const qaData = await documentService.askQuestion(
-        documentId,
-        articleId,
-        question,
-        64,
-        0.15
-      );
-
+      const passage = qaContextFullText?.trim();
+      const qaData = await documentService.askQuestion(documentId, articleId, question, 64, 0.15, passage || undefined);
       const timestamp = new Date().toLocaleTimeString();
-      const newItem: QAItem = {
-        question,
-        answer: qaData.answer,
-        confidence: qaData.confidence,
-        articleHeading: articleHeading || qaData.article_heading,
-        timestamp,
-        context: qaData.context_preview,
-      };
 
-      setQaHistory((prev) => [...prev, newItem]);
+      setQaHistory((prev) => [
+        ...prev,
+        {
+          question,
+          answer: qaData.answer,
+          confidence: qaData.confidence,
+          articleHeading: articleHeading || qaData.article_heading,
+          timestamp,
+          context: qaData.context_preview,
+        },
+      ]);
+
       setCurrentAnswer(qaData.answer);
       setQuestion('');
       resetTranscript();
 
-      // Announce that answer is ready and how to replay (after answer TTS finishes)
       setTimeout(() => {
-        speak(
-          'Answer received. Press A to replay the answer anytime, or press Space to ask another question.',
-          { interrupt: false }
-        );
+        speak('Answer received. Press A to replay the answer anytime, or press Space to ask another question.', {
+          interrupt: false,
+        });
       }, 8000);
     } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Failed to get answer. Please try again.';
-      setQaError(message);
+      setQaError(error instanceof Error ? error.message : 'Failed to get answer. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -183,42 +193,35 @@ export const DocumentQA = ({
       }
       setIsRecording(false);
       stopListening();
-    } else {
-      setIsRecording(true);
-      setQuestion('');
-      resetTranscript();
-      startListening();
-      // Auto-stop after 10 seconds to avoid very long recordings
-      const timer = setTimeout(() => {
-        stopListening();
-        setIsRecording(false);
-        setRecordingTimer(null);
-      }, 10000);
-      setRecordingTimer(timer);
+      return;
     }
+
+    setIsRecording(true);
+    setQuestion('');
+    resetTranscript();
+    startListening();
+
+    const timer = setTimeout(() => {
+      stopListening();
+      setIsRecording(false);
+      setRecordingTimer(null);
+    }, 10000);
+    setRecordingTimer(timer);
   };
 
-  const displayQuestion = isRecording
-    ? 'Listening...'
-    : question;
+  const displayQuestion = isRecording ? 'Listening...' : question;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
-      {/* Header */}
       <div className="flex items-center gap-4">
-        <Button
-          onClick={onBack}
-          variant="ghost"
-          size="icon"
-          aria-label="Go back - Press Escape"
-        >
+        <Button onClick={onBack} variant="ghost" size="icon" aria-label="Go back - Press Escape">
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl">Ask a Question</h1>
           <p className="text-sm text-muted-foreground">
-            {mode === 'voice' 
-              ? currentAnswer 
+            {mode === 'voice'
+              ? currentAnswer
                 ? 'Space to ask new • A to replay answer • Esc to go back'
                 : 'Space/Enter to record • R to record again • Esc to go back'
               : 'Type your question'}
@@ -226,7 +229,16 @@ export const DocumentQA = ({
         </div>
       </div>
 
-      {/* Speech Recognition Error */}
+      {favoriteStoredPassageMissing && (
+        <Card className="border-amber-500/50 bg-amber-500/10 p-4">
+          <p className="text-sm leading-relaxed">
+            This favorite has no saved full article text in the database. Questions may only work if the original
+            document is still loaded on the server. Re-save the favorite from a processed document to store full text
+            for Q&A.
+          </p>
+        </Card>
+      )}
+
       {speechError && mode === 'voice' && (
         <Card className="border-destructive bg-destructive/10 p-4">
           <div className="flex items-start gap-3">
@@ -241,26 +253,45 @@ export const DocumentQA = ({
                     <li>Find "Microphone" and set to "Allow"</li>
                     <li>Reload the page</li>
                   </ul>
-                  <p className="text-muted-foreground">
-                    You can still type your question in text mode.
-                  </p>
+                  <p className="text-muted-foreground">You can still type your question in text mode.</p>
                 </div>
               )}
             </div>
-            <Button
-              onClick={clearError}
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              aria-label="Dismiss error"
-            >
+            <Button onClick={clearError} variant="ghost" size="icon" className="h-6 w-6" aria-label="Dismiss error">
               <X className="h-4 w-4" />
             </Button>
           </div>
         </Card>
       )}
 
-      {/* Q&A API Error */}
+      <Card className="p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium">Save this article</p>
+            <p className="text-sm text-muted-foreground">
+              Adds the current article to shared favorites. Shortcut: S (when not typing)
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="lg"
+            className="min-h-[48px] gap-2 shrink-0"
+            disabled={favoriteSaving || !documentId || !articleId}
+            onClick={() => void saveArticleToFavorites()}
+            aria-label="Save article to favorites. Keyboard S when not in question box."
+          >
+            <Bookmark className="h-5 w-5" aria-hidden="true" />
+            {favoriteSaving ? 'Saving...' : 'Save to favorites'}
+          </Button>
+        </div>
+        {favoriteStatus && (
+          <p className="mt-3 text-sm" role="status" aria-live="polite">
+            {favoriteStatus}
+          </p>
+        )}
+      </Card>
+
       {qaError && (
         <Card className="border-destructive bg-destructive/10 p-4">
           <div className="space-y-1 text-sm">
@@ -270,7 +301,6 @@ export const DocumentQA = ({
         </Card>
       )}
 
-      {/* Input Area */}
       <Card className="p-6">
         <div className="space-y-4">
           <label htmlFor="question-input" className="text-sm">
@@ -280,24 +310,19 @@ export const DocumentQA = ({
             id="question-input"
             value={displayQuestion}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder={
-              mode === 'voice'
-                ? 'Tap microphone and speak...'
-                : 'Type your question here...'
-            }
+            placeholder={mode === 'voice' ? 'Tap microphone and speak...' : 'Type your question here...'}
             className="min-h-[120px] text-base"
             disabled={isRecording || isLoading}
             aria-label="Question input"
           />
           {isRecording && (
             <p className="text-sm text-secondary animate-pulse" aria-live="polite">
-              🎤 Recording... Speak now
+              Recording... Speak now
             </p>
           )}
         </div>
       </Card>
 
-      {/* Action Buttons */}
       <div className="flex gap-3">
         {mode === 'voice' && (
           <VoiceButton
@@ -307,12 +332,7 @@ export const DocumentQA = ({
             className="flex-1"
           />
         )}
-        <Button
-          onClick={handleAsk}
-          disabled={!question.trim() || isLoading || isRecording}
-          size="lg"
-          className="flex-1"
-        >
+        <Button onClick={handleAsk} disabled={!question.trim() || isLoading || isRecording} size="lg" className="flex-1">
           {isLoading ? (
             <>
               <Loader2 className="mr-2 h-5 w-5 animate-spin" aria-hidden="true" />
@@ -327,7 +347,6 @@ export const DocumentQA = ({
         </Button>
       </div>
 
-      {/* Current Answer */}
       {currentAnswer && (
         <div className="space-y-4">
           <h2 className="text-lg">Answer</h2>
@@ -338,25 +357,27 @@ export const DocumentQA = ({
         </div>
       )}
 
-      {/* Q&A History */}
       {qaHistory.length > 0 && !currentAnswer && (
         <div className="space-y-4">
           <h2 className="text-lg">Previous Questions</h2>
           <div className="space-y-4">
-            {qaHistory.slice().reverse().map((qa, index) => (
-              <Card key={index} className="p-4">
-                <div className="space-y-3">
-                  <div>
-                    <p className="text-sm text-muted-foreground">Question:</p>
-                    <p>{qa.question}</p>
+            {qaHistory
+              .slice()
+              .reverse()
+              .map((qa, index) => (
+                <Card key={index} className="p-4">
+                  <div className="space-y-3">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Question:</p>
+                      <p>{qa.question}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Answer:</p>
+                      <p className="text-sm">{qa.answer}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Answer:</p>
-                    <p className="text-sm">{qa.answer}</p>
-                  </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              ))}
           </div>
         </div>
       )}
