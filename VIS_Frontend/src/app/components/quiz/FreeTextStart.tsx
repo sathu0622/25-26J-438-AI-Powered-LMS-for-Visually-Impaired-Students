@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Volume2, Loader2, PenLine, History } from 'lucide-react';
 import { freeTextService, FreeTextSessionListItem } from '../../services/freeTextService';
 import { Card } from '../ui/card';

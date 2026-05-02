@@ -21,9 +21,70 @@ llm = None  # Injected Llama model for distractor generation
 
 # Cache for generated distractors to avoid regenerating
 _distractor_cache: Dict[str, List[str]] = {}
+# Bump when sanitization/format rules change so old cached strings cannot leak back in
+_DISTRACTOR_CACHE_TAG = ":mcqopt:v2"
+
+
+def _distr_cache_key(item_id: str) -> str:
+    return item_id + _DISTRACTOR_CACHE_TAG
+
 
 # Thread safety for LLM generation
 _llm_lock = threading.Lock()
+
+
+def _strip_concatenated_answer_leak(text: str) -> str:
+    """
+    Remove a second answer accidentally glued into CSV/LLM text, e.g.:
+    '...disputes. Answer: Correct Answer: It spread to other countries.'
+    Keeps only the fragment before '. Answer:', ' Correct Answer:', etc.
+    Runs iteratively to peel nested leaks.
+    """
+    if not text or not isinstance(text, str):
+        return ""
+    t = text.strip()
+    lead_label = re.compile(
+        r"^(?:incorrect\s+|wrong\s+|correct\s+)?answer\s*:\s*",
+        re.IGNORECASE,
+    )
+    # Mid-string leaks (after punctuation or clear boundary)
+    mid_leak = re.compile(
+        r"(?<=[\.!?])\s*(?:incorrect\s+|wrong\s+|correct\s+)?(?:answer|correct\s+answer)\s*:.*$"
+        r"|(?<=\S)\s{2,}(?:incorrect\s+|wrong\s+|correct\s+)?answer\s*:.*$"
+        r"|[\.\!?]\s*(?:incorrect\s+|wrong\s+|correct\s+)?correct\s+answer\s*:.*$"
+        r"|(?<!^)\s+answer\s*:\s*(?:correct\s+)?answer\s*:.*$",
+        re.IGNORECASE | re.DOTALL,
+    )
+
+    changed = True
+    safety = 0
+    while changed and safety < 12:
+        safety += 1
+        changed = False
+        before = t
+        t = lead_label.sub("", t).strip()
+
+        prev = ""
+        while prev != t:
+            prev = t
+            m = mid_leak.search(t)
+            if m:
+                cut = m.start()
+                if cut > 0:
+                    t = t[:cut].rstrip(".!? ").strip()
+                    changed = True
+        if before != t:
+            changed = True
+
+    # Final tidy: orphaned " Correct Answer:" without leading punctuation
+    t = re.sub(
+        r"\s*[Cc]orrect\s+[Aa]nswer\s*:\s*.*$",
+        "",
+        t,
+        flags=re.DOTALL,
+    ).strip()
+
+    return t
 
 
 def _clean_option_text(text: str) -> str:
@@ -33,8 +94,8 @@ def _clean_option_text(text: str) -> str:
     """
     if not text:
         return ""
-    
-    cleaned = text.strip()
+
+    cleaned = _strip_concatenated_answer_leak(text)
     
     # Remove common LLM artifacts (case-insensitive)
     artifacts = [
@@ -63,7 +124,10 @@ def _clean_option_text(text: str) -> str:
     
     # Remove any remaining colons at the start
     cleaned = re.sub(r'^:\s*', '', cleaned).strip()
-    
+
+    # Second pass after label cleanup (LLM sometimes appends blocks)
+    cleaned = _strip_concatenated_answer_leak(cleaned)
+
     return cleaned
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -135,12 +199,14 @@ def _load_item_bank() -> Dict[str, List[AdaptiveItem]]:
         difficulty_label = str(row.get("Difficulty", "medium")).strip()
         diff_val = _difficulty_map.get(difficulty_label.lower(), 0.0)
         # Extract key phrase if available (could be same as correct answer or from a separate column)
-        key_phrase = str(row.get("KeyPhrase", row.get("CorrectAnswer", ""))).strip()
+        key_phrase = _clean_option_text(str(row.get("KeyPhrase", row.get("CorrectAnswer", ""))).strip())
+        q_raw = str(row["Question"]).strip()
+        a_raw = str(row["CorrectAnswer"]).strip()
         item = AdaptiveItem(
             item_id=f"{chapter}::{idx}",
             chapter_name=chapter,
-            question=str(row["Question"]).strip(),
-            correct_answer=str(row["CorrectAnswer"]).strip(),
+            question=_clean_option_text(q_raw),
+            correct_answer=_clean_option_text(a_raw),
             context=str(row.get("Context", "")).strip(),
             difficulty=diff_val,
             difficulty_label=difficulty_label,
@@ -190,21 +256,22 @@ def _generate_distractors(item: AdaptiveItem) -> List[str]:
     Uses thread lock to prevent concurrent LLM access issues.
     """
     # Check cache first
-    if item.item_id in _distractor_cache:
-        return _distractor_cache[item.item_id]
+    ck = _distr_cache_key(item.item_id)
+    if ck in _distractor_cache:
+        return _distractor_cache[ck]
     
     fallback = [f"Option {i}" for i in range(2, 5)]
     
     if llm is None:
         print("⚠️ LLM not available, using fallback distractors")
-        _distractor_cache[item.item_id] = fallback
+        _distractor_cache[ck] = fallback
         return fallback
     
     # Try to acquire lock with timeout
     lock_acquired = _llm_lock.acquire(timeout=30)
     if not lock_acquired:
         print("⚠️ LLM busy (lock timeout), using fallback distractors")
-        _distractor_cache[item.item_id] = fallback
+        _distractor_cache[ck] = fallback
         return fallback
     
     try:
@@ -219,6 +286,8 @@ The distractors should be:
 - Related to the topic and time period
 - Realistic enough to challenge students
 - Clearly different from the correct answer
+
+Each line must be ONE short historical claim only — never include labels like "Answer:" or "Correct Answer:", and never concatenate two statements or repeat the supplied correct answer verbatim.
 
 Format your response EXACTLY as:
 DISTRACTOR_1: [first wrong answer]
@@ -251,7 +320,7 @@ DISTRACTOR_3: [third wrong answer]""",
         while len(distractors) < 3:
             distractors.append(f"Option {len(distractors) + 2}")
         
-        _distractor_cache[item.item_id] = distractors[:3]
+        _distractor_cache[ck] = distractors[:3]
         return distractors[:3]
         
     except Exception as e:
@@ -262,28 +331,61 @@ DISTRACTOR_3: [third wrong answer]""",
         if "access violation" in error_str or "segfault" in error_str:
             print("⚠️ LLM critical error detected")
         
-        _distractor_cache[item.item_id] = fallback
+        _distractor_cache[ck] = fallback
         return fallback
-        
+    
     finally:
         _llm_lock.release()
+
+
+def _sanitize_mcq_line(s: str) -> str:
+    """Normalize one MCQ choice for display/comparison (includes leak stripping)."""
+    if not s:
+        return ""
+    return _clean_option_text(str(s).strip()).strip()
 
 
 def _item_with_options(item: AdaptiveItem) -> AdaptiveItem:
     """Add MCQ options to an adaptive item."""
     distractors = _generate_distractors(item)
-    
-    # Create options array with correct answer and distractors
-    options = [item.correct_answer] + distractors
+
+    correct_s = _sanitize_mcq_line(item.correct_answer)
+    if not correct_s:
+        correct_s = "Response"
+
+    seen = {correct_s.lower()}
+    extras: List[str] = []
+    alt_n = 0
+    for d in distractors[:3]:
+        s = _sanitize_mcq_line(d)
+        if not s:
+            s = f"Distractor {len(extras) + 2}"
+        low = s.lower()
+        while low in seen:
+            alt_n += 1
+            s = f"Historical alternative #{alt_n}"
+            low = s.lower()
+        seen.add(low)
+        extras.append(s)
+
+    while len(extras) < 3:
+        alt_n += 1
+        s = f"Other option #{alt_n}"
+        while s.lower() in seen:
+            alt_n += 1
+            s = f"Other option #{alt_n}"
+        seen.add(s.lower())
+        extras.append(s)
+
+    options = [correct_s] + extras[:3]
     random.shuffle(options)
-    correct_index = options.index(item.correct_answer)
-    
-    # Return new item with options
+    correct_index = options.index(correct_s)
+
     return AdaptiveItem(
         item_id=item.item_id,
         chapter_name=item.chapter_name,
         question=item.question,
-        correct_answer=item.correct_answer,
+        correct_answer=correct_s,
         difficulty=item.difficulty,
         difficulty_label=item.difficulty_label,
         discrimination=item.discrimination,

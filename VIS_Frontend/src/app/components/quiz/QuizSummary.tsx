@@ -1,9 +1,17 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { CheckCircle2, RefreshCw, Home, Play, BookOpen } from 'lucide-react';
 import { useTTS } from '../../contexts/TTSContext';
 import { QuizSetSummary } from '../../services/quizService';
+
+export interface QuizSummaryReviewItem {
+  question: string;
+  yourAnswer: string;
+  correctAnswer: string;
+  correct: boolean;
+  year?: string;
+}
 
 interface QuizSummaryProps {
   summary: QuizSetSummary;
@@ -12,6 +20,32 @@ interface QuizSummaryProps {
   onRetake: () => void;
   onGoHome: () => void;
   onStartNew: () => void;
+  /** When set (e.g. past paper), read each question aloud with verdict and answers. */
+  reviewItems?: QuizSummaryReviewItem[];
+}
+
+function buildQuizSummaryPhrases(
+  correctCount: number,
+  totalQuestions: number,
+  averageScore: number,
+  accuracy: number,
+  reviewItems?: QuizSummaryReviewItem[]
+): string[] {
+  const head = `Quiz complete. You answered ${correctCount} out of ${totalQuestions} correctly. Accuracy ${accuracy} percent. Average score ${averageScore} percent.`;
+  const shortcuts = `Press Enter to retake this set, H for home, or N to start a new set.`;
+  if (!reviewItems?.length) {
+    return [`${head} ${shortcuts}`];
+  }
+  const detail = reviewItems.map((item, idx) => {
+    const verdict = item.correct ? 'Correct.' : 'Incorrect.';
+    const yr = item.year ? ` Year ${item.year}.` : '';
+    const yours = `Your answer: ${item.yourAnswer?.trim() ? item.yourAnswer : 'none'}.`;
+    const corr = item.correct
+      ? ''
+      : ` The correct answer was: ${item.correctAnswer}.`;
+    return `Question ${idx + 1}.${yr} ${item.question}. ${verdict} ${yours}${corr}`;
+  });
+  return [head + ' Beginning question-by-question review.', ...detail, `End of review. ${shortcuts}`];
 }
 
 export const QuizSummary = ({
@@ -21,15 +55,67 @@ export const QuizSummary = ({
   onRetake,
   onGoHome,
   onStartNew,
+  reviewItems,
 }: QuizSummaryProps) => {
   const { speak, cancel } = useTTS();
 
+  const accuracy =
+    totalQuestions > 0 ? Math.round((correctCount / totalQuestions) * 100) : 0;
+
+  const phrases = useMemo(
+    () =>
+      buildQuizSummaryPhrases(
+        correctCount,
+        totalQuestions,
+        summary.average_score,
+        accuracy,
+        reviewItems
+      ),
+    [
+      correctCount,
+      totalQuestions,
+      summary.average_score,
+      accuracy,
+      reviewItems,
+    ]
+  );
+
+  const speakRecap = useCallback(
+    (parts: string[]) => {
+      cancel();
+      let i = 0;
+      const run = () => {
+        if (i >= parts.length) return;
+        const first = i === 0;
+        speak(parts[i], {
+          interrupt: first,
+          onEnd: () => {
+            i += 1;
+            run();
+          },
+        });
+      };
+      run();
+    },
+    [speak, cancel]
+  );
+
   useEffect(() => {
+    let stopped = false;
     cancel();
-    speak(
-      `Quiz complete. You answered ${correctCount} out of ${totalQuestions} correctly. Average score ${summary.average_score} percent. Press Enter to retake this set, H for home, or N to start a new set.`,
-      { interrupt: true }
-    );
+    let i = 0;
+    const run = () => {
+      if (stopped || i >= phrases.length) return;
+      speak(phrases[i], {
+        interrupt: i === 0,
+        onEnd: () => {
+          if (stopped) return;
+          i += 1;
+          run();
+        },
+      });
+    };
+    run();
 
     const handleKeys = (e: KeyboardEvent) => {
       if (e.key === 'Enter') {
@@ -45,12 +131,11 @@ export const QuizSummary = ({
 
     window.addEventListener('keydown', handleKeys);
     return () => {
+      stopped = true;
       window.removeEventListener('keydown', handleKeys);
       cancel();
     };
-  }, [correctCount, totalQuestions, summary.average_score, onRetake, onGoHome, onStartNew, speak, cancel]);
-
-  const accuracy = Math.round((correctCount / totalQuestions) * 100);
+  }, [phrases, speak, cancel, onRetake, onGoHome, onStartNew]);
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6 pb-24">
@@ -98,10 +183,7 @@ export const QuizSummary = ({
           <p className="text-sm font-semibold text-muted-foreground mb-2">Audio Recap</p>
           <p className="text-base">You can replay the summary.</p>
         </div>
-        <Button
-          variant="secondary"
-          onClick={() => speak(`You answered ${correctCount} out of ${totalQuestions} correctly. Average score ${summary.average_score} percent.`)}
-        >
+        <Button variant="secondary" onClick={() => speakRecap(phrases)}>
           <Play className="mr-2 h-4 w-4" /> Play
         </Button>
       </Card>

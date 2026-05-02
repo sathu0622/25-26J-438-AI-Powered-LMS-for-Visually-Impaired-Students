@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { Volume2, RefreshCw, Home, CheckCircle2, XCircle } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Card } from '../ui/card';
@@ -24,12 +24,64 @@ export const FreeTextSummary = ({
 }: FreeTextSummaryProps) => {
   const { speak, cancel } = useTTS();
 
-  const summaryText = `Free-text quiz completed for ${chapterName}. You answered ${summary.correct_count} out of ${summary.total_questions} questions correctly. Your average score is ${summary.average_score} percent. Press R to retake the same questions, N for a new quiz, or H to go home.`;
+  const recapPhrases = useMemo(() => {
+    const head = `Free-text quiz completed for ${chapterName}. You answered ${summary.correct_count} out of ${summary.total_questions} questions correctly. Your average score is ${summary.average_score} percent. Beginning answer-by-answer review.`;
+    const shortcuts = `Press R to retake the same questions, N for a new quiz, or H to go home.`;
+    const perAnswer = answers.map((ans, index) => {
+      const verdict = ans.correct ? 'Marked correct.' : 'Marked incorrect.';
+      const yours = `Your answer: ${ans.user_answer?.trim() ? ans.user_answer : 'none'}.`;
+      const corr = `Correct answer: ${ans.correct_answer}. Score ${ans.score} percent. Feedback: ${ans.feedback}`;
+      return `Question ${index + 1}. ${verdict} ${yours} ${corr}`;
+    });
+    return [head, ...perAnswer, `End of review. ${shortcuts}`];
+  }, [
+    chapterName,
+    summary.correct_count,
+    summary.total_questions,
+    summary.average_score,
+    answers,
+  ]);
+
+  const speakRecap = useCallback(
+    (parts: string[]) => {
+      cancel();
+      let i = 0;
+      const run = () => {
+        if (i >= parts.length) return;
+        speak(parts[i], {
+          interrupt: i === 0,
+          onEnd: () => {
+            i += 1;
+            run();
+          },
+        });
+      };
+      run();
+    },
+    [speak, cancel]
+  );
 
   useEffect(() => {
-    speak(summaryText, { interrupt: true });
-    return () => cancel();
-  }, [summaryText, speak, cancel]);
+    let stopped = false;
+    cancel();
+    let i = 0;
+    const run = () => {
+      if (stopped || i >= recapPhrases.length) return;
+      speak(recapPhrases[i], {
+        interrupt: i === 0,
+        onEnd: () => {
+          if (stopped) return;
+          i += 1;
+          run();
+        },
+      });
+    };
+    run();
+    return () => {
+      stopped = true;
+      cancel();
+    };
+  }, [recapPhrases, speak, cancel]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -69,7 +121,12 @@ export const FreeTextSummary = ({
             <h2 className="text-2xl font-semibold">{chapterName}</h2>
             <p className="text-sm text-muted-foreground">Session completed successfully. Your answers have been saved for retake.</p>
           </div>
-          <Button variant="ghost" size="icon" aria-label="Speak summary" onClick={() => speak(summaryText)}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Play full recap including each answer"
+            onClick={() => speakRecap(recapPhrases)}
+          >
             <Volume2 className="h-5 w-5" />
           </Button>
         </div>

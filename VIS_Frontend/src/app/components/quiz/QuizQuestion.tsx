@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Volume2, Mic, Send, SkipForward, Check } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
@@ -18,15 +18,21 @@ interface QuizQuestionProps {
     correct_answer: string;
     key_phrase: string;
     year?: string; // Optional year for past paper questions
-    options?: string[];      // MCQ options (4 choices)
-    correct_index?: number;  // Index of correct answer in options array
+    options?: string[]; // MCQ options (4 choices)
+    correct_index?: number; // Index of correct answer in options array
   };
- questionNumber: number;
+  questionNumber: number;
   totalQuestions: number;
   onSubmit: (answer: string) => void;
   onSkip: () => void;
   onBack?: () => void;
   isPastPaper?: boolean; // Flag to indicate if this is a past paper question
+  /** Unique per question row; avoids re-running effects when parent recreates `question` every render (e.g. quiz timer ticks). */
+  questionIdentityKey?: string;
+  /** TTS rate (defaults follow ttsService: ~0.95). Use slightly higher for timed quizzes. */
+  ttsRate?: number;
+  /** Shorter prompts for timed quizzes to save listening time */
+  timedQuiz?: boolean;
 }
 
 export const QuizQuestion = ({
@@ -37,6 +43,9 @@ export const QuizQuestion = ({
   onSkip,
   onBack,
   isPastPaper = false,
+  questionIdentityKey,
+  ttsRate,
+  timedQuiz = false,
 }: QuizQuestionProps) => {
   const [answer, setAnswer] = useState('');
   const [selectedOption, setSelectedOption] = useState<number | null>(null);
@@ -45,122 +54,179 @@ export const QuizQuestion = ({
   const [showVoiceModal, setShowVoiceModal] = useState(false);
 
   const { speak, cancel } = useTTS();
-  
+  const questionRef = useRef(question);
+  const selectedOptionRef = useRef<number | null>(null);
+  questionRef.current = question;
+
   // Check if this is an MCQ question
   const isMCQ = question.options && question.options.length > 0;
   const optionLabels = ['A', 'B', 'C', 'D'];
+
+  const readAloudDepsKey =
+    questionIdentityKey ??
+    `${question.question}|||${question.options?.join('\u241E') ?? ''}|${question.year ?? ''}|${questionNumber}`;
 
   useEffect(() => {
     cancel();
     setHasReadQuestion(false);
     setSelectedOption(null);
+    selectedOptionRef.current = null;
     setAnswer('');
+    const q = questionRef.current;
+    const mcqOpts = q.options && q.options.length > 0;
     const timer = setTimeout(() => {
-      // Create the year announcement for past paper questions
-      const yearAnnouncement = isPastPaper && question.year 
-        ? `This question is from the year ${question.year}. ` 
-        : '';
-      
-      if (isMCQ && question.options) {
-        // Read MCQ options
-        const optionsText = question.options
+      const yearAnnouncement =
+        isPastPaper && q.year ? `From year ${q.year}. ` : '';
+
+      const rate = timedQuiz ? ttsRate ?? 1.2 : ttsRate;
+
+      if (mcqOpts && q.options) {
+        const optionsText = q.options
           .map((opt, idx) => `${optionLabels[idx]}: ${opt}`)
           .join('. ');
-        speak(
-          `Question ${questionNumber}. ${yearAnnouncement}${question.question}. This is a multiple choice question. ${optionsText}. Press A, B, C, or D to select your answer. Press Q to repeat question. Press S to skip. Press Backspace to go back.`,
-          { interrupt: true }
-        );
+        const intro = timedQuiz
+          ? `${yearAnnouncement}Question ${questionNumber} of ${totalQuestions}. ${q.question}. Choices: ${optionsText}. Keys: A-D to choose; Enter submits; Q repeat; S skip.`
+          : `Question ${questionNumber}. ${yearAnnouncement}${q.question}. This is a multiple choice question. ${optionsText}. Press A, B, C, or D to select your answer. Press Q to repeat question. Press S to skip. Press Backspace to go back.`;
+        speak(intro, { interrupt: true, rate });
       } else {
         speak(
-          `Question ${questionNumber}. ${yearAnnouncement}${question.question}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question, Press Backspace to go back.`,
-          { interrupt: true }
+          `Question ${questionNumber}. ${yearAnnouncement}${q.question}. Press Space or Enter to record your answer, Press Q to repeat question, Press R to record, Press S to skip question, Press Backspace to go back.`,
+          { interrupt: true, ...(ttsRate !== undefined ? { rate: ttsRate } : {}) }
         );
       }
       setHasReadQuestion(true);
-    }, 500);
+    }, timedQuiz ? 150 : 500);
     return () => {
       clearTimeout(timer);
       cancel();
     };
-  }, [questionNumber, totalQuestions, question, speak, cancel]);
+  }, [readAloudDepsKey, questionNumber, totalQuestions, isPastPaper, timedQuiz, ttsRate, speak, cancel]);
 
-  // Keyboard shortcuts
+  useEffect(() => {
+    selectedOptionRef.current = selectedOption;
+  }, [selectedOption]);
+
+  // Keyboard shortcuts (capture phase: reliable Enter submit before nested button handlers)
   useEffect(() => {
     const handleKeyPress = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+
       // MCQ option selection (A, B, C, D)
-      if (isMCQ && question.options) {
+      const qNow = questionRef.current;
+      const opts = qNow.options;
+      const isMcqHere = opts && opts.length > 0;
+      if (isMcqHere && opts) {
         const key = e.key.toUpperCase();
         const optionIndex = optionLabels.indexOf(key);
-        if (optionIndex !== -1 && optionIndex < question.options.length && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+        if (optionIndex !== -1 && optionIndex < opts.length) {
           e.preventDefault();
+          e.stopPropagation();
           handleOptionSelect(optionIndex);
           return;
         }
       }
-      
-      // Space or Enter to toggle recording/submit (when not in textarea)
-      if ((e.key === ' ' || e.key === 'Enter') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
-        e.preventDefault();
-        if (isMCQ && selectedOption !== null) {
+
+      // Space or Enter: submit MCQ with latest selection from ref (avoids stale closures)
+      if (e.key === ' ' || e.key === 'Enter') {
+        if (isMcqHere && opts) {
+          const idx = selectedOptionRef.current;
+          if (idx !== null && idx >= 0 && idx < opts.length) {
+            e.preventDefault();
+            e.stopPropagation();
+            onSubmit(opts[idx]);
+            setSelectedOption(null);
+            selectedOptionRef.current = null;
+            setAnswer('');
+          }
+          return;
+        }
+
+        if (answer.trim() && !showVoiceModal) {
+          e.preventDefault();
           handleSubmit();
-        } else if (answer.trim() && !showVoiceModal) {
-          handleSubmit();
-        } else if (!isMCQ) {
+        } else if (!isMcqHere) {
+          e.preventDefault();
           handleVoiceToggle();
         }
+        return;
       }
 
       // R key to start recording (only for non-MCQ)
-      if ((e.key === 'r' || e.key === 'R') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA' && !isMCQ) {
+      if ((e.key === 'r' || e.key === 'R') && !isMcqHere) {
         e.preventDefault();
         handleVoiceToggle();
       }
 
       // S key to skip
-      if ((e.key === 's' || e.key === 'S') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+      if (e.key === 's' || e.key === 'S') {
         e.preventDefault();
-        handleSkip();
+        e.stopPropagation();
+        onSkip();
+        setAnswer('');
+        setSelectedOption(null);
+        selectedOptionRef.current = null;
       }
 
       // Q key to read question
-      if ((e.key === 'q' || e.key === 'Q') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+      if (e.key === 'q' || e.key === 'Q') {
         e.preventDefault();
         handleReadQuestion();
       }
 
       // Backspace or B key to go back
-      if ((e.key === 'Backspace' || e.key === 'b' || e.key === 'B') && e.target && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+      if (e.key === 'Backspace' || e.key === 'b' || e.key === 'B') {
         e.preventDefault();
         if (onBack) onBack();
       }
     };
 
-    window.addEventListener('keydown', handleKeyPress);
-    return () => window.removeEventListener('keydown', handleKeyPress);
-  }, [showVoiceModal, answer, selectedOption, isMCQ, onBack]);
+    window.addEventListener('keydown', handleKeyPress, true);
+    return () => window.removeEventListener('keydown', handleKeyPress, true);
+  }, [showVoiceModal, answer, questionIdentityKey, readAloudDepsKey, onBack, onSubmit, onSkip]);
+
+  const mcqAnnouncementRate =
+    timedQuiz ? ttsRate ?? 1.2 : ttsRate !== undefined ? ttsRate : undefined;
 
   const handleReadQuestion = () => {
     cancel();
-    // Create the year announcement for past paper questions
-    const yearAnnouncement = isPastPaper && question.year 
-      ? `This question is from the year ${question.year}. ` 
-      : '';
-    
-    if (isMCQ && question.options) {
-      const optionsText = question.options
+    const q = questionRef.current;
+    const yearAnnouncement =
+      isPastPaper && q.year ? `From year ${q.year}. ` : '';
+
+    const opts = q.options;
+    if (opts && opts.length > 0) {
+      const optionsText = opts
         .map((opt, idx) => `${optionLabels[idx]}: ${opt}`)
         .join('. ');
-      speak(`Question ${questionNumber}. ${yearAnnouncement}${question.question}. Options: ${optionsText}`, { interrupt: true });
+      const txt = timedQuiz
+        ? `${yearAnnouncement}${q.question}. ${optionsText}`
+        : `Question ${questionNumber}. ${yearAnnouncement}${q.question}. Options: ${optionsText}`;
+      speak(txt, {
+        interrupt: true,
+        ...(mcqAnnouncementRate !== undefined ? { rate: mcqAnnouncementRate } : {}),
+      });
     } else {
-      speak(`Question ${questionNumber}. ${yearAnnouncement}${question.question}`, { interrupt: true });
+      speak(`Question ${questionNumber}. ${yearAnnouncement}${q.question}`, {
+        interrupt: true,
+        ...(mcqAnnouncementRate !== undefined ? { rate: mcqAnnouncementRate } : {}),
+      });
     }
   };
 
   const handleOptionSelect = (index: number) => {
     if (!question.options) return;
+    selectedOptionRef.current = index;
     setSelectedOption(index);
     const selectedText = question.options[index];
-    speak(`Selected ${optionLabels[index]}: ${selectedText}. Press Enter to submit.`, { interrupt: true });
+    const cue = timedQuiz
+      ? `${optionLabels[index]}: ${selectedText}. Press Enter to submit.`
+      : `Selected ${optionLabels[index]}: ${selectedText}. Press Enter to submit.`;
+    speak(cue, {
+      interrupt: true,
+      ...(mcqAnnouncementRate !== undefined ? { rate: mcqAnnouncementRate } : {}),
+    });
   };
 
   const handleVoiceToggle = () => {
@@ -178,6 +244,7 @@ export const QuizQuestion = ({
       // For MCQ, submit the selected option text
       onSubmit(question.options[selectedOption]);
       setSelectedOption(null);
+      selectedOptionRef.current = null;
       setAnswer('');
       setHasReadQuestion(false);
     } else if (answer.trim()) {
@@ -191,6 +258,7 @@ export const QuizQuestion = ({
     onSkip();
     setAnswer('');
     setSelectedOption(null);
+    selectedOptionRef.current = null;
     setHasReadQuestion(false);
   };
 
@@ -201,7 +269,9 @@ export const QuizQuestion = ({
         <div className="flex items-center justify-between text-sm">
           <span className="text-muted-foreground">
             {isMCQ 
-              ? 'Press A/B/C/D to select • Q to repeat • S to skip • B to go back'
+              ? (timedQuiz
+                  ? 'A–D choose • Enter submits • Q repeat • S skip • B back'
+                  : 'Press A/B/C/D to select • Q to repeat • S to skip • B to go back')
               : 'Press Q to repeat • Space to record • S to skip • B to go back'
             }
           </span>
