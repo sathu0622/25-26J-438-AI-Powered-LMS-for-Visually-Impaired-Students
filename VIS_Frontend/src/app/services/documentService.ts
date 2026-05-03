@@ -7,6 +7,9 @@
 
 import { documentApi } from './api';
 
+const env = (import.meta as any).env;
+const DOCUMENT_PREFIX = env?.VITE_API_DOCUMENT_PREFIX ?? '';
+
 export interface DocumentProcessResponse {
   document_id: string;
   summaries?: Array<{
