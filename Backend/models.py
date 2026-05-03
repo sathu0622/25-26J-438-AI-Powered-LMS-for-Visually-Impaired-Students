@@ -21,14 +21,18 @@ def load_all_models():
     type_model = load_model(str(TYPE_MODEL_PATH), compile=False)
     print(f"✓ Resource type model loaded")
     
-    # Summarization model
+    # Summarization model - FLAN-T5 Base CPU-only
     base_model_name = "google/flan-t5-base"
     summ_tokenizer = T5Tokenizer.from_pretrained(base_model_name)
-    base_summ_model = T5ForConditionalGeneration.from_pretrained(base_model_name)
+    base_summ_model = T5ForConditionalGeneration.from_pretrained(
+        base_model_name,
+        torch_dtype=torch.float32,  # Use float32 for CPU
+        device_map="cpu"  # Explicitly map to CPU
+    )
     summ_model = PeftModel.from_pretrained(base_summ_model, str(T5_MODEL_DIR))
     summ_model.to(DEVICE)
     summ_model.eval()
-    print(f"✓ T5 summarization model loaded ({DEVICE})")
+    print(f"✓ FLAN-T5 Base summarization model loaded on CPU")
     
     # Q&A model
     qa_tokenizer = AutoTokenizer.from_pretrained(QA_MODEL_NAME)

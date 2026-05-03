@@ -12,8 +12,8 @@ load_dotenv(override=True)
 BASE_DIR = Path(__file__).parent
 MODEL_DIR = BASE_DIR / "Model"
 
-# Device configuration
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+# Device configuration - CPU-only mode for FLAN-T5 Base
+DEVICE = "cpu"
 print(f"Using device: {DEVICE}")
 
 # Tesseract configuration
