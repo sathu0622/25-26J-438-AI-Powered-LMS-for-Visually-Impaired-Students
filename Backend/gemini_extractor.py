@@ -57,7 +57,7 @@ def _call_with_retry(
 
 
 # ---------------------------------------------------------------------------
-# Internal helpers (unchanged logic, same as original)
+# Internal helpers
 # ---------------------------------------------------------------------------
 
 def _extract_json_block(raw_text: str) -> Optional[Dict[str, Any]]:
@@ -160,7 +160,126 @@ def _extract_pdf_text_fast(file_path: str) -> str:
         return ""
 
 
+# ---------------------------------------------------------------------------
+# FIX: Improved prompt for newspaper image extraction
+# ---------------------------------------------------------------------------
+
+def _build_newspaper_image_prompt() -> str:
+    """
+    Dedicated prompt for newspaper/magazine IMAGE extraction.
+    
+    Key fixes over the old generic prompt:
+    1. Explicitly instructs the model to treat heading + subheading + body as ONE article
+       even when images appear between them in the layout.
+    2. Requires COMPLETE body text — every paragraph, sentence, and word must be included.
+    3. Handles multi-column layouts: text that continues across columns belongs to the same article.
+    4. Warns the model NOT to truncate articles or stop early.
+    5. Uses a clearer JSON schema with worked examples.
+    """
+    return """
+You are a precise newspaper OCR and article-extraction engine.
+
+Your job: Read this newspaper page image and extract EVERY article with its COMPLETE text.
+
+=== CRITICAL RULES ===
+
+1. COMPLETE TEXT ONLY — Never truncate, summarize, or omit any words.
+   Every sentence, every paragraph of every article must appear in full in "body" and "full_text".
+
+2. HEADING + SUBHEADING + BODY = ONE ARTICLE
+   A newspaper article often has: a large heading, then an optional subheading/deck line,
+   then possibly a photo, then the body paragraphs. ALL of these belong to the SAME article.
+   Do NOT split them into separate articles.
+   Example: "A 75 YEAR JOURNEY" (heading) + "Going down memory lane with nostalgia" (subheading)
+   + all following body paragraphs = one article.
+
+3. MULTI-COLUMN BODY — Body text often flows across 2-3 columns. Read left-to-right,
+   top-to-bottom across all columns and join them into one continuous body for that article.
+
+4. COLUMN LABELS — Set "column" to:
+   - "left"  if the article sits only in the left column
+   - "right" if the article sits only in the right column  
+   - "full"  if the article spans the full width or multiple columns
+
+5. ARTICLE BOUNDARIES — A new article starts when you see a new distinct heading/title
+   that clearly introduces a different topic or story.
+
+6. OPINION / SECTION LABELS — If an article has a section label like "OPINION" above
+   its heading, include that label as a prefix in the heading: e.g. "OPINION: Sri Lanka,
+   Our Country to Celebrate!". Do NOT make the section label a separate article.
+
+7. body field — must be a JSON array of strings, one string per paragraph.
+   Each string must be the FULL text of that paragraph. No placeholders like "[continues...]".
+
+8. full_text — concatenate: heading + "\n" + subheading (if any) + "\n\n" + all body paragraphs
+   joined by "\n\n". Must equal the complete readable article text.
+
+=== OUTPUT FORMAT ===
+
+Return ONLY valid JSON. No markdown, no code fences, no extra commentary.
+
+{
+  "full_text": "<all article texts from the page joined together>",
+  "articles": [
+    {
+      "article_id": "article_1",
+      "heading": "<exact heading text>",
+      "subheading": "<exact subheading/deck line, or empty string>",
+      "column": "left|right|full",
+      "body": [
+        "<full paragraph 1 text>",
+        "<full paragraph 2 text>"
+      ],
+      "full_text": "<heading + subheading + all body paragraphs>"
+    }
+  ]
+}
+
+=== EXAMPLE (for a 3-article page) ===
+
+{
+  "full_text": "OPINION: Sri Lanka, Our Country to Celebrate! ... [full text] ... A 75 YEAR JOURNEY ... [full text] ... THE LION FLAG OF LANKA ... [full text]",
+  "articles": [
+    {
+      "article_id": "article_1",
+      "heading": "OPINION: Sri Lanka, Our Country to Celebrate!",
+      "subheading": "",
+      "column": "left",
+      "body": ["Sri Lankans recovered a land...", "This is why, looking back...", "...every paragraph..."],
+      "full_text": "OPINION: Sri Lanka, Our Country to Celebrate!\n\nSri Lankans recovered a land..."
+    },
+    {
+      "article_id": "article_2",
+      "heading": "A 75 YEAR JOURNEY",
+      "subheading": "Going down memory lane with nostalgia",
+      "column": "full",
+      "body": ["Although controversial at times...", "The kings who succeeded Vijaya..."],
+      "full_text": "A 75 YEAR JOURNEY\nGoing down memory lane with nostalgia\n\nAlthough controversial at times..."
+    },
+    {
+      "article_id": "article_3",
+      "heading": "THE LION FLAG OF LANKA",
+      "subheading": "",
+      "column": "full",
+      "body": ["liberation and hope. Legendary King Dutugemunu...", "By 1815...", "...every paragraph..."],
+      "full_text": "THE LION FLAG OF LANKA\n\nliberation and hope..."
+    }
+  ]
+}
+
+Now extract all articles from the newspaper image with COMPLETE text.
+"""
+
+
 def _build_prompt(resource_type: str, source_kind: str) -> str:
+    """
+    For PDFs and generic sources (books etc.) use the original prompt.
+    For newspaper/magazine IMAGE uploads use the dedicated prompt above.
+    """
+    # Route newspaper/magazine image uploads to the improved prompt
+    if resource_type in {"newspapers", "magazines"} and source_kind == "file_upload":
+        return _build_newspaper_image_prompt()
+
     return f"""
 You are an extraction engine for scanned/printed documents.
 Resource type: {resource_type}
@@ -169,6 +288,10 @@ Input source: {source_kind}
 Extract all meaningful article/chapter units.
 Handle noisy OCR and keep original language text.
 
+IMPORTANT: Extract COMPLETE text for every article. Never truncate or summarize body content.
+An article's heading + subheading + all body paragraphs (even across multiple columns)
+all belong to the SAME article entry.
+
 Return strict JSON only (no markdown, no extra text) with this schema:
 {{
   "full_text": "all extracted text merged in reading order",
@@ -176,7 +299,7 @@ Return strict JSON only (no markdown, no extra text) with this schema:
     {{
       "article_id": "stable_id",
       "heading": "title or chapter heading",
-      "subheading": "optional subheading",
+      "subheading": "optional subheading or deck line",
       "column": "left|right|full",
       "body": ["paragraph 1", "paragraph 2"],
       "full_text": "heading + subheading + body text"
@@ -185,7 +308,7 @@ Return strict JSON only (no markdown, no extra text) with this schema:
 }}
 
 Rules:
-- For newspapers/magazines: split by individual articles.
+- For newspapers/magazines: split by individual articles. Each article = one heading + all its body text.
 - For books: split by chapters/sections where possible.
 - If only one unit is identifiable, return one article with column "full".
 - Never return empty full_text.
@@ -212,6 +335,7 @@ Return strict JSON only:
     {{
       "article_id": "stable_id",
       "heading": "title",
+      "subheading": "deck line if present",
       "body": ["Summary snippet 1", "Summary snippet 2"],
       "full_text": "Heading + Summaries"
     }}
@@ -291,7 +415,6 @@ def _structure_pdf_text_in_chunks(
     results: List[Optional[Dict[str, Any]]] = [None] * len(chunks)
 
     def process_chunk(idx: int, text_chunk: str) -> Optional[Dict[str, Any]]:
-        # Uses retry wrapper — handles transient 429s on paid tier
         response = _call_with_retry(
             model,
             [prompt, text_chunk],
@@ -429,6 +552,67 @@ def _fast_pdf_local_fallback(pdf_text: str, resource_type: str) -> Optional[Dict
 
 
 # ---------------------------------------------------------------------------
+# FIX: Post-processing validation to catch incomplete extractions
+# ---------------------------------------------------------------------------
+
+def _validate_and_repair_articles(
+    articles: List[Dict[str, Any]],
+    resource_type: str,
+    min_body_words: int = 30,
+) -> List[Dict[str, Any]]:
+    """
+    After extraction, check each article for suspiciously short body text.
+    
+    Newspapers have multi-column layouts. If an article has a proper heading
+    but very few body words (< min_body_words), it likely means the body text
+    was not captured — possibly because it appeared visually separated from the
+    heading by an image in the layout.
+    
+    This doesn't re-fetch from Gemini (that would require another API call),
+    but it flags the issue clearly so the caller can decide to retry.
+    """
+    repaired = []
+    for art in articles:
+        full_text = (art.get("full_text") or "").strip()
+        heading = (art.get("heading") or "").strip()
+        body = art.get("body") or []
+        body_text = " ".join(body).strip()
+        word_count = len(body_text.split()) if body_text else 0
+
+        if heading and word_count < min_body_words and not body_text:
+            # Body is completely empty — reconstruct from full_text minus heading
+            heading_escaped = re.escape(heading)
+            subheading = (art.get("subheading") or "").strip()
+            remainder = re.sub(r"^\s*" + heading_escaped, "", full_text, count=1).strip()
+            if subheading:
+                subheading_escaped = re.escape(subheading)
+                remainder = re.sub(r"^\s*" + subheading_escaped, "", remainder, count=1).strip()
+            if remainder:
+                art = dict(art)
+                art["body"] = [p.strip() for p in remainder.split("\n\n") if p.strip()] or [remainder]
+                art["full_text"] = full_text
+
+        repaired.append(art)
+    return repaired
+
+
+def _needs_retry(articles: List[Dict[str, Any]], min_body_words: int = 30) -> bool:
+    """
+    Returns True if any article looks suspiciously incomplete (heading present
+    but body has fewer than min_body_words words).
+    Used to decide whether to issue a retry extraction call.
+    """
+    for art in articles:
+        heading = (art.get("heading") or "").strip()
+        body = art.get("body") or []
+        body_text = " ".join(body).strip()
+        word_count = len(body_text.split()) if body_text else 0
+        if heading and word_count < min_body_words:
+            return True
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
 
@@ -437,13 +621,14 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
     Gemini-based structured extraction for newspapers, magazines and books.
     Returns normalized data compatible with existing pipeline.
 
-    Paid-tier changes vs original:
-      - Model: gemini-2.5-flash (same string, now on paid project)
-      - Chunk size: 100k chars (was 28k)
-      - Chunking threshold: 200k chars (was 60k)
-      - Max parallel workers: 10 (was 3)
-      - Timeouts: 45-90s (was 20-60s)
-      - Retry logic: added _call_with_retry wrapper on all generate calls
+    Key fixes in this version:
+      - Dedicated newspaper image prompt (_build_newspaper_image_prompt) that:
+          * Enforces COMPLETE body text extraction
+          * Correctly groups heading + subheading + body as ONE article
+          * Handles multi-column layouts
+          * Includes a worked example matching the actual newspaper structure
+      - Post-extraction validation (_validate_and_repair_articles)
+      - Automatic retry with the same improved prompt if articles look incomplete
     """
     if not GEMINI_API_KEY:
         print("API key not configured. Falling back to existing extraction.")
@@ -473,14 +658,12 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
             pdf_text = _extract_pdf_text_fast(file_path)
             if pdf_text:
                 if len(pdf_text) > CHUNK_THRESHOLD:
-                    # Large PDF — split into 100k-char chunks, process in parallel
                     chunked_result = _structure_pdf_text_in_chunks(model, resource_type, pdf_text)
                     if chunked_result:
                         return chunked_result
                     print("Chunked PDF structuring failed. Using fast PDF fallback.")
                 else:
                     prompt = _build_prompt(resource_type, "plain_pdf_text")
-                    # Small/medium PDFs — single call with retry
                     for max_chars, timeout_s in ((150_000, TIMEOUT_SMALL), (100_000, 35)):
                         try:
                             trimmed_text = pdf_text[:max_chars]
@@ -527,10 +710,12 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
         # ------------------------------------------------------------------
         uploaded = genai.upload_file(path=file_path)
         try:
-            # Attempt 1: full extraction.
+            primary_prompt = _build_prompt(resource_type, "file_upload")
+
+            # Attempt 1: full extraction with improved prompt.
             response = _call_with_retry(
                 model,
-                [uploaded, _build_prompt(resource_type, "file_upload")],
+                [uploaded, primary_prompt],
                 timeout_s=TIMEOUT_UPLOAD,
             )
 
@@ -564,7 +749,66 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
         if not data:
             print("did not return parseable JSON. Falling back.")
             return None
-        return _normalize_result(data, resource_type)
+
+        normalized = _normalize_result(data, resource_type)
+        if not normalized:
+            return None
+
+        # ------------------------------------------------------------------
+        # FIX: Validate extracted articles and retry if any look incomplete.
+        # ------------------------------------------------------------------
+        structured = normalized.get("structured_articles") or []
+        structured = _validate_and_repair_articles(structured, resource_type)
+
+        if _needs_retry(structured) and resource_type in {"newspapers", "magazines"}:
+            print(
+                "One or more articles appear incomplete (very short body). "
+                "Retrying extraction with stricter completeness prompt..."
+            )
+            try:
+                # Re-upload for retry (original was deleted above)
+                uploaded_retry = genai.upload_file(path=file_path)
+                try:
+                    retry_response = _call_with_retry(
+                        model,
+                        [uploaded_retry, _build_newspaper_image_prompt()],
+                        timeout_s=TIMEOUT_UPLOAD,
+                    )
+                finally:
+                    try:
+                        if hasattr(uploaded_retry, "name") and uploaded_retry.name:
+                            genai.delete_file(uploaded_retry.name)
+                    except Exception:
+                        pass
+
+                retry_raw = _response_text_safe(retry_response)
+                retry_data = _extract_json_block(retry_raw)
+                if retry_data:
+                    retry_normalized = _normalize_result(retry_data, resource_type)
+                    if retry_normalized:
+                        retry_structured = retry_normalized.get("structured_articles") or []
+                        retry_structured = _validate_and_repair_articles(
+                            retry_structured, resource_type
+                        )
+                        # Only use retry result if it's better (more total words)
+                        def _total_words(arts: List[Dict[str, Any]]) -> int:
+                            return sum(
+                                len(" ".join(a.get("body") or []).split())
+                                for a in arts
+                            )
+
+                        if _total_words(retry_structured) > _total_words(structured):
+                            print("Retry produced more complete extraction. Using retry result.")
+                            structured = retry_structured
+                            normalized = retry_normalized
+            except Exception as exc:
+                print(f"Retry extraction failed ({exc}). Using original result.")
+
+        normalized["structured_articles"] = structured
+        normalized["article_texts"] = [
+            a.get("full_text", "") for a in structured if a.get("full_text")
+        ]
+        return normalized
 
     except Exception as exc:
         print(f"extraction failed: {exc}. Falling back to existing extraction.")

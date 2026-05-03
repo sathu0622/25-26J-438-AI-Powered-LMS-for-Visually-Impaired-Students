@@ -37,7 +37,7 @@ def extract_text_with_strategy(input_path: str, resource_type: str) -> Dict[str,
     # while preserving the existing fallback pipeline.
     gemini_result = extract_with_gemini(input_path, resource_type)
     if gemini_result and gemini_result.get("full_text"):
-        print("✓ Gemini extraction successful")
+        print("✓extraction successful")
         return gemini_result
 
     # ===========================
@@ -153,7 +153,7 @@ def process_document(
         if not full_text or len(full_text.strip()) == 0:
             raise ValueError("No text extracted from document")
         
-        print(f"✓ Extracted {len(full_text)} characters using {extraction_method}")
+        print(f"✓ Extracted {len(full_text)}")
         print(f"✓ Found {len(article_texts)} article(s)")
         
         # Step 3: Prepare structured article data if available
