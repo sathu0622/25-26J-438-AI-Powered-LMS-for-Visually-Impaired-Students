@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
-import { CheckCircle2, RefreshCw, Home, Play, BookOpen } from 'lucide-react';
+import { CheckCircle2, RefreshCw, Home, BookOpen } from 'lucide-react';
 import { useTTS } from '../../contexts/TTSContext';
 import { QuizSetSummary } from '../../services/quizService';
 
@@ -78,26 +78,6 @@ export const QuizSummary = ({
       accuracy,
       reviewItems,
     ]
-  );
-
-  const speakRecap = useCallback(
-    (parts: string[]) => {
-      cancel();
-      let i = 0;
-      const run = () => {
-        if (i >= parts.length) return;
-        const first = i === 0;
-        speak(parts[i], {
-          interrupt: first,
-          onEnd: () => {
-            i += 1;
-            run();
-          },
-        });
-      };
-      run();
-    },
-    [speak, cancel]
   );
 
   useEffect(() => {
@@ -177,16 +157,6 @@ export const QuizSummary = ({
           <Home className="mr-2 h-5 w-5" /> Back to Dashboard
         </Button>
       </div>
-
-      <Card className="p-6 flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold text-muted-foreground mb-2">Audio Recap</p>
-          <p className="text-base">You can replay the summary.</p>
-        </div>
-        <Button variant="secondary" onClick={() => speakRecap(phrases)}>
-          <Play className="mr-2 h-4 w-4" /> Play
-        </Button>
-      </Card>
     </div>
   );
 };

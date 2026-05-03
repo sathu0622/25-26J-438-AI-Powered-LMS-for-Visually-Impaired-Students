@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Mic, MicOff, HelpCircle, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -13,6 +13,8 @@ export const VoiceCommandSystem = ({ onNavigate, currentPage }: VoiceCommandSyst
   const [lastCommand, setLastCommand] = useState('');
   const [showHelp, setShowHelp] = useState(false);
   const [showCommandPicker, setShowCommandPicker] = useState(false);
+  const showHelpRef = useRef(showHelp);
+  const showCommandPickerRef = useRef(showCommandPicker);
 
   const commands = {
     // Navigation commands
@@ -137,6 +139,26 @@ export const VoiceCommandSystem = ({ onNavigate, currentPage }: VoiceCommandSyst
     }
   }, [processCommand, speakText]);
 
+  useEffect(() => {
+    showHelpRef.current = showHelp;
+  }, [showHelp]);
+
+  useEffect(() => {
+    showCommandPickerRef.current = showCommandPicker;
+  }, [showCommandPicker]);
+
+  const isEditableTarget = (target: EventTarget | null) => {
+    const el = target as HTMLElement | null;
+    if (!el) return false;
+    const tag = el.tagName?.toUpperCase();
+    return (
+      tag === 'INPUT' ||
+      tag === 'TEXTAREA' ||
+      tag === 'SELECT' ||
+      el.isContentEditable === true
+    );
+  };
+
   // Announce current page on mount or change
   // useEffect(() => {
   //   const pageNames: Record<string, string> = {
@@ -153,69 +175,75 @@ export const VoiceCommandSystem = ({ onNavigate, currentPage }: VoiceCommandSyst
   //   }, 500);
   // }, [currentPage, speakText]);
 
-  // // Global keyboard shortcuts
-  // useEffect(() => {
-  //   const handleKeyPress = (e: KeyboardEvent) => {
-  //     // Escape - Close modals
-  //     if (e.key === 'Escape') {
-  //       if (showCommandPicker) {
-  //         setShowCommandPicker(false);
-  //         return;
-  //       }
-  //       if (showHelp) {
-  //         setShowHelp(false);
-  //         return;
-  //       }
-  //     }
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Escape - Close modals
+      if (e.key === 'Escape') {
+        if (showCommandPickerRef.current) {
+          e.preventDefault();
+          setShowCommandPicker(false);
+          return;
+        }
+        if (showHelpRef.current) {
+          e.preventDefault();
+          setShowHelp(false);
+          return;
+        }
+      }
 
-  //     // F1 - Voice command
-  //     if (e.key === 'F1') {
-  //       e.preventDefault();
-  //       startVoiceCommand();
-  //       return;
-  //     }
+      // F1 - Voice command
+      if (e.key === 'F1') {
+        e.preventDefault();
+        startVoiceCommand();
+        return;
+      }
 
-  //     // H - Help
-  //     if (e.key === 'h' || e.key === 'H') {
-  //       if (!e.target || (e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
-  //         e.preventDefault();
-  //         setShowHelp(true);
-  //         speakText('Showing keyboard shortcuts and voice commands help');
-  //       }
-  //       return;
-  //     }
+      // H - Help (ignore while typing)
+      if (e.key === 'h' || e.key === 'H') {
+        if (!isEditableTarget(e.target)) {
+          e.preventDefault();
+          setShowHelp(true);
+          speakText('Showing keyboard shortcuts and voice commands help');
+        }
+        return;
+      }
 
-  //     // Alt + Number shortcuts
-  //     if (e.altKey) {
-  //       e.preventDefault();
-  //       switch (e.key) {
-  //         case '1':
-  //           speakText('Going to document upload');
-  //           onNavigate('document-upload');
-  //           break;
-  //         case '2':
-  //           speakText('Going to braille evaluation');
-  //           onNavigate('braille');
-  //           break;
-  //         case '3':
-  //           speakText('Going to quiz system');
-  //           onNavigate('quiz');
-  //           break;
-  //         case '4':
-  //           speakText('Going to history lessons');
-  //           onNavigate('history');
-  //           break;
-  //         case '0':
-  //           speakText('Going to home page');
-  //           onNavigate('home');
-  //           break;
-  //       }
-  //     }
-  //   };
+      // Alt + Number shortcuts (0..4 only)
+      if (e.altKey) {
+        switch (e.key) {
+          case '0':
+            e.preventDefault();
+            speakText('Going to home page');
+            onNavigate('home');
+            return;
+          case '1':
+            e.preventDefault();
+            speakText('Going to document upload');
+            onNavigate('document-upload');
+            return;
+          case '2':
+            e.preventDefault();
+            speakText('Going to braille evaluation');
+            onNavigate('braille');
+            return;
+          case '3':
+            e.preventDefault();
+            speakText('Going to quiz system');
+            onNavigate('quiz');
+            return;
+          case '4':
+            e.preventDefault();
+            speakText('Going to history lessons');
+            onNavigate('history');
+            return;
+        }
+      }
+    };
 
-  //   window.addEventListener('keydown', handleKeyPress);
-  //   return () => window.removeEventListener('keydown', handleKeyPress);
-  // }, [onNavigate, startVoiceCommand, speakText, showHelp, showCommandPicker]);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onNavigate, speakText, startVoiceCommand]);
 
   return (
     <>

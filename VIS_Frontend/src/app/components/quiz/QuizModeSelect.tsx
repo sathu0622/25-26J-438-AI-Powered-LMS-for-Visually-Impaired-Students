@@ -200,7 +200,7 @@ export const QuizModeSelect = ({
     }, 1500);
   };
   return (
-    <main className="mx-auto max-w-3xl p-4 space-y-6 pb-24" role="main" aria-labelledby="page-title">
+    <main className="mx-auto w-full max-w-4xl space-y-6 p-4 pb-24" role="main" aria-labelledby="page-title">
       {/* Skip to main content link for screen readers */}
       <a href="#quiz-options" className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 bg-primary text-white p-2 rounded">
         Skip to quiz options
@@ -208,7 +208,7 @@ export const QuizModeSelect = ({
       
       {/* Page Header */}
       <header className="text-center space-y-2" role="banner">
-        <h1 id="page-title" className="text-2xl">Welcome, {username}!</h1>
+        <h1 id="page-title" className="text-2xl font-semibold leading-tight">Welcome, {username}!</h1>
         <p className="text-muted-foreground" aria-describedby="page-instructions">
           Choose a Quiz Mode or View Your Progress
         </p>
@@ -218,20 +218,20 @@ export const QuizModeSelect = ({
       </header>
 
       {/* Navigation Help Text */}
-      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg" role="complementary" aria-labelledby="nav-help">
-        <h2 id="nav-help" className="text-sm font-semibold mb-1">Keyboard Navigation</h2>
-        <p className="text-xs text-muted-foreground">
+      <div className="rounded-lg border border-blue-200 bg-blue-50 p-4" role="complementary" aria-labelledby="nav-help">
+        <h2 id="nav-help" className="text-sm font-semibold">Keyboard Navigation</h2>
+        <p className="mt-1 text-xs text-muted-foreground">
           Up/Down arrows to navigate options, Enter/Space to select, H for help, Tab for buttons
         </p>
       </div>
       
       {/* Quiz Options */}
-      <section className="grid gap-4 md:grid-cols-2" id="quiz-options" role="region" aria-labelledby="quiz-modes-heading">
+      <section className="grid gap-4 md:grid-cols-2 items-stretch" id="quiz-options" role="region" aria-labelledby="quiz-modes-heading">
         <h2 id="quiz-modes-heading" className="sr-only">Available Quiz Modes</h2>
         
         {/* Option 1: Generative MCQ Quiz */}
         <Card 
-          className={`p-6 space-y-4 ${focusedOption === 0 ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
+          className={`p-6 flex h-full flex-col ${focusedOption === 0 ? 'ring-2 ring-blue-500 bg-blue-50' : ''}`}
           role="option"
           aria-labelledby="generative-title"
           aria-describedby="generative-desc"
@@ -245,12 +245,13 @@ export const QuizModeSelect = ({
             <Sparkles className="h-6 w-6 text-primary" aria-hidden="true" />
             <h3 id="generative-title" className="text-xl font-semibold">Generative MCQ</h3>
           </div>
-          <p id="generative-desc" className="text-sm text-muted-foreground">
+          <p id="generative-desc" className="mt-2 text-sm text-muted-foreground">
             AI-generated multiple choice questions from selected chapters. Perfect for quick practice.
           </p>
           <Button 
             onClick={() => handleSelection(0)} 
-            className="w-full"
+            size="lg"
+            className="mt-auto w-full min-h-[56px]"
             aria-label="Start Generative MCQ Quiz"
             onFocus={() => {
               cancel();
@@ -263,7 +264,7 @@ export const QuizModeSelect = ({
         
         {/* Option 2: Generative Free-Text Quiz */}
         <Card 
-          className={`p-6 space-y-4 ${focusedOption === 1 ? 'ring-2 ring-green-500 bg-green-50' : ''}`}
+          className={`p-6 flex h-full flex-col ${focusedOption === 1 ? 'ring-2 ring-green-500 bg-green-50' : ''}`}
           role="option"
           aria-labelledby="freetext-title"
           aria-describedby="freetext-desc"
@@ -277,12 +278,13 @@ export const QuizModeSelect = ({
             <PenLine className="h-6 w-6 text-green-600" aria-hidden="true" />
             <h3 id="freetext-title" className="text-xl font-semibold">Free-Text Quiz</h3>
           </div>
-          <p id="freetext-desc" className="text-sm text-muted-foreground">
+          <p id="freetext-desc" className="mt-2 text-sm text-muted-foreground">
             AI-generated questions with free-form answers. Evaluated by meaning, not exact match. Continue as long as you want.
           </p>
           <Button 
             onClick={() => handleSelection(1)} 
-            className="w-full bg-green-600 hover:bg-green-700"
+            size="lg"
+            className="mt-auto w-full min-h-[56px] bg-green-600 hover:bg-green-700"
             aria-label="Start Free-Text Quiz"
             onFocus={() => {
               cancel();
@@ -295,7 +297,7 @@ export const QuizModeSelect = ({
         
         {/* Option 3: Adaptive Quiz */}
         <Card 
-          className={`p-6 space-y-4 ${focusedOption === 2 ? 'ring-2 ring-purple-500 bg-purple-50' : ''}`}
+          className={`p-6 flex h-full flex-col ${focusedOption === 2 ? 'ring-2 ring-purple-500 bg-purple-50' : ''}`}
           role="option"
           aria-labelledby="adaptive-title"
           aria-describedby="adaptive-desc"
@@ -309,13 +311,14 @@ export const QuizModeSelect = ({
             <Layers className="h-6 w-6 text-purple-600" aria-hidden="true" />
             <h3 id="adaptive-title" className="text-xl font-semibold">Adaptive Quiz</h3>
           </div>
-          <p id="adaptive-desc" className="text-sm text-muted-foreground">
+          <p id="adaptive-desc" className="mt-2 text-sm text-muted-foreground">
             Personalized difficulty that adapts to your performance. Questions become easier or harder based on your answers.
           </p>
           <Button 
             variant="outline" 
             onClick={() => handleSelection(2)} 
-            className="w-full"
+            size="lg"
+            className="mt-auto w-full min-h-[56px]"
             aria-label="Start Adaptive Quiz"
             onFocus={() => {
               cancel();
@@ -328,7 +331,7 @@ export const QuizModeSelect = ({
         
         {/* Option 4: Past Paper Quiz */}
         <Card 
-          className={`p-6 space-y-4 ${focusedOption === 3 ? 'ring-2 ring-orange-500 bg-orange-50' : ''}`}
+          className={`p-6 flex h-full flex-col ${focusedOption === 3 ? 'ring-2 ring-orange-500 bg-orange-50' : ''}`}
           role="option"
           aria-labelledby="pastpaper-title"
           aria-describedby="pastpaper-desc"
@@ -342,13 +345,14 @@ export const QuizModeSelect = ({
             <FileText className="h-6 w-6 text-orange-600" aria-hidden="true" />
             <h3 id="pastpaper-title" className="text-xl font-semibold">Past Paper Quiz</h3>
           </div>
-          <p id="pastpaper-desc" className="text-sm text-muted-foreground">
+          <p id="pastpaper-desc" className="mt-2 text-sm text-muted-foreground">
             Practice with real examination questions from previous years. Questions include year announcements and use advanced evaluation.
           </p>
           <Button 
             variant="outline" 
             onClick={() => handleSelection(3)} 
-            className="w-full"
+            size="lg"
+            className="mt-auto w-full min-h-[56px]"
             aria-label="Start Past Paper Quiz"
             onFocus={() => {
               cancel();
@@ -360,7 +364,7 @@ export const QuizModeSelect = ({
         </Card>
         
         <Card 
-          className={`p-6 space-y-4 ${focusedOption === 4 ? 'ring-2 ring-amber-500 bg-amber-50' : ''}`}
+          className={`p-6 flex h-full flex-col md:col-span-2 ${focusedOption === 4 ? 'ring-2 ring-amber-500 bg-amber-50' : ''}`}
           role="option"
           aria-labelledby="timed-title"
           aria-describedby="timed-desc"
@@ -374,13 +378,14 @@ export const QuizModeSelect = ({
             <Timer className="h-6 w-6 text-amber-600" aria-hidden="true" />
             <h3 id="timed-title" className="text-xl font-semibold">Timed Quiz</h3>
           </div>
-          <p id="timed-desc" className="text-sm text-muted-foreground">
+          <p id="timed-desc" className="mt-2 text-sm text-muted-foreground">
             Twenty multiple choice questions from the question dataset across chapters. Thirty minutes total. Full review when you finish.
           </p>
           <Button
             variant="outline"
             onClick={() => handleSelection(4)}
-            className="w-full border-amber-300"
+            size="lg"
+            className="mt-auto w-full min-h-[56px] border-amber-300"
             aria-label="Start timed quiz"
             onFocus={() => {
               cancel();
@@ -406,8 +411,8 @@ export const QuizModeSelect = ({
             announceOptionSelection(5, 'focus');
           }}
         >
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-start gap-3">
               <User className="h-6 w-6 text-secondary-foreground" aria-hidden="true" />
               <div>
                 <h3 id="profile-title" className="text-lg font-semibold">Your Quiz History</h3>
@@ -419,6 +424,8 @@ export const QuizModeSelect = ({
             <Button 
               variant="secondary" 
               onClick={() => handleSelection(5)}
+              size="lg"
+              className="min-h-[56px] w-full sm:w-auto"
               aria-label="Quiz History"
               onFocus={() => {
                 cancel();
