@@ -176,8 +176,13 @@ def _extract_pdf_text_fast(file_path: str) -> str:
 def _build_newspaper_image_prompt() -> str:
     """
     Dedicated prompt for newspaper/magazine IMAGE extraction.
-    Instructs the model to treat heading + subheading + body as ONE article,
-    extract COMPLETE body text, handle multi-column layouts, and never truncate.
+
+    KEY FIX: Explicitly handles the pattern where a PHOTO appears between
+    a heading and its body text — this is extremely common in newspapers and
+    causes models to incorrectly split one article into multiple pieces.
+
+    Also handles large in-body section headings (like "THE LION FLAG OF LANKA")
+    that are part of the article body, NOT separate standalone articles.
     """
     return """
 You are a precise newspaper OCR and article-extraction engine.
@@ -187,35 +192,58 @@ Your job: Read this newspaper page image and extract EVERY article with its COMP
 === CRITICAL RULES ===
 
 1. COMPLETE TEXT ONLY — Never truncate, summarize, or omit any words.
-   Every sentence, every paragraph of every article must appear in full in "body" and "full_text".
+   Every sentence and every paragraph must appear in full in "body" and "full_text".
 
-2. HEADING + SUBHEADING + BODY = ONE ARTICLE
-   A newspaper article often has: a large heading, then an optional subheading/deck line,
-   then possibly a photo, then the body paragraphs. ALL of these belong to the SAME article.
-   Do NOT split them into separate articles.
-   Example: "A 75 YEAR JOURNEY" (heading) + "Going down memory lane with nostalgia" (subheading)
-   + all following body paragraphs = one article.
+2. HEADING + SUBHEADING + PHOTO + BODY = ONE SINGLE ARTICLE
+   This is the most important rule. Newspaper layouts frequently place a photo
+   BETWEEN the heading and the body text. This does NOT mean they are separate articles.
+   Everything that belongs to a story — heading, subheading, any photos in between,
+   and ALL body paragraphs below or beside — is ONE article.
 
-3. MULTI-COLUMN BODY — Body text often flows across 2-3 columns. Read left-to-right,
-   top-to-bottom across all columns and join them into one continuous body for that article.
+   *** NEVER create a new article just because there is a photo or image gap
+   between the heading and the body text. ***
 
-4. COLUMN LABELS — Set "column" to:
+3. LARGE IN-BODY SECTION HEADINGS ARE NOT NEW ARTICLES
+   Sometimes a large bold/decorative text appears WITHIN the body of an article
+   as a section title or visual divider (e.g. "THE LION FLAG OF LANKA").
+   If this text does NOT have its own independent body paragraphs and is
+   visually part of a larger article, it is a SECTION HEADING inside that
+   article — NOT a separate article. Include it as a paragraph in the body,
+   prefixed with the text as-is.
+
+4. MULTI-COLUMN BODY — Body text often flows across 2-3 columns. Read all columns
+   left-to-right, top-to-bottom and join them into one continuous body for that article.
+
+5. ARTICLE BOUNDARIES — Only start a new article when you see a NEW, DISTINCT heading
+   that clearly introduces a completely different topic or story with its OWN body text.
+   A photo alone, a column break alone, or a decorative section title alone is NOT
+   a new article boundary.
+
+6. COLUMN LABELS — Set "column" to:
    - "left"  if the article sits only in the left column
    - "right" if the article sits only in the right column
    - "full"  if the article spans the full width or multiple columns
 
-5. ARTICLE BOUNDARIES — A new article starts when you see a new distinct heading/title
-   that clearly introduces a different topic or story.
+7. OPINION / SECTION LABELS — If an article has a section label like "OPINION" above
+   its heading, prefix it into the heading field:
+   e.g. heading = "OPINION: Sri Lanka, Our Country to Celebrate!"
+   Do NOT make the section label a separate article.
 
-6. OPINION / SECTION LABELS — If an article has a section label like "OPINION" above
-   its heading, include that label as a prefix in the heading: e.g. "OPINION: Sri Lanka,
-   Our Country to Celebrate!". Do NOT make the section label a separate article.
+8. body field — JSON array of strings, one string per paragraph.
+   Never use placeholders like "[continues...]" or "[body text]".
 
-7. body field — must be a JSON array of strings, one string per paragraph.
-   Each string must be the FULL text of that paragraph. No placeholders like "[continues...]".
+9. full_text — heading + "\\n" + subheading (if any) + "\\n\\n" + all body paragraphs
+   joined by "\\n\\n". Must be the complete readable article text.
 
-8. full_text — concatenate: heading + "\\n" + subheading (if any) + "\\n\\n" + all body paragraphs
-   joined by "\\n\\n". Must equal the complete readable article text.
+=== STEP-BY-STEP APPROACH ===
+
+Before writing JSON, do this mentally:
+  Step 1. Count only TRUE article headings — ones that introduce a full independent story.
+  Step 2. For each heading, collect ALL body paragraphs belonging to it,
+          even if a photo or decorative section title appears in between.
+  Step 3. Treat decorative/bold section titles within the body as part of the body text,
+          not as new article headings.
+  Step 4. Only then write the JSON.
 
 === OUTPUT FORMAT ===
 
@@ -238,17 +266,30 @@ Return ONLY valid JSON. No markdown, no code fences, no extra commentary.
   ]
 }
 
-=== EXAMPLE (for a 3-article page) ===
+=== CORRECT EXAMPLE FOR THIS SPECIFIC PAGE ===
+
+This page has exactly 2 articles:
+  1. The OPINION column on the left.
+  2. "A 75 YEAR JOURNEY" — which includes the subheading, the photo, the decorative
+     "THE LION FLAG OF LANKA" section title, and ALL body paragraphs in both columns.
 
 {
-  "full_text": "OPINION: Sri Lanka, Our Country to Celebrate! ... [full text] ... A 75 YEAR JOURNEY ... [full text] ... THE LION FLAG OF LANKA ... [full text]",
+  "full_text": "OPINION: Sri Lanka, Our Country to Celebrate!\\n\\n[full text]...\\n\\nA 75 YEAR JOURNEY\\nGoing down memory lane with nostalgia\\n\\n[full text]...",
   "articles": [
     {
       "article_id": "article_1",
       "heading": "OPINION: Sri Lanka, Our Country to Celebrate!",
       "subheading": "",
       "column": "left",
-      "body": ["Sri Lankans recovered a land...", "This is why, looking back...", "...every paragraph..."],
+      "body": [
+        "Sri Lankans recovered a land, resources and the right to make decisions, but not in any way they wanted...",
+        "This is why, looking back at the 75 years that have passed since that day, we can be proud of how far we have come...",
+        "The hope, understandably exaggerated at the moment of Independence, was tempered by realities about the tasks at hand...",
+        "There have been disappointments and yet significant achievements as well...",
+        "Independence arrived after almost five centuries of conquest, plunder and subjugation in various degrees by various European powers...",
+        "We have always travelled towards a country called Tomorrow. Our people have hoped, worked, struggled, faltered and wept...",
+        "Sri Lanka. Our country. Ours to protect, ours to rebuild, ours to recover, ours to celebrate!"
+      ],
       "full_text": "OPINION: Sri Lanka, Our Country to Celebrate!\\n\\nSri Lankans recovered a land..."
     },
     {
@@ -256,21 +297,23 @@ Return ONLY valid JSON. No markdown, no code fences, no extra commentary.
       "heading": "A 75 YEAR JOURNEY",
       "subheading": "Going down memory lane with nostalgia",
       "column": "full",
-      "body": ["Although controversial at times...", "The kings who succeeded Vijaya..."],
+      "body": [
+        "Although controversial at times, the lion in the flag of Sri Lanka has long been Sri Lanka's pride, be it on a jersey representing Sri Lankan sport or as the symbol of a social revolution...",
+        "The kings who succeeded Vijaya were said to have used this lion banner extensively, making the lion flag a representation of liberation and hope...",
+        "THE LION FLAG OF LANKA",
+        "Legendary King Dutugemunu brought a flag with him that featured a lion holding a sword on his right forepaw together with two other emblems, the Sun and the Moon...",
+        "By 1815, the banner was still in use, even though the reign of the last king of the Kandyan Kingdom, King Sri Vikrama Rajasinha, was brought to an end by the colonizers...",
+        "As an independence movement took hold of the subcontinent, a Ceylonese movement too grew in strength during the early 20th century...",
+        "A picture of it was subsequently published in a special edition of the Dinamina newspaper, a publication owned by Wijewardene to mark 100 years since the end of Sri Lankan independence...",
+        "The first Prime Minister of independent Ceylon Hon. D.S. Senanayake, hoisted the Lion Flag at the ceremony on February 4, 1948...",
+        "Finally in 1972, the flag was modified once more, with four stylized leaves of the Bo (Pipul) tree, a Buddhist symbol, added to the four corners to replace the four pinnacles."
+      ],
       "full_text": "A 75 YEAR JOURNEY\\nGoing down memory lane with nostalgia\\n\\nAlthough controversial at times..."
-    },
-    {
-      "article_id": "article_3",
-      "heading": "THE LION FLAG OF LANKA",
-      "subheading": "",
-      "column": "full",
-      "body": ["liberation and hope. Legendary King Dutugemunu...", "By 1815...", "...every paragraph..."],
-      "full_text": "THE LION FLAG OF LANKA\\n\\nliberation and hope..."
     }
   ]
 }
 
-Now extract all articles from the newspaper image with COMPLETE text.
+Now extract all articles from the newspaper image with COMPLETE text following the rules above.
 """
 
 
