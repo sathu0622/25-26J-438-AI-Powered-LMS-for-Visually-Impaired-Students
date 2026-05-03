@@ -10,12 +10,22 @@ from config import GEMINI_API_KEY
 # Model config — paid tier
 # ---------------------------------------------------------------------------
 GEMINI_MODEL = "gemini-2.5-flash"
-CHUNK_SIZE = 100_000          # chars per chunk (was 28000 on free tier)
-CHUNK_THRESHOLD = 200_000     # only split PDFs larger than this (was 60000)
-MAX_WORKERS = 10              # parallel chunk workers (was 3)
-TIMEOUT_CHUNK = 45            # seconds per chunk call (was 20)
-TIMEOUT_SMALL = 45            # seconds for single small-PDF call (was 25)
-TIMEOUT_UPLOAD = 90           # seconds for file-upload path (was 60)
+CHUNK_SIZE = 100_000          # chars per chunk
+CHUNK_THRESHOLD = 200_000     # only split PDFs larger than this
+MAX_WORKERS = 10              # parallel chunk workers
+TIMEOUT_CHUNK = 600           # seconds per chunk call (10 minutes)
+TIMEOUT_SMALL = 600           # seconds for single small-PDF call (10 minutes)
+TIMEOUT_UPLOAD = 600          # seconds for file-upload path (10 minutes)
+
+# ---------------------------------------------------------------------------
+# FIX: Deterministic generation config — temperature=0 ensures the SAME
+#      output every time for the same image + prompt combination.
+# ---------------------------------------------------------------------------
+GENERATION_CONFIG = {
+    "temperature": 0,          # Fully deterministic — no random sampling
+    "top_p": 1,                # No nucleus sampling (irrelevant at temp=0)
+    "top_k": 1,                # Always pick the single most likely token
+}
 
 
 # ---------------------------------------------------------------------------
@@ -29,8 +39,7 @@ def _call_with_retry(
 ) -> Any:
     """
     Calls model.generate_content with automatic retry on 429 rate-limit errors.
-    On paid tier, recovery is fast (usually < 10s); we still respect the
-    retry_delay hint from the error body when present.
+    temperature=0 in the model config ensures consistent outputs across retries.
     """
     for attempt in range(max_retries):
         try:
@@ -161,20 +170,14 @@ def _extract_pdf_text_fast(file_path: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# FIX: Improved prompt for newspaper image extraction
+# Prompts
 # ---------------------------------------------------------------------------
 
 def _build_newspaper_image_prompt() -> str:
     """
     Dedicated prompt for newspaper/magazine IMAGE extraction.
-    
-    Key fixes over the old generic prompt:
-    1. Explicitly instructs the model to treat heading + subheading + body as ONE article
-       even when images appear between them in the layout.
-    2. Requires COMPLETE body text — every paragraph, sentence, and word must be included.
-    3. Handles multi-column layouts: text that continues across columns belongs to the same article.
-    4. Warns the model NOT to truncate articles or stop early.
-    5. Uses a clearer JSON schema with worked examples.
+    Instructs the model to treat heading + subheading + body as ONE article,
+    extract COMPLETE body text, handle multi-column layouts, and never truncate.
     """
     return """
 You are a precise newspaper OCR and article-extraction engine.
@@ -198,7 +201,7 @@ Your job: Read this newspaper page image and extract EVERY article with its COMP
 
 4. COLUMN LABELS — Set "column" to:
    - "left"  if the article sits only in the left column
-   - "right" if the article sits only in the right column  
+   - "right" if the article sits only in the right column
    - "full"  if the article spans the full width or multiple columns
 
 5. ARTICLE BOUNDARIES — A new article starts when you see a new distinct heading/title
@@ -211,8 +214,8 @@ Your job: Read this newspaper page image and extract EVERY article with its COMP
 7. body field — must be a JSON array of strings, one string per paragraph.
    Each string must be the FULL text of that paragraph. No placeholders like "[continues...]".
 
-8. full_text — concatenate: heading + "\n" + subheading (if any) + "\n\n" + all body paragraphs
-   joined by "\n\n". Must equal the complete readable article text.
+8. full_text — concatenate: heading + "\\n" + subheading (if any) + "\\n\\n" + all body paragraphs
+   joined by "\\n\\n". Must equal the complete readable article text.
 
 === OUTPUT FORMAT ===
 
@@ -246,7 +249,7 @@ Return ONLY valid JSON. No markdown, no code fences, no extra commentary.
       "subheading": "",
       "column": "left",
       "body": ["Sri Lankans recovered a land...", "This is why, looking back...", "...every paragraph..."],
-      "full_text": "OPINION: Sri Lanka, Our Country to Celebrate!\n\nSri Lankans recovered a land..."
+      "full_text": "OPINION: Sri Lanka, Our Country to Celebrate!\\n\\nSri Lankans recovered a land..."
     },
     {
       "article_id": "article_2",
@@ -254,7 +257,7 @@ Return ONLY valid JSON. No markdown, no code fences, no extra commentary.
       "subheading": "Going down memory lane with nostalgia",
       "column": "full",
       "body": ["Although controversial at times...", "The kings who succeeded Vijaya..."],
-      "full_text": "A 75 YEAR JOURNEY\nGoing down memory lane with nostalgia\n\nAlthough controversial at times..."
+      "full_text": "A 75 YEAR JOURNEY\\nGoing down memory lane with nostalgia\\n\\nAlthough controversial at times..."
     },
     {
       "article_id": "article_3",
@@ -262,7 +265,7 @@ Return ONLY valid JSON. No markdown, no code fences, no extra commentary.
       "subheading": "",
       "column": "full",
       "body": ["liberation and hope. Legendary King Dutugemunu...", "By 1815...", "...every paragraph..."],
-      "full_text": "THE LION FLAG OF LANKA\n\nliberation and hope..."
+      "full_text": "THE LION FLAG OF LANKA\\n\\nliberation and hope..."
     }
   ]
 }
@@ -276,7 +279,6 @@ def _build_prompt(resource_type: str, source_kind: str) -> str:
     For PDFs and generic sources (books etc.) use the original prompt.
     For newspaper/magazine IMAGE uploads use the dedicated prompt above.
     """
-    # Route newspaper/magazine image uploads to the improved prompt
     if resource_type in {"newspapers", "magazines"} and source_kind == "file_upload":
         return _build_newspaper_image_prompt()
 
@@ -345,21 +347,12 @@ Return strict JSON only:
 
 
 def _should_skip_gemini_upload(resource_type: str, file_path: str) -> bool:
-    """
-    Gemini file-upload extraction often gets blocked for periodicals due to
-    copyrighted-recitation policy. Newspapers now use fail-and-retry with a
-    best-effort fallback prompt, so we only skip magazines for image uploads.
-    """
     if file_path.lower().endswith(".pdf"):
         return False
     return resource_type in {"magazines"}
 
 
 def _chunk_text_for_gemini(text: str, max_chars: int = CHUNK_SIZE) -> List[str]:
-    """
-    Split text into paragraph-aware chunks.
-    Paid tier: default chunk size raised to 100k chars (was 28k on free tier).
-    """
     clean = (text or "").strip()
     if not clean:
         return []
@@ -403,10 +396,6 @@ def _reindex_articles(
 def _structure_pdf_text_in_chunks(
     model: Any, resource_type: str, pdf_text: str
 ) -> Optional[Dict[str, Any]]:
-    """
-    Structure big PDFs by sending bounded chunks in parallel.
-    Paid tier: chunk size = 100k, max_workers = 10, timeout = 45s.
-    """
     chunks = _chunk_text_for_gemini(pdf_text, max_chars=CHUNK_SIZE)
     if not chunks:
         return None
@@ -509,9 +498,6 @@ def _normalize_result(
 
 
 def _fast_pdf_local_fallback(pdf_text: str, resource_type: str) -> Optional[Dict[str, Any]]:
-    """
-    Fast local fallback when Gemini is blocked or fails on PDFs.
-    """
     clean_text = (pdf_text or "").strip()
     if not clean_text:
         return None
@@ -552,7 +538,7 @@ def _fast_pdf_local_fallback(pdf_text: str, resource_type: str) -> Optional[Dict
 
 
 # ---------------------------------------------------------------------------
-# FIX: Post-processing validation to catch incomplete extractions
+# Post-processing validation
 # ---------------------------------------------------------------------------
 
 def _validate_and_repair_articles(
@@ -560,17 +546,6 @@ def _validate_and_repair_articles(
     resource_type: str,
     min_body_words: int = 30,
 ) -> List[Dict[str, Any]]:
-    """
-    After extraction, check each article for suspiciously short body text.
-    
-    Newspapers have multi-column layouts. If an article has a proper heading
-    but very few body words (< min_body_words), it likely means the body text
-    was not captured — possibly because it appeared visually separated from the
-    heading by an image in the layout.
-    
-    This doesn't re-fetch from Gemini (that would require another API call),
-    but it flags the issue clearly so the caller can decide to retry.
-    """
     repaired = []
     for art in articles:
         full_text = (art.get("full_text") or "").strip()
@@ -580,7 +555,6 @@ def _validate_and_repair_articles(
         word_count = len(body_text.split()) if body_text else 0
 
         if heading and word_count < min_body_words and not body_text:
-            # Body is completely empty — reconstruct from full_text minus heading
             heading_escaped = re.escape(heading)
             subheading = (art.get("subheading") or "").strip()
             remainder = re.sub(r"^\s*" + heading_escaped, "", full_text, count=1).strip()
@@ -597,11 +571,6 @@ def _validate_and_repair_articles(
 
 
 def _needs_retry(articles: List[Dict[str, Any]], min_body_words: int = 30) -> bool:
-    """
-    Returns True if any article looks suspiciously incomplete (heading present
-    but body has fewer than min_body_words words).
-    Used to decide whether to issue a retry extraction call.
-    """
     for art in articles:
         heading = (art.get("heading") or "").strip()
         body = art.get("body") or []
@@ -612,6 +581,13 @@ def _needs_retry(articles: List[Dict[str, Any]], min_body_words: int = 30) -> bo
     return False
 
 
+def _total_words(arts: List[Dict[str, Any]]) -> int:
+    return sum(
+        len(" ".join(a.get("body") or []).split())
+        for a in arts
+    )
+
+
 # ---------------------------------------------------------------------------
 # Main entry point
 # ---------------------------------------------------------------------------
@@ -619,16 +595,14 @@ def _needs_retry(articles: List[Dict[str, Any]], min_body_words: int = 30) -> bo
 def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str, Any]]:
     """
     Gemini-based structured extraction for newspapers, magazines and books.
-    Returns normalized data compatible with existing pipeline.
 
-    Key fixes in this version:
-      - Dedicated newspaper image prompt (_build_newspaper_image_prompt) that:
-          * Enforces COMPLETE body text extraction
-          * Correctly groups heading + subheading + body as ONE article
-          * Handles multi-column layouts
-          * Includes a worked example matching the actual newspaper structure
-      - Post-extraction validation (_validate_and_repair_articles)
-      - Automatic retry with the same improved prompt if articles look incomplete
+    KEY CHANGE FOR CONSISTENCY:
+      - Model is initialized with temperature=0, top_k=1, top_p=1.
+        This makes Gemini fully deterministic — uploading the same image
+        with the same prompt will always produce the same output.
+      - The retry logic still runs if the first pass looks incomplete,
+        but because temperature=0 the retry will produce the same result
+        as the first attempt (so it won't silently change the output).
     """
     if not GEMINI_API_KEY:
         print("API key not configured. Falling back to existing extraction.")
@@ -642,8 +616,22 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
 
     try:
         genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(GEMINI_MODEL)
+
+        # ------------------------------------------------------------------
+        # FIX: temperature=0 for fully deterministic, consistent output.
+        # Every call with the same image + prompt will return identical JSON.
+        # ------------------------------------------------------------------
+        model = genai.GenerativeModel(
+            GEMINI_MODEL,
+            generation_config=genai.types.GenerationConfig(
+                temperature=0,   # No randomness — always pick the top token
+                top_p=1,         # Disabled nucleus sampling
+                top_k=1,         # Only the single most probable token
+            ),
+        )
+
         is_pdf = file_path.lower().endswith(".pdf")
+
         if _should_skip_gemini_upload(resource_type, file_path):
             print(
                 "Skipping upload extraction for periodicals to avoid "
@@ -755,7 +743,10 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
             return None
 
         # ------------------------------------------------------------------
-        # FIX: Validate extracted articles and retry if any look incomplete.
+        # Validate extracted articles and repair/retry if incomplete.
+        # NOTE: With temperature=0, retrying with the same prompt will
+        # produce the same result. The retry is kept only as a safety net
+        # for cases where the FALLBACK prompt produces a better structure.
         # ------------------------------------------------------------------
         structured = normalized.get("structured_articles") or []
         structured = _validate_and_repair_articles(structured, resource_type)
@@ -766,7 +757,6 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
                 "Retrying extraction with stricter completeness prompt..."
             )
             try:
-                # Re-upload for retry (original was deleted above)
                 uploaded_retry = genai.upload_file(path=file_path)
                 try:
                     retry_response = _call_with_retry(
@@ -790,13 +780,7 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
                         retry_structured = _validate_and_repair_articles(
                             retry_structured, resource_type
                         )
-                        # Only use retry result if it's better (more total words)
-                        def _total_words(arts: List[Dict[str, Any]]) -> int:
-                            return sum(
-                                len(" ".join(a.get("body") or []).split())
-                                for a in arts
-                            )
-
+                        # Only use retry result if it has more content
                         if _total_words(retry_structured) > _total_words(structured):
                             print("Retry produced more complete extraction. Using retry result.")
                             structured = retry_structured
