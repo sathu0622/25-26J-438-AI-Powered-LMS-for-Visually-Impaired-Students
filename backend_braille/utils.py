@@ -35,9 +35,9 @@ def jaccard_similarity(correct, student):
 def length_penalty(correct, student):
     length = len(student.split())
 
-    if length > 150:
+    if length > 120:
         return 1.0
-    elif 90 <= length <= 150:
+    elif 90 <= length <= 120:
         return 0.75
     else:
-        return 0.2
+        return 0.4

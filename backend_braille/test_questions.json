@@ -1,0 +1,284 @@
+{
+  "test_cases": [
+    {
+      "id": 1,
+      "subject": "Sri Lanka History",
+      "topic": "Ancient Kingdoms",
+      "expected_quality": "strong",
+      "question": "Who founded the Anuradhapura Kingdom and what was its historical significance?",
+      "student_answer": "The Anuradhapura Kingdom was founded by King Pandukabhaya around 377 BC, making it the first formally established kingdom in Sri Lankan history. Before his rule, the island was divided among various chiefs and clans with no centralized power. Pandukabhaya unified these factions and established Anuradhapura as the capital city, laying the foundation for a structured political system. The kingdom became the political, cultural, and religious center of Sri Lanka for over a thousand years, lasting until around 1017 AD. One of its most important contributions was the promotion and preservation of Theravada Buddhism. When Mahinda, the son of Emperor Ashoka, arrived in Sri Lanka during the reign of King Devanampiya Tissa, Buddhism was officially introduced and Anuradhapura became its heartland. Magnificent structures such as the Ruwanwelisaya, Jetavanaramaya, and Thuparamaya were built during this era. The kingdom also developed advanced irrigation systems, including tanks and canals, which supported a thriving agricultural society. Its influence on Buddhism spread throughout South and Southeast Asia, making it a civilization of regional importance."
+    },
+    {
+      "id": 2,
+      "subject": "Sri Lanka History",
+      "topic": "Colonial Period",
+      "expected_quality": "medium",
+      "question": "Describe the impact of Portuguese rule on Sri Lanka in the 16th century.",
+      "student_answer": "The Portuguese arrived in Sri Lanka in 1505 and quickly established control over the coastal regions and the maritime trade routes. They monopolized the trade of cinnamon, which was highly valued in Europe, causing significant disruption to the local economy. The Portuguese also attempted to spread Roman Catholicism among the local population and destroyed several Buddhist temples and shrines along the coast. They appointed local rulers who converted to Christianity and used them to extend their influence. Despite their coastal dominance, they repeatedly failed to conquer the Kandyan Kingdom in the central highlands. Their presence introduced new administrative systems and foreign cultural influences that left a lasting impact on coastal communities in Sri Lanka."
+    },
+    {
+      "id": 3,
+      "subject": "Sri Lanka History",
+      "topic": "Independence",
+      "expected_quality": "strong",
+      "question": "Explain the role of D.S. Senanayake in Sri Lanka gaining independence in 1948.",
+      "student_answer": "Don Stephen Senanayake, widely known as the Father of the Nation, played a decisive and central role in guiding Ceylon toward independence from British rule. He was a founding member and later leader of the Ceylon National Congress and later the United National Party, through which he organized political pressure for self-governance. Unlike leaders in some other colonies who pursued confrontational methods, Senanayake followed a policy of negotiation and constitutional reform, which earned British trust and accelerated the transfer of power. He was instrumental in drafting the Soulbury Constitution, which became the legal framework for Ceylon's independence. On February 4, 1948, Ceylon officially became a self-governing dominion within the British Commonwealth, and Senanayake was sworn in as its first Prime Minister. Beyond politics, he was deeply committed to national development. He launched major irrigation and agricultural projects, most notably the Gal Oya Development Scheme, which opened new farming lands and resettled thousands of families. He also sought to build a unified national identity, appealing to Sinhalese, Tamil, and Muslim communities to work together as one nation. His leadership set the tone for post-independence governance in Sri Lanka and his legacy remains influential in the country's political history."
+    },
+    {
+      "id": 4,
+      "subject": "Sri Lanka History",
+      "topic": "Ancient Kingdoms",
+      "expected_quality": "weak",
+      "question": "What was the significance of the Battle of Vijithapura in Sri Lankan history?",
+      "student_answer": "I think it was a battle between two kings in ancient Sri Lanka. One side won and took control. It was probably important for who ruled the country at that time. I am not very sure about the details."
+    },
+    {
+      "id": 5,
+      "subject": "Sri Lanka History",
+      "topic": "Colonial Period",
+      "expected_quality": "strong",
+      "question": "How did British colonial rule change the economy of Sri Lanka?",
+      "student_answer": "British colonial rule brought fundamental and far-reaching changes to the economy of Sri Lanka, transforming it from a traditional subsistence-based agricultural society into an export-oriented plantation economy. In the early nineteenth century, the British introduced coffee cultivation on a large scale in the hill country. When a leaf disease destroyed the coffee plantations in the 1870s, tea was introduced as a replacement and rapidly became the island's dominant export crop. Rubber was also introduced as another major plantation product. To support this plantation economy, the British constructed an extensive network of roads and railways connecting the highland estates to the coastal ports, particularly Colombo. Since the local Sinhalese population was largely unwilling to work on the plantations, the British brought large numbers of Tamil laborers from South India. These workers lived in estate lines under difficult conditions and formed a distinct social community that remains in Sri Lanka today. The plantation economy generated considerable wealth, but most of it flowed to British companies and investors rather than to the local population. The peasant agricultural sector was largely neglected, leading to rural poverty and economic inequality. The British also developed the banking and financial system, introduced a modern legal framework, and expanded English-language education, which created a new professional class. However, the economic structure they built was heavily dependent on a few export commodities, leaving the economy vulnerable to global price fluctuations."
+    },
+    {
+      "id": 6,
+      "subject": "Sri Lanka History",
+      "topic": "Ancient Civilisation",
+      "expected_quality": "medium",
+      "question": "Describe the achievements of King Parakramabahu I in the 12th century.",
+      "student_answer": "King Parakramabahu I, who ruled from Polonnaruwa in the twelfth century, is regarded as one of the greatest monarchs in Sri Lankan history. His most celebrated achievement was the unification of the three kingdoms of Sri Lanka — Rajarata, Ruhuna, and Maya — under a single rule for the first time in centuries. He is famous for constructing the Parakrama Samudra, a vast irrigation reservoir near Polonnaruwa that supported widespread paddy cultivation. He sent military expeditions to South India and even to Myanmar, demonstrating Ceylon's regional power. His famous saying was that not a single drop of rainwater should flow to the sea without benefiting mankind, reflecting his commitment to irrigation and agriculture. He was also a patron of Buddhism and renovated many temples and religious sites across the island."
+    },
+    {
+      "id": 7,
+      "subject": "Sri Lanka History",
+      "topic": "Independence Movement",
+      "expected_quality": "medium",
+      "question": "What was the Donoughmore Constitution and what changes did it bring to Ceylon?",
+      "student_answer": "The Donoughmore Constitution was introduced in 1931 following the recommendations of the Donoughmore Commission sent by the British government to review Ceylon's political system. Its most significant contribution was the introduction of universal suffrage, granting the right to vote to all adults regardless of gender, race, or literacy. This made Ceylon one of the first Asian countries to adopt universal franchise. The old Legislative Council was replaced by a State Council, and executive committees were established to give Ceylonese politicians greater control over government departments. Although the British Governor still held significant power, the constitution was an important step toward self-rule. It gave local politicians valuable administrative experience and helped build the foundations for full independence in 1948."
+    },
+    {
+      "id": 8,
+      "subject": "Sri Lanka History",
+      "topic": "Colonial Period",
+      "expected_quality": "weak",
+      "question": "Why did the Dutch replace the Portuguese as the colonial power in Sri Lanka?",
+      "student_answer": "The Dutch replaced the Portuguese because the Kandyan king wanted help to fight them. The Dutch agreed and together they defeated the Portuguese. After that the Dutch took control of the ports. This happened somewhere in the 1600s I think."
+    },
+    {
+      "id": 9,
+      "subject": "Sri Lanka History",
+      "topic": "Ancient Kingdoms",
+      "expected_quality": "strong",
+      "question": "Explain the story of Prince Vijaya and its importance in Sri Lankan history.",
+      "student_answer": "The story of Prince Vijaya is recorded in the Mahavamsa, the ancient Pali chronicle of Sri Lankan history, and is considered the founding narrative of the Sinhalese civilization. According to the chronicle, Vijaya was the grandson of a union between a princess and a lion, which is the origin of the word Sinhalese, meaning lion people. He was a prince from the Sinhapura kingdom in North India, but due to his violent and unruly behavior he and his seven hundred followers were banished by his father, King Sinhabahu. Their ship eventually landed on the northern coast of Sri Lanka on the very day the Buddha attained parinibbana, around 543 BC. This parallel is considered spiritually significant in the Mahavamsa, implying a divine connection between the establishment of the Sinhalese kingdom and the Buddha's final passing. After landing, Vijaya encountered Kuveni, a local Yaksha woman who helped him settle and establish order on the island. He later married a princess from South India to secure a legitimate royal lineage and founded the first Sinhalese kingdom. The story is historically important because it establishes the origin myth of the Sinhalese people and their connection to Buddhism, which has shaped Sri Lankan national and cultural identity for centuries. The Mahavamsa uses this narrative to frame Sri Lanka as a land chosen for the preservation of Buddhism, a belief that has had lasting political and religious significance."
+    },
+    {
+      "id": 10,
+      "subject": "Sri Lanka History",
+      "topic": "Post-Independence",
+      "expected_quality": "medium",
+      "question": "What was the Official Language Act of 1956 and what were its consequences?",
+      "student_answer": "The Official Language Act of 1956, commonly known as the Sinhala Only Act, was passed by the government of Prime Minister S.W.R.D. Bandaranaike. The act declared Sinhala as the sole official language of Ceylon, replacing English which had been the language of administration during the colonial period. Tamil politicians and the Tamil community strongly opposed the act because it disadvantaged Tamil-speaking government employees and reduced opportunities for Tamils in the public sector. The bill triggered large-scale protests and riots. Although Bandaranaike signed a pact with Tamil leader S.J.V. Chelvanayakam to address Tamil concerns, it was later abrogated. The act is widely regarded as a turning point that deepened ethnic divisions between the Sinhalese and Tamil communities, contributing to the long-term political tensions that eventually led to the civil conflict in Sri Lanka."
+    },
+    {
+      "id": 11,
+      "subject": "World History",
+      "topic": "Colonialism and Conflict",
+      "expected_quality": "strong",
+      "question": "Explain how divisions created by colonial powers led to conflicts and tensions that continue today.",
+      "student_answer": "Colonial powers, particularly European nations during the 18th and 19th centuries, deliberately or carelessly created divisions among conquered peoples that have generated conflicts lasting well into the present day. One of the most consequential strategies was divide and rule, where colonial administrators categorized, classified, and often elevated one ethnic or religious group over another to reduce the likelihood of unified resistance. In British India, distinctions between Hindus and Muslims were sharpened by separate electoral rolls, leading directly to the violent partition of 1947 and the ongoing tensions between India and Pakistan over Kashmir. In Africa, the Berlin Conference of 1884 drew borders that ignored ethnic, linguistic, and cultural boundaries, grouping rival communities together and dividing others. These artificial borders have contributed to civil wars in countries such as Nigeria, Sudan, Rwanda, and the Democratic Republic of Congo. In Rwanda, the Belgian colonial administration issued identity cards classifying people as Hutu or Tutsi, hardening previously fluid social distinctions into rigid racial categories. This institutionalized division directly fueled the 1994 genocide. In the Middle East, the Sykes-Picot Agreement secretly divided Arab lands between Britain and France after World War One, creating borders that continue to drive instability and conflict across Iraq, Syria, Lebanon, and Palestine. The colonial legacy of imposed divisions thus remains one of the most significant root causes of ongoing global conflicts."
+    },
+    {
+      "id": 12,
+      "subject": "World History",
+      "topic": "Colonial Governance",
+      "expected_quality": "medium",
+      "question": "Explain how colonial governance systems created divisions and established administrative structures.",
+      "student_answer": "Colonial governance systems were designed primarily to serve the interests of the colonizing power rather than the local population. European colonial administrations typically divided territories into provinces or districts that did not reflect existing political or cultural boundaries. They appointed local intermediaries, often from a favored ethnic or social group, to enforce laws and collect taxes on behalf of the colonial government. This system of indirect rule, used widely by the British, created a privileged class of collaborators while marginalizing others. In many colonies, separate legal systems were applied to Europeans and indigenous populations, entrenching inequality. Administrative capitals were established at coastal or strategically convenient locations rather than traditional centers of power. These structures concentrated resources and political authority in certain regions, creating imbalances that persisted long after independence."
+    },
+    {
+      "id": 13,
+      "subject": "World History",
+      "topic": "Colonial Legal Systems",
+      "expected_quality": "strong",
+      "question": "Explain how colonial governance introduced new legal systems and administrative structures that influenced local traditional systems.",
+      "student_answer": "European colonial powers introduced legal and administrative frameworks that fundamentally disrupted and often dismantled the traditional governance systems of colonized societies. In most cases, colonial law was imposed from above with little consideration for existing customary laws, dispute resolution mechanisms, or local governance structures. The British introduced their common law system across colonies in Africa, Asia, and the Caribbean, establishing courts, codified laws, and legal procedures modeled on English practice. While this created a degree of institutional consistency within colonies, it also rendered traditional legal authorities such as chiefs, elders, and village councils powerless or subordinate. In India, the British codified Hindu and Muslim personal law in ways that often distorted or oversimplified complex living traditions. French colonial administration applied the policy of assimilation, which sought to replace indigenous cultures and governance with French language, law, and institutions. Property law was particularly disruptive. Colonial land registration systems frequently failed to recognize communal land ownership, which was common in African and Asian societies, converting communal lands into individually titled or state-owned property. This dispossessed many communities and created conditions for landlessness and poverty. After independence, many newly formed nations inherited these colonial legal frameworks without the resources or capacity to reform them immediately, meaning that colonial legal structures continued to shape governance long after the colonizers departed. Today, debates over land rights, customary law recognition, and legal pluralism in post-colonial states are a direct legacy of this imposed transformation."
+    },
+    {
+      "id": 14,
+      "subject": "World History",
+      "topic": "Colonial Economics",
+      "expected_quality": "medium",
+      "question": "Explain how colonialism destroyed traditional economic systems and established new systems, creating conditions for ongoing problems.",
+      "student_answer": "Colonialism systematically dismantled traditional economic systems that had sustained local communities for generations and replaced them with structures designed to extract wealth for the benefit of the colonizing power. Before colonization, many societies in Africa, Asia, and the Americas had self-sufficient agricultural economies, local trade networks, and specialized craft industries. Colonial powers disrupted these systems by introducing cash crop agriculture, forcing local farmers to grow export commodities such as cotton, sugar, rubber, and tobacco instead of food crops. This made colonized populations dependent on global markets they did not control and vulnerable to price collapses. Colonial taxation systems, which required payment in European currency, forced people into wage labor and cash economies. Local industries were often deliberately suppressed to protect European manufacturers. After independence, former colonies were left with economies heavily dependent on a narrow range of primary commodity exports, inadequate infrastructure for domestic industry, and limited skilled labor for manufacturing. These conditions created long-term economic dependency on former colonial powers and international financial institutions, contributing to cycles of debt and underdevelopment that continue to affect many countries today."
+    },
+    {
+      "id": 15,
+      "subject": "World History",
+      "topic": "Independence and Nation-Building",
+      "expected_quality": "strong",
+      "question": "Explain how independence movements led to the establishment of new nations based on colonial borders and created conflicts.",
+      "student_answer": "The wave of decolonization that swept Asia and Africa between the 1940s and 1970s resulted in the creation of dozens of new independent nations. However, in most cases these new states inherited the territorial borders drawn by colonial powers, which had been designed for administrative and economic convenience rather than to reflect ethnic, linguistic, religious, or cultural identities. This fundamental mismatch between the borders of states and the identities of the peoples living within them has been one of the most persistent sources of post-independence conflict. In Africa, the principle of uti possidetis, which meant that newly independent states would retain colonial borders to prevent fragmentation, was adopted at independence but locked in many of the divisions and groupings that colonial rule had imposed. Nigeria, whose colonial borders enclosed over 250 ethnic groups, experienced a catastrophic civil war from 1967 to 1970 when the predominantly Igbo southeast attempted to secede as the Republic of Biafra. Sudan's colonial borders grouped Arab-Muslim northerners with predominantly Christian and animist southerners, contributing to decades of civil war that eventually led to South Sudan's secession in 2011. In South Asia, the partition of British India along religious lines in 1947 created Pakistan and India in a process that displaced up to 14 million people and killed hundreds of thousands. The disputed status of Kashmir has remained a source of military confrontation between India and Pakistan ever since. Independence movements achieved the goal of ending direct colonial rule, but the nations they created were often structurally fragile precisely because their borders reflected colonial logic rather than the aspirations of the peoples themselves."
+    },
+    {
+      "id": 16,
+      "subject": "World History",
+      "topic": "Industrial Revolution and Social Classes",
+      "expected_quality": "medium",
+      "question": "Write a suitable introduction explaining how industrialization led to the emergence of new social classes and created conditions for labor movements.",
+      "student_answer": "The Industrial Revolution, which began in Britain in the mid-eighteenth century and spread across Europe and North America during the nineteenth century, fundamentally transformed the structure of society. As factory production replaced artisan crafts and agricultural labor, two new and distinct social classes emerged: the industrial bourgeoisie, who owned factories and accumulated capital, and the urban working class, or proletariat, who sold their labor for wages. Workers labored under harsh conditions for long hours and minimal pay, with no legal protections or collective bargaining rights. Living conditions in rapidly expanding industrial cities were often squalid and dangerous. These circumstances created widespread discontent that gradually gave rise to organized labor movements. Workers began forming trade unions, staging strikes, and demanding better wages, shorter working hours, and safer conditions. The ideas of thinkers such as Karl Marx and Friedrich Engels gave political expression to these grievances, arguing that the conflict between capital and labor was the defining struggle of industrial society."
+    },
+    {
+      "id": 17,
+      "subject": "World History",
+      "topic": "Oil Crisis and Global Economy",
+      "expected_quality": "weak",
+      "question": "Explain how the economic problems caused by the Oil Crisis (1972) created inflation and changed global power structures.",
+      "student_answer": "The oil crisis made oil prices go very high. Many countries had to pay more for energy. This caused prices of many things to rise. Some oil-producing countries became more powerful because of their oil. It was a big problem for the world economy."
+    },
+    {
+      "id": 18,
+      "subject": "World History",
+      "topic": "Post-Cold War Globalization",
+      "expected_quality": "strong",
+      "question": "Explain how the end of the Cold War led to globalization and new technologies, creating new problems and conflicts.",
+      "student_answer": "The collapse of the Soviet Union in 1991 ended the bipolar world order that had defined global politics for over four decades and opened the way for a new era of economic and political globalization. With the ideological contest between capitalism and communism effectively resolved in favor of the market economy, barriers to trade, investment, and the movement of people began to fall. The 1990s saw rapid expansion of free trade agreements, the creation of the World Trade Organization in 1995, and the integration of formerly communist economies into global markets. Simultaneously, the digital revolution accelerated the interconnection of economies and societies. The rise of the internet, mobile communications, and global supply chains created unprecedented economic growth but also introduced new forms of inequality. Developed nations benefited most from globalization, while many developing countries found themselves locked into low-wage manufacturing and commodity exports. The spread of global capitalism also produced a backlash. Economic dislocation caused by deindustrialization in Western nations fueled political polarization and the rise of nationalist movements. Meanwhile, the absence of Cold War constraints allowed previously suppressed ethnic, religious, and regional conflicts to resurface, as seen in the former Yugoslavia and Rwanda in the 1990s. New technologies enabled transnational terrorism, cyber warfare, and the rapid spread of misinformation. The September 11 attacks of 2001 and the subsequent War on Terror demonstrated how non-state actors could exploit globalized networks to cause destruction on a massive scale. The post-Cold War era thus brought both unprecedented connectivity and new categories of conflict that the existing international order was poorly equipped to manage."
+    },
+    {
+      "id": 19,
+      "subject": "World History",
+      "topic": "Industrial Revolution and Urbanization",
+      "expected_quality": "medium",
+      "question": "Explain how the Industrial Revolution led to population growth in urban centers from the early 18th century.",
+      "student_answer": "The Industrial Revolution triggered one of the largest migrations in human history as rural populations moved to cities in search of factory employment. Before industrialization, most people in Britain and Europe lived in rural areas and worked in agriculture. The development of factories, particularly in textile manufacturing, iron production, and coal mining, created large concentrations of employment in specific locations. Cities such as Manchester, Birmingham, and Leeds grew dramatically within a few decades. Improved agricultural productivity, partly driven by the Agricultural Revolution that preceded industrialization, meant that fewer workers were needed on farms, pushing people toward urban employment. Advances in medicine and public health gradually reduced mortality rates, contributing to overall population growth. By the mid-nineteenth century, Britain had become the first society in history where more people lived in cities than in rural areas. This urban growth created enormous demand for housing, sanitation, and public services that city authorities were initially unable to meet."
+    },
+    {
+      "id": 20,
+      "subject": "World History",
+      "topic": "Industrial Revolution and Economic Change",
+      "expected_quality": "strong",
+      "question": "Explain how the Industrial Revolution created new economic systems and industries and caused social changes.",
+      "student_answer": "The Industrial Revolution, which began in Britain around the 1760s and spread across Europe and North America over the following century, represented the most profound transformation of economic life since the development of agriculture. The introduction of steam power, mechanized production, and new manufacturing techniques replaced the cottage industry system in which goods were produced by hand in homes or small workshops. Large factories concentrated workers, machinery, and capital in single locations, enabling mass production at scales and costs that handcraft could never achieve. New industries emerged, including cotton textiles, iron and steel, coal mining, chemical manufacturing, and eventually railways and engineering. The factory system created entirely new patterns of economic organization. Capital accumulation became the driving force of the economy, and a new class of industrial capitalists, the bourgeoisie, rose to economic and political prominence. For workers, industrialization brought both opportunity and hardship. Wages were often higher than in agricultural work, but factory conditions were dangerous, hours were extremely long, and child labor was widespread. The disruption of traditional craft industries caused severe unemployment among skilled artisans. Urbanization accelerated as millions moved to industrial cities, creating overcrowded slums with inadequate sanitation and housing. These conditions generated new social tensions and eventually gave rise to trade unions, socialist politics, and demands for democratic reform. The Industrial Revolution also transformed international trade, as industrial nations sought raw materials and markets globally, contributing to the expansion of European colonialism."
+    },
+    {
+      "id": 21,
+      "subject": "World History",
+      "topic": "Industrial Revolution and Labor Movements",
+      "expected_quality": "medium",
+      "question": "Explain how the Industrial Revolution created new social classes and led to labor movements.",
+      "student_answer": "The Industrial Revolution produced a fundamental restructuring of social class in European societies. The old social hierarchy based on land ownership and aristocratic status was gradually challenged by the rise of the industrial middle class, who accumulated wealth through factory ownership, commerce, and finance. Below them, a large urban working class emerged, made up of men, women, and children who worked in factories, mines, and workshops for wages. These workers had no job security, no legal protections, and no political representation. Working conditions were often dangerous and hours were extremely long, sometimes exceeding sixteen hours a day. In response to these conditions, workers began to organize collectively. Early trade unions, initially illegal in Britain until 1824, were formed to negotiate wages and working hours with employers. The Chartist movement in Britain during the 1830s and 1840s demanded political rights for working-class men. Labor unrest spread across Europe, contributing to the revolutionary upheavals of 1848. The ideas of Karl Marx, who argued that industrial capitalism would inevitably generate class conflict, gave theoretical form to growing working-class radicalism."
+    },
+    {
+      "id": 22,
+      "subject": "World History",
+      "topic": "Industrial Revolution and Environmental Impact",
+      "expected_quality": "weak",
+      "question": "Explain how the Industrial Revolution led to exploitation of resources and created conflicts and lasting problems.",
+      "student_answer": "The Industrial Revolution used a lot of coal and other resources. Factories caused pollution. Many workers were treated badly. This created problems between workers and factory owners. Some of these problems like pollution still exist today."
+    },
+    {
+      "id": 23,
+      "subject": "World History",
+      "topic": "Cold War",
+      "expected_quality": "strong",
+      "question": "Explain how the Cold War created divisions and led to military alliances.",
+      "student_answer": "The Cold War, which developed in the years immediately following World War Two, created a fundamental division in the international system between two opposing blocs led by the United States and the Soviet Union. Each superpower sought to extend its political, economic, and military influence while preventing the other from doing the same, a competition that shaped global politics for nearly five decades. One of the most visible expressions of this rivalry was the formation of competing military alliances. In 1949, the United States and its Western European allies founded the North Atlantic Treaty Organization, commonly known as NATO, a collective defense pact in which an attack on one member was treated as an attack on all. The Soviet Union responded in 1955 with the Warsaw Pact, which bound the Eastern European states within its sphere of influence into a parallel military alliance. These alliances divided Europe into two armed camps separated by what Winston Churchill famously described as an Iron Curtain. Germany itself was divided into West Germany, aligned with NATO, and East Germany, within the Warsaw Pact. Berlin became a flashpoint for Cold War tensions, most dramatically during the Berlin Blockade of 1948 and the construction of the Berlin Wall in 1961. Beyond Europe, Cold War divisions extended globally. The Korean War, the Vietnam War, conflicts in Angola, Mozambique, Nicaragua, and Afghanistan were all shaped by superpower competition. Both blocs supported proxy governments and armed movements aligned with their interests, turning local conflicts into arenas of Cold War struggle. The nuclear arms race between the two superpowers meant that the entire world lived under the threat of mutual assured destruction."
+    },
+    {
+      "id": 24,
+      "subject": "World History",
+      "topic": "Cold War",
+      "expected_quality": "medium",
+      "question": "Explain the nature and development of the Cold War in four points.",
+      "student_answer": "First, the Cold War was an ideological conflict between American capitalism and democracy on one side and Soviet communism and one-party rule on the other, with each superpower seeking to spread its system globally. Second, it was characterized by an arms race in which both the United States and the Soviet Union built enormous arsenals of nuclear weapons, creating a balance of terror known as mutually assured destruction that prevented direct military conflict between them. Third, the Cold War was fought indirectly through proxy wars in Korea, Vietnam, and Afghanistan, where each superpower supported opposing sides without engaging each other directly. Fourth, the Cold War divided the world into competing blocs, with NATO in the West and the Warsaw Pact in the East, while many nations in Asia, Africa, and Latin America tried to navigate a middle path through the Non-Aligned Movement."
+    },
+    {
+      "id": 25,
+      "subject": "World History",
+      "topic": "Post-Cold War",
+      "expected_quality": "medium",
+      "question": "Explain how the end of the Cold War led to the spread of new ideologies and new conditions.",
+      "student_answer": "The end of the Cold War with the dissolution of the Soviet Union in 1991 removed the dominant ideological framework that had structured global politics since 1945. The apparent victory of liberal democracy and market capitalism led American political scientist Francis Fukuyama to famously describe it as the end of history, suggesting that liberal democracy had triumphed as the final form of human government. In the 1990s, many former communist states in Eastern Europe transitioned to multiparty democracy and market economies, and international institutions expanded in membership and influence. However, new ideological forces soon emerged to fill the vacuum. Religious nationalism, political Islam, ethnic nationalism, and populism all grew in strength during the 1990s and 2000s. The September 11 attacks demonstrated the global reach of jihadist ideology. In Russia, liberal democracy gave way to an authoritarian nationalism under Vladimir Putin. In China, economic liberalization proceeded without political reform. By the 2010s, liberal democracy itself appeared under pressure from within, as populist movements challenged established parties in the United States, Europe, and elsewhere."
+    },
+    {
+      "id": 26,
+      "subject": "World History",
+      "topic": "Colonialism and Conflict",
+      "expected_quality": "weak",
+      "question": "Explain how colonialism created divisions that led to conflicts.",
+      "student_answer": "Colonial powers divided countries and created groups that did not like each other. When they left, these groups fought. This happened in Africa and Asia. The borders they drew were not fair. So there were many wars after independence."
+    },
+    {
+      "id": 27,
+      "subject": "World History",
+      "topic": "Colonial Impact on Society",
+      "expected_quality": "strong",
+      "question": "Explain the impact of colonialism on local societies.",
+      "student_answer": "European colonialism had a profound and largely destructive impact on the societies it conquered, reshaping their political structures, social hierarchies, economies, cultures, and identities in ways whose consequences persist to the present day. Politically, colonialism dismantled existing states, kingdoms, and governance systems, replacing them with centralized administrative structures designed to serve colonial interests. Traditional rulers were either removed or reduced to subordinate roles, eliminating indigenous political authority. Socially, colonial powers introduced or reinforced racial hierarchies that classified people according to European racial categories, privileging some groups over others and creating lasting divisions. Caste systems in South Asia were codified and hardened by colonial administration. In Africa, tribal identities were often exaggerated and institutionalized in ways that created lasting communal tensions. Economically, colonialism reoriented local production away from subsistence and local trade toward export commodities, creating dependency on global markets and destroying traditional industries. Culturally, colonial education systems promoted European languages, Christianity, and Western values while denigrating indigenous languages, religions, and knowledge systems. Many societies experienced deep cultural dislocation as a result, with a class of Western-educated elites becoming disconnected from their communities. At the same time, colonial contact produced new hybrid cultures, languages, and religious forms that became important parts of post-colonial identity. The psychological impact of colonialism, including internalized inferiority and the devaluation of indigenous identity, was analyzed profoundly by thinkers such as Frantz Fanon and Aime Cesaire, who argued that decolonization required not only political independence but the recovery of cultural and psychological self-determination."
+    },
+    {
+      "id": 28,
+      "subject": "World History",
+      "topic": "Colonial Resource Exploitation",
+      "expected_quality": "medium",
+      "question": "Explain how colonial powers exploited resources and created economic systems that benefited them at the expense of local populations.",
+      "student_answer": "Colonial powers systematically extracted the natural resources of their territories to fuel their own industrial growth and generate profit for European investors and governments. In Africa, the Congo Free State under Belgian King Leopold II became notorious for the brutal exploitation of rubber, with African workers subjected to mutilation and murder if they failed to meet extraction quotas. In South Asia, Britain extracted vast amounts of cotton, indigo, spices, and later coal and iron ore. The British East India Company and later the British Crown structured Indian taxation and trade to benefit British industry, deliberately suppressing Indian textile manufacturing to protect British mills. In Latin America, Spanish and Portuguese colonizers extracted enormous quantities of silver and gold through forced indigenous labor in mines such as Potosi. Colonial trade systems required that colonized territories sell raw materials cheaply to the colonizing power and buy manufactured goods back at high prices, a relationship that transferred wealth from colonies to Europe. These economic systems left colonized societies with depleted resources, underdeveloped industries, and economic structures built for export rather than domestic welfare."
+    },
+    {
+      "id": 29,
+      "subject": "World History",
+      "topic": "Colonial Culture and Religion",
+      "expected_quality": "strong",
+      "question": "Explain how European colonialism destroyed traditional cultures and imposed new religions and educational systems.",
+      "student_answer": "European colonialism conducted a systematic assault on the cultures, religions, and knowledge systems of colonized peoples, replacing them with European languages, Christianity, and Western educational models. This cultural dimension of colonialism was not merely incidental but integral to the colonial project, justified by a belief in European civilizational superiority and the supposed duty to civilize non-European peoples. Missionary activity accompanied colonial conquest across Africa, Asia, and the Americas. Christian missionaries established schools and hospitals that provided real services but also worked to convert local populations, discrediting and suppressing indigenous spiritual practices. In many parts of Africa, traditional religious ceremonies were banned, sacred objects destroyed, and local priests marginalized. Indigenous languages were suppressed in formal education. Colonial schools taught in French, English, Portuguese, or Spanish and used curricula designed in Europe that taught colonial history from the colonizer's perspective, often portraying indigenous peoples as backward and without civilization. The colonial education system was designed to produce a class of intermediaries who could serve colonial administration, not to provide genuine opportunities for indigenous advancement. In the Americas, the devastation wrought by Spanish and Portuguese conquest was catastrophic. Entire civilizations, including the Aztec, Inca, and Maya, saw their monumental architecture destroyed, sacred texts burned, and religious systems outlawed. The forced conversion of indigenous populations to Christianity proceeded alongside massacres and enslavement. Traditional healing practices, agricultural knowledge, and social institutions were dismissed and suppressed. The long-term consequences of this cultural destruction include the loss of languages, the erosion of community cohesion, and the psychological trauma of a people taught to see their own heritage as inferior."
+    },
+    {
+      "id": 30,
+      "subject": "World History",
+      "topic": "Colonial Economic Destruction",
+      "expected_quality": "weak",
+      "question": "Explain how European colonialism destroyed traditional economic systems and created conflicts and lasting problems.",
+      "student_answer": "European colonialism took over local economies and made people work for them. They took resources and destroyed local businesses. This made poor countries stay poor. Local people could not develop their own industries. These problems still affect developing countries."
+    },
+    {
+      "id": 31,
+      "subject": "World History",
+      "topic": "Colonial Governance Structures",
+      "expected_quality": "medium",
+      "question": "Explain how colonial governance systems created divisions and imposed administrative structures that exist today.",
+      "student_answer": "Colonial administrative systems were built around the need to control large territories with relatively small numbers of European officials, leading to governance approaches that deliberately manipulated existing social divisions or created new ones. The British policy of indirect rule, most extensively applied in Africa, preserved the formal authority of local chiefs and kings but subordinated them to colonial oversight, giving them incentives to enforce colonial policies on their own communities. The French policy of direct administration replaced local authority more completely with French officials and institutions. In both cases, administrative boundaries drawn for colonial convenience frequently grouped rival communities together or divided cohesive ones. Many of these borders and administrative divisions were carried over into post-colonial states, where they continue to structure political competition and occasionally generate conflict. The preference shown by colonial administrations for certain ethnic or regional groups in recruitment to the civil service and police also created lasting inequalities in access to state power that contributed to post-independence political tensions."
+    },
+    {
+      "id": 32,
+      "subject": "World History",
+      "topic": "Colonial Divisions and Ongoing Conflicts",
+      "expected_quality": "strong",
+      "question": "Explain how these divisions and administrative systems led to conflicts and problems.",
+      "student_answer": "The administrative divisions and social hierarchies established by colonial governance systems have proved remarkably durable and have been a major driver of conflicts in post-colonial states across Africa, Asia, and the Middle East. When colonial powers departed, they left behind states whose institutions, borders, and internal divisions were products of colonial rule rather than indigenous political development. In many cases, the groups that colonial administrations had favored in recruitment to civil service positions and security forces inherited disproportionate power at independence, generating resentment among marginalized communities that expressed itself in political instability and violence. In Iraq, the British mandate favored Sunni Arabs in administrative and military positions during the period of indirect rule, while Shia and Kurdish populations were underrepresented. This legacy of communal inequality intersected with the borders of the Iraqi state, which had enclosed diverse communities within a single political unit, to produce recurring cycles of violence including the Ba'athist repression of Kurds, the post-2003 sectarian civil war, and the rise of the Islamic State. In Sri Lanka, British preferential treatment of Tamils in colonial civil service recruitment created Sinhalese resentment that contributed to the discriminatory policies of post-independence governments, which in turn fueled Tamil nationalist resistance and eventually a civil war lasting from 1983 to 2009. In central Africa, Belgian colonial administration's hardening of Hutu-Tutsi distinctions in Rwanda through identity cards and differential access to education created structural inequalities that, combined with political manipulation, produced the 1994 genocide in which approximately 800,000 people were killed. These cases illustrate how colonial administrative divisions created fault lines that post-colonial political competition transformed into violent conflicts."
+    },
+    {
+      "id": 33,
+      "subject": "World History",
+      "topic": "Urbanization and Class",
+      "expected_quality": "medium",
+      "question": "Explain how urban population growth caused class divisions and social change.",
+      "student_answer": "The rapid urbanization that accompanied industrialization produced sharp class divisions and transformed the social fabric of European societies. In pre-industrial cities, social hierarchies existed but were relatively stable and structured by tradition, guild membership, and inherited status. Industrial cities created a new and more volatile social landscape. A wealthy middle class of factory owners, merchants, bankers, and professionals accumulated unprecedented wealth and gradually acquired political influence that challenged the dominance of the landed aristocracy. Below them, a large urban working class lived in crowded tenements, worked in dangerous factories, and had no access to political representation or legal protection. The physical geography of industrial cities reflected these class divisions, with wealthy residential areas separated from working-class districts by distance, railway lines, or industrial zones. These material conditions generated new forms of class consciousness. Workers developed collective identities based on shared experience of labor and exploitation, which found expression in trade unions, friendly societies, and eventually socialist political parties. Social reformers, journalists, and writers such as Charles Dickens drew public attention to the conditions of the urban poor, helping to build political pressure for reform."
+    },
+    {
+      "id": 34,
+      "subject": "World History",
+      "topic": "Environmental Exploitation",
+      "expected_quality": "strong",
+      "question": "Explain how exploitation of resources during industrialization led to environmental destruction and present-day problems.",
+      "student_answer": "The Industrial Revolution initiated a process of resource exploitation at a scale and intensity that the natural environment had never previously experienced, laying the foundations for the environmental crises that define the present era. The burning of coal to power steam engines and heat industrial furnaces released enormous quantities of carbon dioxide, sulfur dioxide, and particulate matter into the atmosphere. Industrial cities such as Manchester, Leeds, and Pittsburgh became notorious for their suffocating smog, poisoned rivers, and blackened landscapes. The River Thames in London became so polluted by industrial and human waste that the Great Stink of 1858 forced Parliament itself to act. Mining operations for coal, iron, copper, and tin stripped landscapes, contaminated groundwater, and created spoil heaps that destroyed agricultural land. Textile mills discharged dyes and chemical effluents into rivers, killing aquatic life. Deforestation accelerated as forests were cleared for agriculture, fuel, and construction to supply the demands of growing industrial cities. The cumulative effect of two centuries of industrial resource exploitation has been catastrophic for the global environment. The concentration of carbon dioxide in the atmosphere has risen from approximately 280 parts per million before industrialization to over 420 parts per million today, driving global average temperature increases that are producing more frequent and severe extreme weather events, rising sea levels, and disruption of ecosystems worldwide. The chemical pollution of soils, waterways, and oceans, the depletion of biodiversity, and the collapse of fisheries are all consequences traceable in significant part to industrial patterns of resource use that began in the eighteenth century. Addressing these problems requires confronting the same logic of unlimited growth and resource extraction that powered industrialization in the first place."
+    },
+    {
+      "id": 35,
+      "subject": "World History",
+      "topic": "Colonial Governance and Present Conflicts",
+      "expected_quality": "medium",
+      "question": "Explain how colonial governance divisions continue to cause conflicts today.",
+      "student_answer": "Many of the conflicts that dominate international news today can be traced directly to the administrative divisions and governance structures imposed by colonial powers. Colonial borders drawn without reference to ethnic, linguistic, or cultural realities enclosed rival communities within single states, creating permanent sources of tension over political power, resources, and identity. In the Middle East, the borders established by British and French mandates after World War One created states such as Iraq, Syria, and Lebanon that contained diverse and sometimes historically hostile communities. Lebanon's carefully balanced communal constitution, designed to share power between Maronite Christians, Sunni Muslims, and Shia Muslims, has repeatedly broken down, most catastrophically in the civil war of 1975 to 1990. In South Asia, the Durand Line drawn by the British between Afghanistan and what is now Pakistan divided Pashtun communities across two states, contributing to the Afghan-Pakistani border tensions and the political complexity of counterterrorism operations that persist today. In sub-Saharan Africa, conflicts over mineral resources in territories defined by colonial boundaries continue to generate violence, as in the eastern Democratic Republic of Congo, where colonial-era ethnic classifications and resource inequalities interact with weak post-colonial state institutions to produce chronic instability. The persistence of colonial-era divisions as drivers of present-day conflict underlines the importance of understanding history in order to address the structural roots of contemporary problems."
+    }
+  ]
+}

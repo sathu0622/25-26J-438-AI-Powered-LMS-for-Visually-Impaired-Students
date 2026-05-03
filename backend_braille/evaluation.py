@@ -10,15 +10,9 @@ from utils import (
 from logger_config import logger
 from rag_retriever import retrieve_context, retrieve_topic_info
 
-# =========================
-# CACHE
-# =========================
 _context_cache = {}
 
 
-# =========================
-# CLEAN TEXT
-# =========================
 def clean_text(text: str) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"/[a-zA-Z]+>", " ", text)
@@ -26,17 +20,11 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
-# =========================
-# EXTRACT KEY POINTS
-# =========================
 def extract_key_points(text):
     parts = re.split(r'[.;]', text)
     return [p.strip() for p in parts if len(p.strip()) > 20]
 
 
-# =========================
-# FIND MISSING POINTS
-# =========================
 def find_missing_points(correct_answer, student_answer, sbert_model, threshold=70):
     correct_points = extract_key_points(correct_answer)
     student_points = extract_key_points(student_answer)
@@ -63,9 +51,6 @@ def find_missing_points(correct_answer, student_answer, sbert_model, threshold=7
     return missing[:3]
 
 
-# =========================
-# GENERATE MODEL ANSWER
-# =========================
 def generate_correct_answer(question, tokenizer, model):
     torch.manual_seed(42)
     np.random.seed(42)
@@ -143,10 +128,6 @@ ANSWER:
 
     return answer
 
-
-# =========================
-# SCORE CALCULATION
-# =========================
 def calculate_final_score(correct, student, sbert_model):
 
     correct = clean_text(correct)
@@ -156,9 +137,9 @@ def calculate_final_score(correct, student, sbert_model):
     keyword = keyword_overlap_score(correct, student)
     jaccard = jaccard_similarity(correct, student)
 
-    semantic_weighted = semantic * 0.70
-    keyword_weighted = keyword * 0.20
-    jaccard_weighted = jaccard * 0.10
+    semantic_weighted = semantic * 0.50
+    keyword_weighted = keyword * 0.35
+    jaccard_weighted = jaccard * 0.15
 
     length_factor = length_penalty(correct, student)
 
@@ -184,14 +165,13 @@ def generate_feedback(score, correct_answer, student_answer, question, sbert_mod
 
     further_study = ""
     if chapter or topic:
-        further_study += "\n\n📚 Further Study Recommendation:\n"
+        further_study += "\n\nFurther Study Recommendation:\n"
         if chapter:
             further_study += f"  • Chapter : {chapter}\n"
         if topic:
             further_study += f"  • Topic   : {topic}\n"
         further_study += "  Review this section in your textbook to strengthen your understanding."
 
-    # ── PASS ──────────────────────────────────────────────────────────────────
     if score >= 75:
         return (
             f"Excellent answer (Score: {score}%). "
@@ -199,7 +179,6 @@ def generate_feedback(score, correct_answer, student_answer, question, sbert_mod
             + further_study
         )
 
-    # ── NEEDS IMPROVEMENT ─────────────────────────────────────────────────────
     elif score >= 45:
         feedback = (
             f"Good attempt (Score: {score}%). "
@@ -220,7 +199,6 @@ def generate_feedback(score, correct_answer, student_answer, question, sbert_mod
         feedback += further_study
         return feedback
 
-    # ── FAIL ──────────────────────────────────────────────────────────────────
     else:
         feedback = (
             f"Your answer shows limited understanding of the topic (Score: {score}%).\n\n"
@@ -241,9 +219,6 @@ def generate_feedback(score, correct_answer, student_answer, question, sbert_mod
         return feedback
 
 
-# =========================
-# MAIN EVALUATION
-# =========================
 def evaluate_student_answer(question, student_answer, tokenizer, model, sbert):
 
     correct_answer = generate_correct_answer(question, tokenizer, model)

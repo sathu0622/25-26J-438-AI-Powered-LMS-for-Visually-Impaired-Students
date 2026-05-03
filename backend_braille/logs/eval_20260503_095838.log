@@ -1,0 +1,43 @@
+2026-05-03 09:58:38,229 [INFO] Starting evaluation run — API: http://localhost:8000/evaluate
+2026-05-03 09:58:38,230 [INFO] Log file: logs\eval_20260503_095838.log
+2026-05-03 09:58:38,230 [INFO] Loading test cases from: test_questions.json
+2026-05-03 09:58:38,230 [INFO] Loaded 5 test case(s).
+2026-05-03 09:58:38,230 [INFO] ────────────────────────────────────────────────────────────
+2026-05-03 09:58:38,230 [INFO] [TC 6] Subject  : History
+2026-05-03 09:58:38,231 [INFO] [TC 6] Question : Explain how European colonialism destroyed traditional economic systems and created lasting problems.
+2026-05-03 09:58:38,231 [INFO] [TC 6] Student  : European colonialism destroyed traditional economic systems by introducing plantations and export-oriented agriculture. Local industries such as handicrafts declined because they could not compete with imported goods. Farmers became dependent on cash crops and lost self-sufficiency. Wealth was concentrated among a few plantation owners while most people remained poor and landless. This led to long-term problems such as poverty, unemployment, and social inequality, which still affect many countries today.
+2026-05-03 09:59:40,283 [ERROR] [TC 6] Request timed out after 60s.
+2026-05-03 09:59:40,284 [INFO] ────────────────────────────────────────────────────────────
+2026-05-03 09:59:40,285 [INFO] [TC 7] Subject  : History
+2026-05-03 09:59:40,285 [INFO] [TC 7] Question : Describe two causes of World War II.
+2026-05-03 09:59:40,285 [INFO] [TC 7] Student  : One major cause of World War II was the rise of Adolf Hitler and his aggressive expansion policies. Another cause was the weakness of the League of Nations, which failed to prevent conflicts between countries.
+2026-05-03 10:00:42,325 [ERROR] [TC 7] Request timed out after 60s.
+2026-05-03 10:00:42,325 [INFO] ────────────────────────────────────────────────────────────
+2026-05-03 10:00:42,325 [INFO] [TC 8] Subject  : History
+2026-05-03 10:00:42,325 [INFO] [TC 8] Question : Explain the impact of the Industrial Revolution on society.
+2026-05-03 10:00:42,325 [INFO] [TC 8] Student  : The Industrial Revolution led to urbanization as people moved to cities for work. It also created a gap between rich factory owners and poor workers, leading to poor living conditions and social problems.
+2026-05-03 10:01:44,377 [ERROR] [TC 8] Request timed out after 60s.
+2026-05-03 10:01:44,377 [INFO] ────────────────────────────────────────────────────────────
+2026-05-03 10:01:44,378 [INFO] [TC 9] Subject  : History
+2026-05-03 10:01:44,378 [INFO] [TC 9] Question : What were the main features of the Colebrooke-Cameron Reforms in Sri Lanka?
+2026-05-03 10:01:44,378 [INFO] [TC 9] Student  : The Colebrooke-Cameron Reforms introduced a unified administration, established the Executive and Legislative Councils, and promoted a modern system of government in Sri Lanka.
+2026-05-03 10:02:46,435 [ERROR] [TC 9] Request timed out after 60s.
+2026-05-03 10:02:46,435 [INFO] ────────────────────────────────────────────────────────────
+2026-05-03 10:02:46,435 [INFO] [TC 10] Subject  : History
+2026-05-03 10:02:46,435 [INFO] [TC 10] Question : Explain the importance of the Kandyan Convention of 1815.
+2026-05-03 10:02:46,435 [INFO] [TC 10] Student  : The Kandyan Convention of 1815 marked the end of the Kandyan Kingdom and brought the whole island under British rule. It also ensured the protection of Buddhism and granted certain rights to local chiefs.
+2026-05-03 10:03:48,496 [ERROR] [TC 10] Request timed out after 60s.
+2026-05-03 10:03:48,498 [INFO] Results saved to: test_results.json
+2026-05-03 10:03:48,498 [INFO] ============================================================
+2026-05-03 10:03:48,498 [INFO] SUMMARY
+2026-05-03 10:03:48,499 [INFO] ============================================================
+2026-05-03 10:03:48,499 [INFO] Total   : 5
+2026-05-03 10:03:48,499 [INFO] Success : 0
+2026-05-03 10:03:48,499 [INFO] Failed  : 5
+2026-05-03 10:03:48,499 [WARNING] Failed test cases:
+2026-05-03 10:03:48,499 [WARNING]   TC 6 — timeout
+2026-05-03 10:03:48,499 [WARNING]   TC 7 — timeout
+2026-05-03 10:03:48,499 [WARNING]   TC 8 — timeout
+2026-05-03 10:03:48,499 [WARNING]   TC 9 — timeout
+2026-05-03 10:03:48,499 [WARNING]   TC 10 — timeout
+2026-05-03 10:03:48,499 [INFO] Done.
