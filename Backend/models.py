@@ -1,4 +1,8 @@
 # models.py
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ""  # CPU-only mode
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Suppress TensorFlow logging
+
 import torch
 from transformers import (
     T5Tokenizer, 

@@ -1,6 +1,12 @@
 # config.py
 import os
 import sys
+
+# Suppress CUDA/GPU warnings for CPU-only mode (must be set BEFORE importing TensorFlow/PyTorch)
+os.environ["CUDA_VISIBLE_DEVICES"] = ""  # Disable all CUDA devices
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Suppress TensorFlow logging
+os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "false"  # Disable GPU memory growth
+
 import torch
 from pathlib import Path
 from typing import Dict, Any

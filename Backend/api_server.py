@@ -1,9 +1,12 @@
 # api_server.py
+import os
+os.environ["CUDA_VISIBLE_DEVICES"] = ""  # CPU-only mode
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Suppress TensorFlow logging
+
 from fastapi import FastAPI, File, UploadFile, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-import os
 import tempfile
 import subprocess
 import sys
