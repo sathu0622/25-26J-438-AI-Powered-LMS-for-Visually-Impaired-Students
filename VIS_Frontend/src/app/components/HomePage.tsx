@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { FileText, Image, HelpCircle, BookOpen, Volume2 } from 'lucide-react';
 import { Card } from './ui/card';
+import { useTTS } from '../contexts/TTSContext';
 
 interface HomePageProps {
   onNavigate: (module: string) => void;
@@ -37,6 +39,15 @@ const modules = [
 ];
 
 export const HomePage = ({ onNavigate }: HomePageProps) => {
+  const { announce, cancel } = useTTS();
+
+  useEffect(() => {
+    announce(
+      'Home. EduVoice AI, a voice-first educational platform. Choose a module: Document AI for PDFs and images with summaries; Braille Evaluation for Braille answer sheets; Voice Quiz with voice support; or History Lessons for audio lessons. Press F1 for voice commands or H for help. Use Alt+1 for Document AI, Alt+2 for Braille, Alt+3 for Quiz, and Alt+4 for History. Alt+0 returns to Home from other screens.'
+    );
+    return () => cancel();
+  }, [announce, cancel]);
+
   return (
     <div className="mx-auto max-w-4xl space-y-8 p-4 pb-24">
       {/* Header */}
