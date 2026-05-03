@@ -47,7 +47,7 @@ def _call_with_retry(
                 if m:
                     retry_after = int(m.group(1)) + 1
                 print(
-                    f"Gemini rate-limited. Retrying in {retry_after}s "
+                    f"rate-limited. Retrying in {retry_after}s "
                     f"(attempt {attempt + 1}/{max_retries})"
                 )
                 time.sleep(retry_after)
@@ -318,14 +318,14 @@ def _structure_pdf_text_in_chunks(
                 try:
                     results[idx] = future.result()
                 except Exception as exc:
-                    print(f"Gemini chunk {idx + 1}/{len(chunks)} failed ({exc}).")
+                    print(f"chunk {idx + 1}/{len(chunks)} failed ({exc}).")
     except Exception as exc:
         print(f"Chunked PDF structuring setup failed ({exc}).")
         return None
 
     if any((res or {}).get("_blocked") for res in results if isinstance(res, dict)):
         print(
-            "Gemini blocked one or more PDF chunks due to policy (finish_reason=4). "
+            "blocked one or more PDF chunks due to policy (finish_reason=4). "
             "Using fast PDF fallback."
         )
         return _fast_pdf_local_fallback(pdf_text, resource_type)
@@ -363,7 +363,7 @@ def _normalize_result(
     if not full_text and fallback_full_text:
         full_text = fallback_full_text.strip()
     if not full_text:
-        print("Gemini result had no text. Falling back.")
+        print("result had no text. Falling back.")
         return None
     if not articles:
         articles = [
@@ -446,13 +446,13 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
       - Retry logic: added _call_with_retry wrapper on all generate calls
     """
     if not GEMINI_API_KEY:
-        print("Gemini API key not configured. Falling back to existing extraction.")
+        print("API key not configured. Falling back to existing extraction.")
         return None
 
     try:
         import google.generativeai as genai
     except Exception as exc:
-        print(f"Gemini SDK unavailable ({exc}). Falling back to existing extraction.")
+        print(f"SDK unavailable ({exc}). Falling back to existing extraction.")
         return None
 
     try:
@@ -461,7 +461,7 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
         is_pdf = file_path.lower().endswith(".pdf")
         if _should_skip_gemini_upload(resource_type, file_path):
             print(
-                "Skipping Gemini upload extraction for periodicals to avoid "
+                "Skipping upload extraction for periodicals to avoid "
                 "copyrighted-recitation blocks. Using existing OCR extraction."
             )
             return None
@@ -477,7 +477,7 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
                     chunked_result = _structure_pdf_text_in_chunks(model, resource_type, pdf_text)
                     if chunked_result:
                         return chunked_result
-                    print("Chunked Gemini PDF structuring failed. Using fast PDF fallback.")
+                    print("Chunked PDF structuring failed. Using fast PDF fallback.")
                 else:
                     prompt = _build_prompt(resource_type, "plain_pdf_text")
                     # Small/medium PDFs — single call with retry
@@ -490,13 +490,13 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
                                 timeout_s=timeout_s,
                             )
                         except Exception as exc:
-                            print(f"Gemini PDF structuring attempt failed ({exc}).")
+                            print(f"PDF structuring attempt failed ({exc}).")
                             continue
 
                         finish_reason = _finish_reason_value(response)
                         if finish_reason == 4:
                             print(
-                                "Gemini blocked PDF structuring due to policy (finish_reason=4). "
+                                "blocked PDF structuring due to policy (finish_reason=4). "
                                 "Using fast PDF fallback."
                             )
                             local = _fast_pdf_local_fallback(pdf_text, resource_type)
@@ -515,12 +515,12 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
                         if normalized:
                             return normalized
 
-                    print("Gemini PDF structuring failed. Using fast PDF fallback.")
+                    print("PDF structuring failed. Using fast PDF fallback.")
                 local = _fast_pdf_local_fallback(pdf_text, resource_type)
                 if local:
                     return local
 
-            print("Fast PDF text path unavailable/empty. Trying Gemini file upload fallback...")
+            print("Fast PDF text path unavailable/empty. Trying file upload fallback...")
 
         # ------------------------------------------------------------------
         # Image path (and PDF fallback): use file upload.
@@ -554,7 +554,7 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
         finish_reason = _finish_reason_value(response)
         if finish_reason == 4:
             print(
-                "Gemini blocked extraction even after best-effort retry "
+                "blocked extraction even after best-effort retry "
                 "(finish_reason=4). Falling back to existing extraction."
             )
             return None
@@ -562,10 +562,10 @@ def extract_with_gemini(file_path: str, resource_type: str) -> Optional[Dict[str
         raw_text = _response_text_safe(response)
         data = _extract_json_block(raw_text)
         if not data:
-            print("Gemini did not return parseable JSON. Falling back.")
+            print("did not return parseable JSON. Falling back.")
             return None
         return _normalize_result(data, resource_type)
 
     except Exception as exc:
-        print(f"Gemini extraction failed: {exc}. Falling back to existing extraction.")
+        print(f"extraction failed: {exc}. Falling back to existing extraction.")
         return None

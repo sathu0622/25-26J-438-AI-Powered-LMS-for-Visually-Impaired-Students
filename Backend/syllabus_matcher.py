@@ -472,6 +472,17 @@ class SyllabusMatcher:
 
         best_score = float(top_scores[0])
         best_row   = self.rows[top_indices[0]]
+        
+        # ── Return empty result if confidence < 0.5 ────────────────────
+        if best_score < 0.5:
+            return {
+                "in_syllabus": False,
+                "confidence": round(best_score, 4),
+                "match": None,
+                "alternatives": [],
+                "message": "Content is not under the subject.",
+            }
+        
         in_syllabus = best_score >= effective_threshold
 
         # ── Alternatives (positions 1 … top_k-1) ─────────────────────
