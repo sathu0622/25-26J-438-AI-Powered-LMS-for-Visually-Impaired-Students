@@ -213,7 +213,7 @@ export const LessonPlayer = ({
 
   const speakIfActive = (text: string, onEnd?: () => void) => {
     if (isComponentActiveRef.current) {
-      speak(text, { interrupt: true, onEnd: onEnd ?? (() => {}) });
+      speak(text, { interrupt: true, onEnd: onEnd ?? (() => { }) });
     }
   };
 
@@ -412,7 +412,17 @@ export const LessonPlayer = ({
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-4 pb-24">
       <div className="flex items-center gap-4">
-        <Button onClick={onBack} variant="ghost" size="icon" aria-label="Go back" title="Press ESC to go back">
+        <Button
+          onClick={() => {
+            cancel();
+            handleStop();
+            onBack();
+          }}
+          variant="ghost"
+          size="icon"
+          aria-label="Go back"
+          title="Press ESC to go back"
+        >
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <div className="flex-1">
@@ -450,9 +460,9 @@ export const LessonPlayer = ({
             <div className="flex items-center justify-between">
               <p className="text-sm font-semibold">
                 {isLoading ? '⏳ Generating Audio...' :
-                 error ? '❌ Audio Generation Failed' :
-                 !audioUrl ? '⏸️ Audio Not Ready' :
-                 isPlaying ? '▶️ Now Playing' : '⏸️ Paused'}
+                  error ? '❌ Audio Generation Failed' :
+                    !audioUrl ? '⏸️ Audio Not Ready' :
+                      isPlaying ? '▶️ Now Playing' : '⏸️ Paused'}
               </p>
               <p className="text-xs text-gray-400">
                 {isLoading ? 'Please wait...' : 'AI Text-to-Speech'}

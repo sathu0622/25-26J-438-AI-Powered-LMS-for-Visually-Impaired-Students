@@ -347,7 +347,15 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
     <div className="mx-auto max-w-3xl space-y-6 p-4 pb-24">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Button onClick={onBack} variant="ghost" size="icon" aria-label="Go back">
+        <Button 
+          onClick={() => {
+            cancel();
+            onBack();
+          }} 
+          variant="ghost" 
+          size="icon" 
+          aria-label="Go back"
+        >
           <ArrowLeft className="h-6 w-6" />
         </Button>
         <div className="flex-1">
@@ -382,6 +390,7 @@ export const TopicList = ({ grade, chapterId, chapterName, onSelectTopic, onBack
             >
               <button
                 onClick={() => {
+                  cancel();
                   const content = topic.simplified_text || topic.original_text || topic.narrative_text || '';
                   onSelectTopic(topic.id, topic.topic_name, content, index);
                 }}

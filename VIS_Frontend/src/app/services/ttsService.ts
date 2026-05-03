@@ -219,6 +219,9 @@ export async function speak(text: string, options: SpeakOptions = {}): Promise<v
  */
 export function cancel(): void {
   setSpeaking(false);
+  // Increment speakId so any pending async fetch results are ignored
+  speakId++;
+  
   if (mockTimeoutId) {
     clearTimeout(mockTimeoutId);
     mockTimeoutId = null;

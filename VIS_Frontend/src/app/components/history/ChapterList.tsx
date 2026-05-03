@@ -383,7 +383,10 @@ export const ChapterList = ({ grade, onSelectChapter, onBack }: ChapterListProps
               className="overflow-hidden transition-all hover:shadow-lg"
             >
               <button
-                onClick={() => onSelectChapter(chapter.id, chapter.chapter_name, index)}
+                onClick={() => {
+                  cancel();
+                  onSelectChapter(chapter.id, chapter.chapter_name, index);
+                }}
                 className="w-full p-6 text-left"
                 aria-label={`Open ${chapter.chapter_name}`}
               >

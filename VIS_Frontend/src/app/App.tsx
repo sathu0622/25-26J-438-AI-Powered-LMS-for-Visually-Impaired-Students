@@ -225,12 +225,12 @@ export function App() {
   // =========================
   const handleQuizStart = async (topic: string, existingSetId?: string) => {
     if (!quizUser) return;
-    
+
     // Set loading state and current generation info
     setQuizGenerating(true);
     setCurrentGenerationTopic(topic);
     setCurrentGenerationMode(quizMode === 'pastpaper' ? 'pastpaper' : 'generative');
-    
+
     // Different logic for past paper vs generative quiz
     if (quizMode === 'pastpaper') {
       try {
@@ -246,7 +246,7 @@ export function App() {
         setCurrentAnswer('');
         setEvaluationResult(null);
         setQuizSummary(null);
-        
+
         if (questions.length > 0) {
           // Convert past paper question to the format expected by QuizQuestion component
           const firstQuestion = questions[0];
@@ -296,7 +296,7 @@ export function App() {
   const handleCancelGeneration = () => {
     setQuizGenerating(false);
     setCurrentGenerationTopic('');
-    
+
     // Return to appropriate screen based on mode
     if (quizMode === 'adaptive') {
       setAdaptiveScreen('start');
@@ -312,7 +312,7 @@ export function App() {
 
     try {
       let result;
-      
+
       if (quizMode === 'pastpaper') {
         // Use past paper evaluation
         result = await pastPaperService.evaluateAnswer(
@@ -321,7 +321,7 @@ export function App() {
           currentQuestion.question,
           currentQuestion.year || ''
         );
-        
+
         // Track the answer for saving later
         const questionResult: PastPaperQuestionResult = {
           question: currentQuestion.question,
@@ -354,10 +354,10 @@ export function App() {
 
   const handleQuizNext = async () => {
     const nextIndex = currentQuestionIndex + 1;
-    
+
     // Check quiz length based on quiz mode
     const totalQuestions = quizMode === 'pastpaper' ? pastPaperQuestions.length : quizQuestions.length;
-    
+
     if (nextIndex >= totalQuestions) {
       await handleQuizComplete();
       return;
@@ -365,7 +365,7 @@ export function App() {
 
     setCurrentQuestionIndex(nextIndex);
     setQuestionNumber(nextIndex + 1);
-    
+
     // Set next question based on quiz mode
     if (quizMode === 'pastpaper') {
       const nextPastPaperQuestion = pastPaperQuestions[nextIndex];
@@ -378,7 +378,7 @@ export function App() {
     } else {
       setCurrentQuestion(quizQuestions[nextIndex]);
     }
-    
+
     setCurrentAnswer('');
     setEvaluationResult(null);
     setQuizScreen('question');
@@ -390,7 +390,7 @@ export function App() {
 
   const handleQuizComplete = async () => {
     if (!quizUser) return;
-    
+
     // Handle past paper quiz completion
     if (quizMode === 'pastpaper') {
       try {
@@ -399,7 +399,7 @@ export function App() {
           ? pastPaperAnswers.reduce((sum, a) => sum + a.score, 0) / pastPaperAnswers.length
           : 0;
         const correctCountFinal = pastPaperAnswers.filter(a => a.correct).length;
-        
+
         // Save the past paper quiz result
         await pastPaperService.saveResult({
           username: quizUser,
@@ -409,7 +409,7 @@ export function App() {
           correct_count: correctCountFinal,
           total_questions: pastPaperQuestions.length
         });
-        
+
         // Create a summary for display
         setQuizSummary({
           total_questions: pastPaperQuestions.length,
@@ -432,7 +432,7 @@ export function App() {
       }
       return;
     }
-    
+
     // Handle generative quiz completion
     if (!quizSetId || !attemptId) return;
     try {
@@ -521,13 +521,13 @@ export function App() {
 
   const handleAdaptiveStart = async (chapter: string) => {
     if (!quizUser) return;
-    
+
     // Set unified loading state  
     setQuizGenerating(true);
     setCurrentGenerationTopic(chapter);
     setCurrentGenerationMode('adaptive');
     setAdaptiveLoading(true);
-    
+
     try {
       const res = await adaptiveService.start(quizUser, chapter);
       setAdaptiveSessionId(res.session_id);
@@ -615,19 +615,19 @@ export function App() {
 
   const handleFreeTextStart = async (chapter: string, sessionId?: string) => {
     if (!quizUser) return;
-    
+
     // Cancel any previous in-flight request
     if (freeTextAbortController.current) {
       freeTextAbortController.current.abort();
     }
-    
+
     // Create new AbortController for this request
     const controller = new AbortController();
     freeTextAbortController.current = controller;
-    
+
     setFreeTextLoading(true);
     setFreeTextChapter(chapter);
-    
+
     try {
       // Start or resume session
       const res = await freeTextService.start(quizUser, chapter, sessionId, controller.signal);
@@ -665,25 +665,25 @@ export function App() {
   const handleFreeTextSubmit = async (answer: string) => {
     if (!freeTextQuestion || !freeTextSessionId || !quizUser) return;
     setFreeTextLoading(true);
-    
+
     try {
       // Save current question before submitting
       setFreeTextLastQuestion(freeTextQuestion);
       setFreeTextLastAnswer(answer);
-      
+
       // Submit answer and get feedback
       const res = await freeTextService.submitAnswer(freeTextSessionId, answer, quizUser);
       setFreeTextLastResult(res);
       setFreeTextAnswers(prev => [...prev, res]);
-      
+
       // Show feedback screen immediately
       setFreeTextScreen('feedback');
       setFreeTextLoading(false);
-      
+
       // Start loading next question in background
       setFreeTextLoadingNext(true);
       setFreeTextPendingNext(null);
-      
+
       try {
         const nextRes = await freeTextService.getNextQuestion(freeTextSessionId, quizUser);
         setFreeTextPendingNext(nextRes);
@@ -701,7 +701,7 @@ export function App() {
 
   const handleFreeTextNextFromFeedback = async () => {
     if (!freeTextSessionId || !quizUser) return;
-    
+
     // Use pending next question if available
     if (freeTextPendingNext) {
       setFreeTextQuestion(freeTextPendingNext.current_question);
@@ -715,16 +715,16 @@ export function App() {
       setFreeTextScreen('question');
       return;
     }
-    
+
     // Cancel any previous in-flight request
     if (freeTextAbortController.current) {
       freeTextAbortController.current.abort();
     }
-    
+
     // Create new AbortController for this request
     const controller = new AbortController();
     freeTextAbortController.current = controller;
-    
+
     // Otherwise fetch next question now
     setFreeTextLoading(true);
     try {
@@ -756,7 +756,7 @@ export function App() {
   const handleFreeTextFinish = async () => {
     if (!freeTextSessionId || !quizUser) return;
     setFreeTextLoading(true);
-    
+
     try {
       const res = await freeTextService.finish(freeTextSessionId, quizUser);
       setFreeTextSummary(res.summary);
@@ -797,7 +797,7 @@ export function App() {
       freeTextAbortController.current.abort();
       freeTextAbortController.current = null;
     }
-    
+
     setQuizMode('none');
     setFreeTextScreen('start');
     setFreeTextSessionId(null);
@@ -810,7 +810,7 @@ export function App() {
     setFreeTextLoading(false);
   };
 
- // History Module Handlers
+  // History Module Handlers
 
   const handleSelectGrade = (grade: number) => {
     setSelectedGrade(grade);
@@ -851,14 +851,14 @@ export function App() {
   return (
     <div className="min-h-screen bg-background">
       {/* Voice Command System - Global Accessibility Control */}
-      <VoiceCommandSystem 
-        onNavigate={handleVoiceNavigate} 
-        currentPage={getCurrentPage()} 
+      <VoiceCommandSystem
+        onNavigate={handleVoiceNavigate}
+        currentPage={getCurrentPage()}
       />
 
       {/* Main Content */}
       <main className="min-h-screen">
-      {/* Home */}
+        {/* Home */}
         {currentModule === 'home' && <HomePage onNavigate={handleNavigate} />}
 
         {/* Document Module */}
@@ -870,8 +870,8 @@ export function App() {
               <BrailleUpload onUpload={handleBrailleUpload} />
             )}
             {brailleScreen === 'evaluation' && (
-              <BrailleEvaluation 
-                onBack={handleBrailleBack} 
+              <BrailleEvaluation
+                onBack={handleBrailleBack}
                 convertedData={brailleConvertedData || undefined}
               />
             )}
@@ -882,231 +882,231 @@ export function App() {
             UPDATED QUIZ RENDER
            ========================= */}
         {currentModule === 'quiz' && (
-  <>
-    {quizUser == null ? (
-      <UserAuth onAuthSuccess={handleQuizAuthSuccess} />
-    ) : quizScreen === 'profile' ? (
-      <UserProfilePage username={quizUser} onBack={handleProfileBack} />
-    ) : quizGenerating ? (
-      <QuizLoading 
-        mode={currentGenerationMode}
-        topic={currentGenerationTopic}
-        onCancel={handleCancelGeneration}
-      />
-    ) : quizMode === 'none' ? (
-      <QuizModeSelect 
-        onSelectGenerative={handleSelectGenerative} 
-        onSelectFreeText={handleSelectFreeText}
-        onSelectAdaptive={handleSelectAdaptive}
-        onSelectPastPaper={handleSelectPastPaper}
-        onViewProfile={handleViewProfile}
-        onLogout={() => { if (window.confirm('Are you sure you want to logout?')) setQuizUser(null); }}
-        username={quizUser}
-      />
-    ) : quizMode === 'freetext' ? (
-      <>
-        {freeTextLoading && (
-          <QuizLoading 
-            mode="generative"
-            topic={freeTextChapter}
-            onCancel={() => setFreeTextLoading(false)}
-          />
-        )}
-        {!freeTextLoading && freeTextScreen === 'start' && (
-          <FreeTextStart
-            username={quizUser}
-            onStart={handleFreeTextStart}
-            onBack={handleFreeTextBack}
-          />
-        )}
-        {!freeTextLoading && freeTextScreen === 'question' && freeTextQuestion && (
-          <FreeTextQuestion
-            question={freeTextQuestion}
-            questionIndex={freeTextQuestionIndex}
-            onSubmit={handleFreeTextSubmit}
-            onFinish={handleFreeTextFinish}
-            onBack={handleFreeTextBack}
-            loading={freeTextLoading}
-            isRetake={freeTextIsRetake}
-          />
-        )}
-        {freeTextScreen === 'feedback' && freeTextLastQuestion && freeTextLastResult && (
-          <FreeTextFeedback
-            question={freeTextLastQuestion}
-            userAnswer={freeTextLastAnswer}
-            result={freeTextLastResult}
-            questionNumber={freeTextQuestionIndex}
-            onNext={handleFreeTextNextFromFeedback}
-            onFinish={handleFreeTextFinish}
-            onBack={handleFreeTextBack}
-            isLoadingNext={freeTextLoadingNext}
-          />
-        )}
-        {!freeTextLoading && freeTextScreen === 'summary' && freeTextSummary && (
-          <FreeTextSummary
-            summary={freeTextSummary}
-            answers={freeTextAnswers}
-            chapterName={freeTextChapter}
-            onRestart={handleFreeTextRestart}
-            onRetake={handleFreeTextRetake}
-            onHome={handleFreeTextBack}
-          />
-        )}
-      </>
-    ) : quizMode === 'generative' ? (
-      <>
-        {quizScreen === 'start' && (
-          <QuizStart
-            onStart={handleQuizStart}
-            onViewSaved={handleShowDashboard}
-            hasSavedSets={savedQuizSets.length > 0}
-          />
-        )}
+          <>
+            {quizUser == null ? (
+              <UserAuth onAuthSuccess={handleQuizAuthSuccess} />
+            ) : quizScreen === 'profile' ? (
+              <UserProfilePage username={quizUser} onBack={handleProfileBack} />
+            ) : quizGenerating ? (
+              <QuizLoading
+                mode={currentGenerationMode}
+                topic={currentGenerationTopic}
+                onCancel={handleCancelGeneration}
+              />
+            ) : quizMode === 'none' ? (
+              <QuizModeSelect
+                onSelectGenerative={handleSelectGenerative}
+                onSelectFreeText={handleSelectFreeText}
+                onSelectAdaptive={handleSelectAdaptive}
+                onSelectPastPaper={handleSelectPastPaper}
+                onViewProfile={handleViewProfile}
+                onLogout={() => { if (window.confirm('Are you sure you want to logout?')) setQuizUser(null); }}
+                username={quizUser}
+              />
+            ) : quizMode === 'freetext' ? (
+              <>
+                {freeTextLoading && (
+                  <QuizLoading
+                    mode="generative"
+                    topic={freeTextChapter}
+                    onCancel={() => setFreeTextLoading(false)}
+                  />
+                )}
+                {!freeTextLoading && freeTextScreen === 'start' && (
+                  <FreeTextStart
+                    username={quizUser}
+                    onStart={handleFreeTextStart}
+                    onBack={handleFreeTextBack}
+                  />
+                )}
+                {!freeTextLoading && freeTextScreen === 'question' && freeTextQuestion && (
+                  <FreeTextQuestion
+                    question={freeTextQuestion}
+                    questionIndex={freeTextQuestionIndex}
+                    onSubmit={handleFreeTextSubmit}
+                    onFinish={handleFreeTextFinish}
+                    onBack={handleFreeTextBack}
+                    loading={freeTextLoading}
+                    isRetake={freeTextIsRetake}
+                  />
+                )}
+                {freeTextScreen === 'feedback' && freeTextLastQuestion && freeTextLastResult && (
+                  <FreeTextFeedback
+                    question={freeTextLastQuestion}
+                    userAnswer={freeTextLastAnswer}
+                    result={freeTextLastResult}
+                    questionNumber={freeTextQuestionIndex}
+                    onNext={handleFreeTextNextFromFeedback}
+                    onFinish={handleFreeTextFinish}
+                    onBack={handleFreeTextBack}
+                    isLoadingNext={freeTextLoadingNext}
+                  />
+                )}
+                {!freeTextLoading && freeTextScreen === 'summary' && freeTextSummary && (
+                  <FreeTextSummary
+                    summary={freeTextSummary}
+                    answers={freeTextAnswers}
+                    chapterName={freeTextChapter}
+                    onRestart={handleFreeTextRestart}
+                    onRetake={handleFreeTextRetake}
+                    onHome={handleFreeTextBack}
+                  />
+                )}
+              </>
+            ) : quizMode === 'generative' ? (
+              <>
+                {quizScreen === 'start' && (
+                  <QuizStart
+                    onStart={handleQuizStart}
+                    onViewSaved={handleShowDashboard}
+                    hasSavedSets={savedQuizSets.length > 0}
+                  />
+                )}
 
-        {quizScreen === 'dashboard' && (
-          <QuizDashboard
-            sets={savedQuizSets}
-            onRetake={handleRetakeSet}
-            onBack={handleQuizHome}
-          />
-        )}
+                {quizScreen === 'dashboard' && (
+                  <QuizDashboard
+                    sets={savedQuizSets}
+                    onRetake={handleRetakeSet}
+                    onBack={handleQuizHome}
+                  />
+                )}
 
-        {quizScreen === 'question' && currentQuestion && (
-          <QuizQuestion
-            question={currentQuestion}
-            questionNumber={questionNumber}
-            totalQuestions={quizQuestions.length || 10}
-            onSubmit={handleQuizSubmit}
-            onSkip={handleQuizSkip}
-            onBack={handleQuizHome}
-            isPastPaper={false}
-          />
-        )}
+                {quizScreen === 'question' && currentQuestion && (
+                  <QuizQuestion
+                    question={currentQuestion}
+                    questionNumber={questionNumber}
+                    totalQuestions={quizQuestions.length || 10}
+                    onSubmit={handleQuizSubmit}
+                    onSkip={handleQuizSkip}
+                    onBack={handleQuizHome}
+                    isPastPaper={false}
+                  />
+                )}
 
-        {quizScreen === 'feedback' && evaluationResult && currentQuestion && (
-          <QuizFeedback
-            question={currentQuestion.question}
-            answer={currentAnswer}
-            result={evaluationResult}
-            onNext={handleQuizNext}
-            onGoHome={handleQuizHome}
-            onBack={handleQuizHome}
-            isLastQuestion={questionNumber === quizQuestions.length}
-          />
-        )}
+                {quizScreen === 'feedback' && evaluationResult && currentQuestion && (
+                  <QuizFeedback
+                    question={currentQuestion.question}
+                    answer={currentAnswer}
+                    result={evaluationResult}
+                    onNext={handleQuizNext}
+                    onGoHome={handleQuizHome}
+                    onBack={handleQuizHome}
+                    isLastQuestion={questionNumber === quizQuestions.length}
+                  />
+                )}
 
-        {quizScreen === 'summary' && quizSummary && (
-          <QuizSummary
-            summary={quizSummary}
-            correctCount={correctCount}
-            totalQuestions={quizQuestions.length}
-            onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
-            onGoHome={handleQuizHome}
-            onStartNew={() => setQuizScreen('start')}
-          />
-        )}
-      </>
-    ) : quizMode === 'pastpaper' ? (
-      <>
-        {quizScreen === 'start' && (
-          <PastPaperQuizStart
-            onStart={handleQuizStart}
-            onBack={handlePastPaperBack}
-          />
-        )}
+                {quizScreen === 'summary' && quizSummary && (
+                  <QuizSummary
+                    summary={quizSummary}
+                    correctCount={correctCount}
+                    totalQuestions={quizQuestions.length}
+                    onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
+                    onGoHome={handleQuizHome}
+                    onStartNew={() => setQuizScreen('start')}
+                  />
+                )}
+              </>
+            ) : quizMode === 'pastpaper' ? (
+              <>
+                {quizScreen === 'start' && (
+                  <PastPaperQuizStart
+                    onStart={handleQuizStart}
+                    onBack={handlePastPaperBack}
+                  />
+                )}
 
-        {/* Past Paper Quiz uses same QuizQuestion and QuizFeedback components */}
-        {quizScreen === 'question' && currentQuestion && (
-          <QuizQuestion
-            question={currentQuestion}
-            questionNumber={questionNumber}
-            totalQuestions={pastPaperQuestions.length || 10}
-            onSubmit={handleQuizSubmit}
-            onSkip={handleQuizSkip}
-            onBack={handlePastPaperBack}
-            isPastPaper={true}
-          />
-        )}
+                {/* Past Paper Quiz uses same QuizQuestion and QuizFeedback components */}
+                {quizScreen === 'question' && currentQuestion && (
+                  <QuizQuestion
+                    question={currentQuestion}
+                    questionNumber={questionNumber}
+                    totalQuestions={pastPaperQuestions.length || 10}
+                    onSubmit={handleQuizSubmit}
+                    onSkip={handleQuizSkip}
+                    onBack={handlePastPaperBack}
+                    isPastPaper={true}
+                  />
+                )}
 
-        {quizScreen === 'feedback' && evaluationResult && currentQuestion && (
-          <QuizFeedback
-            question={currentQuestion.question}
-            answer={currentAnswer}
-            result={evaluationResult}
-            onNext={handleQuizNext}
-            onGoHome={handleQuizHome}
-            onBack={handlePastPaperBack}
-            isLastQuestion={questionNumber === pastPaperQuestions.length}
-          />
-        )}
+                {quizScreen === 'feedback' && evaluationResult && currentQuestion && (
+                  <QuizFeedback
+                    question={currentQuestion.question}
+                    answer={currentAnswer}
+                    result={evaluationResult}
+                    onNext={handleQuizNext}
+                    onGoHome={handleQuizHome}
+                    onBack={handlePastPaperBack}
+                    isLastQuestion={questionNumber === pastPaperQuestions.length}
+                  />
+                )}
 
-        {quizScreen === 'summary' && quizSummary && (
-          <QuizSummary
-            summary={quizSummary}
-            correctCount={correctCount}
-            totalQuestions={pastPaperQuestions.length}
-            onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
-            onGoHome={handleQuizHome}
-            onStartNew={() => setQuizScreen('start')}
-          />
+                {quizScreen === 'summary' && quizSummary && (
+                  <QuizSummary
+                    summary={quizSummary}
+                    correctCount={correctCount}
+                    totalQuestions={pastPaperQuestions.length}
+                    onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
+                    onGoHome={handleQuizHome}
+                    onStartNew={() => setQuizScreen('start')}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                {adaptiveScreen === 'start' && (
+                  <AdaptiveStart
+                    onStart={handleAdaptiveStart}
+                    onBack={() => {
+                      setQuizMode('none');
+                      setAdaptiveScreen('start');
+                    }}
+                  />
+                )}
+                {adaptiveScreen === 'question' && adaptiveItem && (
+                  <AdaptiveQuestion
+                    item={adaptiveItem}
+                    theta={adaptiveTheta}
+                    answeredCount={adaptiveTotal}
+                    onSubmit={handleAdaptiveSubmit}
+                    onFinish={handleAdaptiveFinish}
+                    onBack={() => {
+                      setQuizMode('none');
+                      setAdaptiveScreen('start');
+                    }}
+                    feedback={adaptiveFeedback}
+                    lastResult={adaptiveResult}
+                    lastQuestion={adaptiveLastQuestion}
+                    lastAnswer={adaptiveLastAnswer}
+                    loading={adaptiveLoading}
+                  />
+                )}
+                {adaptiveScreen === 'feedback' && adaptiveResult && adaptiveLastQuestion && (
+                  <AdaptiveFeedback
+                    question={adaptiveLastQuestion}
+                    answer={adaptiveLastAnswer}
+                    result={adaptiveResult}
+                    onNext={handleAdaptiveNext}
+                    onFinish={handleAdaptiveFinish}
+                    onBack={() => {
+                      setQuizMode('none');
+                      setAdaptiveScreen('start');
+                    }}
+                    isFinal={adaptiveCompleted || !adaptiveNextItem}
+                  />
+                )}
+                {adaptiveScreen === 'summary' && (
+                  <AdaptiveSummary
+                    correctCount={adaptiveCorrect}
+                    total={adaptiveTotal}
+                    finalTheta={adaptiveTheta}
+                    onRestart={() => adaptiveChapter ? handleAdaptiveStart(adaptiveChapter) : setAdaptiveScreen('start')}
+                    onHome={handleQuizHome}
+                  />
+                )}
+              </>
+            )}
+          </>
         )}
-      </>
-    ) : (
-      <>
-        {adaptiveScreen === 'start' && (
-          <AdaptiveStart 
-            onStart={handleAdaptiveStart} 
-            onBack={() => {
-              setQuizMode('none');
-              setAdaptiveScreen('start');
-            }}
-          />
-        )}
-        {adaptiveScreen === 'question' && adaptiveItem && (
-          <AdaptiveQuestion
-            item={adaptiveItem}
-            theta={adaptiveTheta}
-            answeredCount={adaptiveTotal}
-            onSubmit={handleAdaptiveSubmit}
-            onFinish={handleAdaptiveFinish}
-            onBack={() => {
-              setQuizMode('none');
-              setAdaptiveScreen('start');
-            }}
-            feedback={adaptiveFeedback}
-            lastResult={adaptiveResult}
-            lastQuestion={adaptiveLastQuestion}
-            lastAnswer={adaptiveLastAnswer}
-            loading={adaptiveLoading}
-          />
-        )}
-        {adaptiveScreen === 'feedback' && adaptiveResult && adaptiveLastQuestion && (
-          <AdaptiveFeedback
-            question={adaptiveLastQuestion}
-            answer={adaptiveLastAnswer}
-            result={adaptiveResult}
-            onNext={handleAdaptiveNext}
-            onFinish={handleAdaptiveFinish}
-            onBack={() => {
-              setQuizMode('none');
-              setAdaptiveScreen('start');
-            }}
-            isFinal={adaptiveCompleted || !adaptiveNextItem}
-          />
-        )}
-        {adaptiveScreen === 'summary' && (
-          <AdaptiveSummary
-            correctCount={adaptiveCorrect}
-            total={adaptiveTotal}
-            finalTheta={adaptiveTheta}
-            onRestart={() => adaptiveChapter ? handleAdaptiveStart(adaptiveChapter) : setAdaptiveScreen('start')}
-            onHome={handleQuizHome}
-          />
-        )}
-      </>
-    )}
-  </>
-)}
         {/* History Module */}
         {currentModule === 'history' && (
           <>
