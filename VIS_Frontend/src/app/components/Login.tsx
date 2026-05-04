@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Lock, Eye, EyeOff, LogIn, BookOpen, AlertCircle, HelpCircle } from 'lucide-react';
 import { useTTS } from '../contexts/TTSContext';
+import { api } from '../services/api';
 
 interface LoginProps {
   onLoggedIn: (username: string) => void;
@@ -54,16 +55,11 @@ const Login: React.FC<LoginProps> = ({ onLoggedIn, onSwitchToRegister }) => {
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('http://20.2.232.102:8000/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Login failed');
+      await api.post('/login', { username: username.trim(), password });
       onLoggedIn(username.trim());
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Login failed';
+      setError(message);
     } finally {
       setLoading(false);
     }

@@ -10,6 +10,7 @@ from Quiz import quiz_routes
 from Quiz.quiz_routes import load_past_paper_data
 from UserManagement import user_routes
 import adaptive_routes
+import timed_quiz_routes
 
 # --- CONFIGURATION ---
 
@@ -98,6 +99,7 @@ adaptive_routes.llm = llm  # For generating smart MCQ distractors
 app.include_router(quiz_routes.router)
 app.include_router(user_routes.router)
 app.include_router(adaptive_routes.router)
+app.include_router(timed_quiz_routes.router)
 
 if __name__ == "__main__":
     print("\n✅ Server running on http://127.0.0.1:8000")

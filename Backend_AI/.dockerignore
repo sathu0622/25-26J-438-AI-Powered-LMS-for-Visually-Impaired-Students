@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# Large model / checkpoint files – stored on HuggingFace Hub
+*.pth
+*.pt
+*.ckpt
+models/lesson_multitask_lora/.cache/
+models/lesson_multitask_lora/runs/
+models/lesson_multitask_lora/examples/
+
+# Generated output
+generated_output/
+*.wav
+*.mp3
+
+# Jupyter
+*.ipynb
+.ipynb_checkpoints/
+
+# Environment files (secrets)
+.env
+
+# Temp
+*.tmp
+*.temp
+tmp/
+temp/
+
+# Logs
+*.log
+logs/

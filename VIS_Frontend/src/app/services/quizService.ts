@@ -33,6 +33,12 @@ export interface QuizSetStartResponse {
   total_questions: number;
 }
 
+export interface QuizSetNextQuestionResponse {
+  question_index: number;
+  current_question: GenerateQuestionResponse;
+  total_questions: number;
+}
+
 export interface QuizSetListItem {
   set_id: string;
   chapter_name: string;
@@ -109,6 +115,13 @@ export const quizService = {
       {
         username,
       }
+    );
+  },
+
+  async getNextQuizSetQuestion(set_id: string, attempt_id: string, username: string) {
+    return api.post<QuizSetNextQuestionResponse>(
+      `/quiz_sets/${set_id}/attempts/${attempt_id}/next`,
+      { username }
     );
   },
 

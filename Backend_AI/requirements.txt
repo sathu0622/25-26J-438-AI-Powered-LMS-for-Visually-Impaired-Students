@@ -1,0 +1,18 @@
+# Define the content for requirements.txt
+fastapi
+uvicorn
+pandas
+python-dotenv
+gtts
+nltk
+numpy
+requests
+soundfile
+pydub
+torch
+torchaudio
+transformers
+peft
+sentencepiece
+accelerate
+huggingface_hub

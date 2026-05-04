@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Lock, Eye, EyeOff, UserPlus, BookOpen, AlertCircle, CheckCircle, HelpCircle } from 'lucide-react';
 import { useTTS } from '../contexts/TTSContext';
+import { api } from '../services/api';
 
 interface RegisterProps {
   onRegistered: (username: string) => void;
@@ -84,16 +85,11 @@ const Register: React.FC<RegisterProps> = ({ onRegistered, onSwitchToLogin }) =>
     setError('');
     setLoading(true);
     try {
-      const res = await fetch('http://20.2.232.102:8000/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: username.trim(), password })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Registration failed');
+      await api.post('/register', { username: username.trim(), password });
       onRegistered(username.trim());
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Registration failed';
+      setError(message);
     } finally {
       setLoading(false);
     }

@@ -22,6 +22,10 @@ PAST_PAPER_CHAPTERS = []  # For past paper chapters
 prefetch_cache = {}
 question_history = {}
 llm = None  # Injected Llama model
+QUIZ_SET_TOTAL_QUESTIONS = 10
+QUIZ_SET_PREFETCH_BUFFER = 2
+_quiz_prefetch_inflight = set()
+_quiz_prefetch_lock = threading.Lock()
 
 # Thread safety for LLM generation (prevents concurrent access issues)
 _llm_lock = threading.Lock()
@@ -54,6 +58,10 @@ class AnswerSetRequest(BaseModel):
     question_index: int
 
 class CompleteAttemptRequest(BaseModel):
+    username: str
+
+
+class NextQuizQuestionRequest(BaseModel):
     username: str
 
 class PastPaperChapterRequest(BaseModel):
@@ -535,6 +543,43 @@ def prefetch_next_question(chapter_name: str):
     if result:
         prefetch_cache[chapter_name] = result
 
+
+def _quiz_prefetch_key(set_id: str, attempt_id: str, question_index: int) -> str:
+    return f"{set_id}:{attempt_id}:{question_index}"
+
+
+def _prefetch_next_quiz_set_question(set_id: str, attempt_id: str, chapter_name: str, question_index: int):
+    key = _quiz_prefetch_key(set_id, attempt_id, question_index)
+    with _quiz_prefetch_lock:
+        if key in prefetch_cache or key in _quiz_prefetch_inflight:
+            return
+        _quiz_prefetch_inflight.add(key)
+
+    try:
+        result = run_ai_generation(chapter_name)
+        if result:
+            prefetch_cache[key] = result
+    finally:
+        with _quiz_prefetch_lock:
+            _quiz_prefetch_inflight.discard(key)
+
+
+def _prefetch_quiz_set_window(
+    set_id: str,
+    attempt_id: str,
+    chapter_name: str,
+    start_index: int,
+    total_target: int,
+    persisted_questions_count: int,
+    buffer_size: int = QUIZ_SET_PREFETCH_BUFFER,
+):
+    upper_bound = min(total_target, start_index + buffer_size)
+    for idx in range(start_index, upper_bound):
+        # Skip questions already persisted in DB.
+        if idx < persisted_questions_count:
+            continue
+        _prefetch_next_quiz_set_question(set_id, attempt_id, chapter_name, idx)
+
 @router.get("/chapters")
 def get_chapters():
     return {"chapters": AVAILABLE_CHAPTERS}
@@ -557,7 +602,7 @@ def evaluate_answer(req: AnswerRequest, background_tasks: BackgroundTasks):
 
 
 @router.post("/quiz_sets/start")
-def start_quiz_set(req: StartSetRequest):
+def start_quiz_set(req: StartSetRequest, background_tasks: BackgroundTasks):
     chapter_name = req.chapter_name
 
     if req.set_id:
@@ -568,11 +613,15 @@ def start_quiz_set(req: StartSetRequest):
         if doc.get("username") != req.username:
             raise HTTPException(403, "Access denied for this quiz set")
     else:
-        questions = generate_question_batch(chapter_name, total=10)
+        first_question = run_ai_generation(chapter_name)
+        if not first_question:
+            raise HTTPException(500, "Failed to generate first question")
+
         doc = {
             "username": req.username,
             "chapter_name": chapter_name,
-            "questions": questions,
+            "questions": [first_question],
+            "total_questions_target": QUIZ_SET_TOTAL_QUESTIONS,
             "created_at": datetime.utcnow(),
             "attempts": [],
         }
@@ -590,17 +639,30 @@ def start_quiz_set(req: StartSetRequest):
 
     quiz_sets_col.update_one({"_id": doc["_id"]}, {"$push": {"attempts": attempt_entry}})
 
+    # Warm up question 2 immediately so student doesn't wait after Q1.
+    if not req.set_id:
+        background_tasks.add_task(
+            _prefetch_quiz_set_window,
+            str(doc["_id"]),
+            attempt_id,
+            chapter_name,
+            1,
+            QUIZ_SET_TOTAL_QUESTIONS,
+            len(doc.get("questions", [])),
+            QUIZ_SET_PREFETCH_BUFFER,
+        )
+
     return {
         "set_id": str(doc["_id"]),
         "attempt_id": attempt_id,
         "chapter_name": doc.get("chapter_name", ""),
         "questions": doc.get("questions", []),
-        "total_questions": len(doc.get("questions", [])),
+        "total_questions": int(doc.get("total_questions_target", QUIZ_SET_TOTAL_QUESTIONS)),
     }
 
 
 @router.post("/quiz_sets/{set_id}/attempts/{attempt_id}/answer")
-def answer_quiz_set(set_id: str, attempt_id: str, req: AnswerSetRequest):
+def answer_quiz_set(set_id: str, attempt_id: str, req: AnswerSetRequest, background_tasks: BackgroundTasks):
     set_oid = to_object_id(set_id)
     doc = quiz_sets_col.find_one({"_id": set_oid, "username": req.username})
     if not doc:
@@ -636,7 +698,87 @@ def answer_quiz_set(set_id: str, attempt_id: str, req: AnswerSetRequest):
     if update_result.matched_count == 0:
         raise HTTPException(404, "Attempt not found")
 
+    total_target = int(doc.get("total_questions_target", QUIZ_SET_TOTAL_QUESTIONS))
+    next_question_index = req.question_index + 1
+
+    # Pre-generate next question while user is reading feedback
+    if next_question_index < total_target and next_question_index >= len(questions):
+        background_tasks.add_task(
+            _prefetch_quiz_set_window,
+            set_id,
+            attempt_id,
+            doc.get("chapter_name", ""),
+            next_question_index,
+            total_target,
+            len(questions),
+            QUIZ_SET_PREFETCH_BUFFER,
+        )
+
     return {**evaluation, "question_index": req.question_index}
+
+
+@router.post("/quiz_sets/{set_id}/attempts/{attempt_id}/next")
+def get_next_quiz_set_question(set_id: str, attempt_id: str, req: NextQuizQuestionRequest, background_tasks: BackgroundTasks):
+    set_oid = to_object_id(set_id)
+    doc = quiz_sets_col.find_one({"_id": set_oid, "username": req.username})
+    if not doc:
+        raise HTTPException(404, "Quiz set not found")
+
+    attempts = doc.get("attempts", [])
+    attempt = next((a for a in attempts if a.get("attempt_id") == attempt_id), None)
+    if not attempt:
+        raise HTTPException(404, "Attempt not found")
+    if attempt.get("completed_at"):
+        raise HTTPException(400, "Attempt already completed")
+
+    answers = attempt.get("answers", [])
+    next_index = len(answers)
+    questions = doc.get("questions", [])
+    total_target = int(doc.get("total_questions_target", QUIZ_SET_TOTAL_QUESTIONS))
+
+    if next_index >= total_target:
+        raise HTTPException(400, "No more questions available")
+
+    generated_new = False
+    if next_index < len(questions):
+        next_question = questions[next_index]
+    else:
+        cache_key = _quiz_prefetch_key(set_id, attempt_id, next_index)
+        if cache_key in prefetch_cache:
+            next_question = prefetch_cache.pop(cache_key)
+        else:
+            next_question = run_ai_generation(doc.get("chapter_name", ""))
+            if not next_question:
+                raise HTTPException(500, "Failed to generate next question")
+
+        quiz_sets_col.update_one(
+            {"_id": set_oid},
+            {
+                "$push": {"questions": next_question},
+            },
+        )
+        generated_new = True
+
+    # Always keep one question prefetched ahead while learner is answering.
+    next_to_prefetch = next_index + 1
+    stored_questions_count = len(questions) + (1 if generated_new else 0)
+    if next_to_prefetch < total_target and next_to_prefetch >= stored_questions_count:
+        background_tasks.add_task(
+            _prefetch_quiz_set_window,
+            set_id,
+            attempt_id,
+            doc.get("chapter_name", ""),
+            next_to_prefetch,
+            total_target,
+            stored_questions_count,
+            QUIZ_SET_PREFETCH_BUFFER,
+        )
+
+    return {
+        "question_index": next_index,
+        "current_question": next_question,
+        "total_questions": total_target,
+    }
 
 
 @router.post("/quiz_sets/{set_id}/attempts/{attempt_id}/complete")
@@ -652,7 +794,7 @@ def complete_quiz_attempt(set_id: str, attempt_id: str, req: CompleteAttemptRequ
         raise HTTPException(404, "Attempt not found")
 
     answers = attempt.get("answers", [])
-    total_questions = len(doc.get("questions", []))
+    total_questions = int(doc.get("total_questions_target", len(answers)))
     correct_count = sum(1 for ans in answers if ans.get("correct"))
     avg_score = int(sum(ans.get("score", 0) for ans in answers) / len(answers)) if answers else 0
 
@@ -698,7 +840,7 @@ def list_quiz_sets(username: str):
                 "set_id": str(doc.get("_id")),
                 "chapter_name": doc.get("chapter_name", ""),
                 "created_at": to_iso(doc.get("created_at")),
-                "questions_count": len(doc.get("questions", [])),
+                "questions_count": int(doc.get("total_questions_target", len(doc.get("questions", [])))),
                 "latest_attempt":
                     {
                         "attempt_id": latest.get("attempt_id"),

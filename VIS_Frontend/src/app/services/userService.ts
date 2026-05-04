@@ -11,11 +11,37 @@ export interface QuizHistory {
   score: number;
   total_questions: number;
   completed_at: string;
-  quiz_type: 'Generative' | 'Adaptive' | 'PastPaper';
+  quiz_type: 'Generative' | 'Adaptive' | 'PastPaper' | 'FreeText' | 'TimedQuiz';
   correct_answers?: number;
   correct_count?: number;
   theta?: number;
   final_level?: string;
+}
+
+export interface ChapterStats {
+  chapter_name: string;
+  total_quizzes: number;
+  average_score: number;
+  best_score: number;
+  last_attempted: string | null;
+  quiz_types: {
+    generative: number;
+    adaptive: number;
+    past_paper: number;
+    freetext: number;
+    timed_quiz?: number;
+  };
+}
+
+export interface SavedQuiz {
+  id: string;
+  chapter_name: string;
+  quiz_type: string;
+  created_at: string;
+  total_questions: number;
+  attempts_count: number;
+  last_score: number | null;
+  can_retake: boolean;
 }
 
 export interface UserProfile {
@@ -24,13 +50,19 @@ export interface UserProfile {
   generative_quizzes: number;
   adaptive_quizzes: number;
   past_paper_quizzes: number;
+  freetext_quizzes: number;
+  timed_quizzes: number;
   average_score: number;
   recent_activity: QuizHistory[];
   quiz_history: {
     generative: QuizHistory[];
     adaptive: QuizHistory[];
     past_paper: QuizHistory[];
+    freetext: QuizHistory[];
+    timed?: QuizHistory[];
   };
+  chapter_stats: ChapterStats[];
+  saved_quizzes: SavedQuiz[];
 }
 
 export interface UserStats {
@@ -39,6 +71,7 @@ export interface UserStats {
   generative_quizzes: number;
   adaptive_quizzes: number;
   past_paper_quizzes: number;
+  timed_quizzes: number;
 }
 
 class UserService {

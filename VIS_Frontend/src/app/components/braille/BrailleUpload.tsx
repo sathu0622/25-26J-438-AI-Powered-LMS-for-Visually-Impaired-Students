@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileText, X, Info, Loader2, PenLine } from 'lucide-react';
 import { Card } from '../ui/card';
 import { Button } from '../ui/button';
 import { brailleApi } from '../../services/api';
+import { useTTS } from '../../contexts/TTSContext';
 
 interface BrailleUploadProps {
   onUpload: (data: { question: string; answer: string; fullText: string }) => void;
@@ -148,6 +149,7 @@ const ManualInputModal = ({ onClose, onSubmit }: ManualInputModalProps) => {
 
 // ── Main Component ──────────────────────────────────────────────────────────
 export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
+  const { announce, cancel } = useTTS();
   const [isDragging, setIsDragging] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -155,6 +157,13 @@ export const BrailleUpload = ({ onUpload }: BrailleUploadProps) => {
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    announce(
+      'Braille Answer Sheet Evaluation module. Upload a Braille PDF using drag and drop or the Browse PDF button. After you choose a file, use Convert and Evaluate to continue. Or use Enter Question and Answer Manually to type the question and student answer instead.'
+    );
+    return () => cancel();
+  }, [announce, cancel]);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTTS } from './contexts/TTSContext';
 import { Navigation } from './components/Navigation';
 import { HomePage } from './components/HomePage';
@@ -22,8 +22,10 @@ import { FreeTextFeedback } from './components/quiz/FreeTextFeedback';
 import { FreeTextSummary } from './components/quiz/FreeTextSummary';
 import { QuizQuestion } from './components/quiz/QuizQuestion';
 import { QuizFeedback } from './components/quiz/QuizFeedback';
-import { QuizSummary } from './components/quiz/QuizSummary';
+import { QuizSummary, type QuizSummaryReviewItem } from './components/quiz/QuizSummary';
 import { QuizDashboard } from './components/quiz/QuizDashboard';
+import { TimedQuizStart } from './components/quiz/TimedQuizStart';
+import { TimedQuizSummary } from './components/quiz/TimedQuizSummary';
 import UserAuth from './components/UserAuth';
 import { HistoryHome } from './components/history/HistoryHome';
 import { ChapterList } from './components/history/ChapterList';
@@ -32,16 +34,23 @@ import { LessonPlayer } from './components/history/LessonPlayer';
 import { UserProfilePage } from './components/UserProfilePage';
 
 // ✅ NEW: Import quizService instead of local data
-import { quizService, QuizSetListItem, QuizSetSummary, GenerateQuestionResponse } from './services/quizService';
+import { quizService, QuizSetListItem, QuizSetSummary, GenerateQuestionResponse, QuizSetNextQuestionResponse } from './services/quizService';
 import { pastPaperService, PastPaperQuestion, PastPaperQuestionResult, PastPaperEvaluateResponse } from './services/pastPaperService';
 import { adaptiveService, AdaptiveItem, AdaptiveAnswerResponse } from './services/adaptiveService';
 import { freeTextService, isAbortError, FreeTextQuestion as FreeTextQuestionType, FreeTextAnswerResponse, FreeTextSummary as FreeTextSummaryType, FreeTextNextResponse } from './services/freeTextService';
+import { userService, SavedQuiz } from './services/userService';
+import {
+  timedQuizService,
+  TimedQuizQuestion,
+  TimedQuizEvaluateResponse,
+  TimedQuizStartResponse,
+} from './services/timedQuizService';
 
 type Module = 'home' | 'document' | 'braille' | 'quiz' | 'history';
 type BrailleScreen = 'upload' | 'evaluation';
 type QuizScreen = 'start' | 'question' | 'feedback' | 'summary' | 'dashboard' | 'profile';
 type HistoryScreen = 'home' | 'chapters' | 'topics' | 'player';
-type QuizMode = 'none' | 'generative' | 'adaptive' | 'pastpaper' | 'freetext';
+type QuizMode = 'none' | 'generative' | 'adaptive' | 'pastpaper' | 'freetext' | 'timed';
 type AdaptiveScreen = 'start' | 'question' | 'feedback' | 'summary';
 type FreeTextScreen = 'start' | 'question' | 'feedback' | 'summary';
 
@@ -73,12 +82,17 @@ export function App() {
   const [evaluationResult, setEvaluationResult] = useState<any>(null);
   const [questionNumber, setQuestionNumber] = useState(1);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [quizTotalQuestions, setQuizTotalQuestions] = useState(10);
+  const [quizPendingNext, setQuizPendingNext] = useState<QuizSetNextQuestionResponse | null>(null);
+  const [quizLoadingNext, setQuizLoadingNext] = useState(false);
   const [correctCount, setCorrectCount] = useState(0);
   const [quizSummary, setQuizSummary] = useState<QuizSetSummary | null>(null);
   const [savedQuizSets, setSavedQuizSets] = useState<QuizSetListItem[]>([]);
   const [quizGenerating, setQuizGenerating] = useState(false);
   const [currentGenerationTopic, setCurrentGenerationTopic] = useState('');
-  const [currentGenerationMode, setCurrentGenerationMode] = useState<'generative' | 'pastpaper' | 'adaptive'>('generative');
+  const [currentGenerationMode, setCurrentGenerationMode] = useState<
+    'generative' | 'pastpaper' | 'adaptive' | 'timed'
+  >('generative');
   // Adaptive state
   const [adaptiveScreen, setAdaptiveScreen] = useState<AdaptiveScreen>('start');
   const [adaptiveSessionId, setAdaptiveSessionId] = useState<string | null>(null);
@@ -113,6 +127,29 @@ export function App() {
   const [freeTextLoadingNext, setFreeTextLoadingNext] = useState<boolean>(false);
   // AbortController for cancelling in-flight free-text requests
   const freeTextAbortController = useRef<AbortController | null>(null);
+  const [timedSessionId, setTimedSessionId] = useState<string | null>(null);
+  const [timedQuestions, setTimedQuestions] = useState<TimedQuizQuestion[]>([]);
+  const [timedQuestionIndex, setTimedQuestionIndex] = useState(0);
+  const [timedAnswers, setTimedAnswers] = useState<Record<string, number>>({});
+  const [timedSecondsLeft, setTimedSecondsLeft] = useState<number | null>(null);
+  const [timedSummary, setTimedSummary] = useState<TimedQuizEvaluateResponse | null>(null);
+  const [timedTimerOn, setTimedTimerOn] = useState(false);
+  const timedAnswersRef = useRef<Record<string, number>>({});
+  const timedFinalizingRef = useRef(false);
+
+  const pastPaperQuizReviewItems = useMemo((): QuizSummaryReviewItem[] => {
+    return pastPaperAnswers.map((a) => ({
+      question: a.question,
+      yourAnswer: a.user_answer,
+      correctAnswer: a.correct_answer,
+      correct: a.correct,
+      year: a.year,
+    }));
+  }, [pastPaperAnswers]);
+
+  useEffect(() => {
+    timedAnswersRef.current = timedAnswers;
+  }, [timedAnswers]);
   // User state for Quiz
   const [quizUser, setQuizUser] = useState<string | null>(() => {
     return localStorage.getItem('quizUser');
@@ -274,6 +311,9 @@ export function App() {
         setQuizSetId(quizSet.set_id);
         setAttemptId(quizSet.attempt_id);
         setQuizQuestions(quizSet.questions);
+        setQuizTotalQuestions(quizSet.total_questions || 10);
+        setQuizPendingNext(null);
+        setQuizLoadingNext(false);
         setPastPaperQuestions([]); // Clear past paper questions
         setCurrentQuestion(quizSet.questions[0]);
         setCurrentQuestionIndex(0);
@@ -292,12 +332,79 @@ export function App() {
     }
   };
 
-  // Handle canceling quiz generation
+  const resetTimedQuiz = () => {
+    setTimedTimerOn(false);
+    setTimedSessionId(null);
+    setTimedQuestions([]);
+    setTimedQuestionIndex(0);
+    setTimedAnswers({});
+    timedAnswersRef.current = {};
+    setTimedSecondsLeft(null);
+    setTimedSummary(null);
+    timedFinalizingRef.current = false;
+  };
+
+  const finalizeTimedQuiz = useCallback(
+    async (answersOverride?: Record<string, number>) => {
+      const user = quizUser;
+      const sessionId = timedSessionId;
+      const qs = timedQuestions;
+      if (!user || !sessionId || qs.length === 0) return;
+      if (timedFinalizingRef.current) return;
+      timedFinalizingRef.current = true;
+      setTimedTimerOn(false);
+      const map = answersOverride ?? timedAnswersRef.current;
+      try {
+        const answers = qs.map((q) => ({
+          item_id: q.item_id,
+          selected_index: map[q.item_id] ?? -1,
+        }));
+        const res = await timedQuizService.evaluate(user, sessionId, answers);
+        setTimedSummary(res);
+        setQuizScreen('summary');
+      } catch (err) {
+        console.error(err);
+        alert('Failed to submit timed quiz.');
+        timedFinalizingRef.current = false;
+      }
+    },
+    [quizUser, timedSessionId, timedQuestions]
+  );
+
+  useEffect(() => {
+    if (!timedTimerOn || quizMode !== 'timed' || quizScreen !== 'question') return;
+
+    const id = window.setInterval(() => {
+      setTimedSecondsLeft((s) => {
+        if (s === null) return null;
+        if (s <= 0) return 0;
+        return s - 1;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(id);
+  }, [timedTimerOn, quizMode, quizScreen]);
+
+  useEffect(() => {
+    if (quizMode !== 'timed' || quizScreen !== 'question') return;
+    if (timedSecondsLeft !== 0) return;
+    if (timedQuestions.length === 0) return;
+    if (timedFinalizingRef.current) return;
+
+    void finalizeTimedQuiz();
+  }, [timedSecondsLeft, quizMode, quizScreen, timedQuestions.length, finalizeTimedQuiz]);
+
   const handleCancelGeneration = () => {
     setQuizGenerating(false);
     setCurrentGenerationTopic('');
-    
-    // Return to appropriate screen based on mode
+
+    if (currentGenerationMode === 'timed') {
+      resetTimedQuiz();
+      setQuizMode('none');
+      setQuizScreen('start');
+      return;
+    }
+
     if (quizMode === 'adaptive') {
       setAdaptiveScreen('start');
     } else {
@@ -306,6 +413,11 @@ export function App() {
   };
 
   const handleQuizSubmit = async (answer: string) => {
+    if (quizMode === 'timed') {
+      handleTimedMcqSubmit(answer);
+      return;
+    }
+
     if (!currentQuestion || !quizUser) return;
 
     setCurrentAnswer(answer);
@@ -347,6 +459,19 @@ export function App() {
       setEvaluationResult(result);
       if (result.correct) setCorrectCount((prev) => prev + 1);
       setQuizScreen('feedback');
+
+      if (quizMode === 'generative' && quizSetId && attemptId) {
+        setQuizLoadingNext(true);
+        setQuizPendingNext(null);
+        try {
+          const nextRes = await quizService.getNextQuizSetQuestion(quizSetId, attemptId, quizUser);
+          setQuizPendingNext(nextRes);
+        } catch (preloadError) {
+          console.error('Failed to pre-load next quiz question', preloadError);
+        } finally {
+          setQuizLoadingNext(false);
+        }
+      }
     } catch (err) {
       console.error('Failed to submit answer', err);
     }
@@ -354,9 +479,9 @@ export function App() {
 
   const handleQuizNext = async () => {
     const nextIndex = currentQuestionIndex + 1;
-    
+
     // Check quiz length based on quiz mode
-    const totalQuestions = quizMode === 'pastpaper' ? pastPaperQuestions.length : quizQuestions.length;
+    const totalQuestions = quizMode === 'pastpaper' ? pastPaperQuestions.length : quizTotalQuestions;
     
     if (nextIndex >= totalQuestions) {
       await handleQuizComplete();
@@ -376,7 +501,27 @@ export function App() {
         year: nextPastPaperQuestion.year
       });
     } else {
-      setCurrentQuestion(quizQuestions[nextIndex]);
+      let nextPayload: QuizSetNextQuestionResponse | null = quizPendingNext;
+
+      if (!nextPayload && quizSetId && attemptId && quizUser) {
+        try {
+          nextPayload = await quizService.getNextQuizSetQuestion(quizSetId, attemptId, quizUser);
+        } catch (err) {
+          console.error('Failed to load next quiz question', err);
+          return;
+        }
+      }
+
+      if (!nextPayload) return;
+
+      setQuizPendingNext(null);
+      setQuizTotalQuestions(nextPayload.total_questions || quizTotalQuestions);
+      setCurrentQuestion(nextPayload.current_question);
+      setQuizQuestions((prev) => {
+        const exists = prev.some((q) => q.question === nextPayload?.current_question.question);
+        if (exists) return prev;
+        return [...prev, nextPayload.current_question];
+      });
     }
     
     setCurrentAnswer('');
@@ -385,6 +530,10 @@ export function App() {
   };
 
   const handleQuizSkip = async () => {
+    if (quizMode === 'timed') {
+      handleTimedMcqSubmit('', true);
+      return;
+    }
     await handleQuizSubmit('Skipped');
   };
 
@@ -447,7 +596,29 @@ export function App() {
     }
   };
 
+  const handleTimedMcqSubmit = (answerText: string, skipped = false) => {
+    const row = timedQuestions[timedQuestionIndex];
+    if (!row || !timedSessionId) return;
+
+    const idx = skipped ? -1 : row.options.indexOf(answerText);
+    const selected = skipped ? -1 : idx >= 0 ? idx : -1;
+
+    const nextAnswers = { ...timedAnswersRef.current, [row.item_id]: selected };
+    timedAnswersRef.current = nextAnswers;
+    setTimedAnswers(nextAnswers);
+
+    const isLast = timedQuestionIndex >= timedQuestions.length - 1;
+
+    if (isLast) {
+      void finalizeTimedQuiz(nextAnswers);
+      return;
+    }
+
+    setTimedQuestionIndex((i) => i + 1);
+  };
+
   function handleQuizHome() {
+    resetTimedQuiz();
     setQuizScreen('start');
     setQuizMode('none');
     setCurrentQuestion(null);
@@ -456,6 +627,9 @@ export function App() {
     setSelectedTopic('');
     setQuestionNumber(1);
     setCurrentQuestionIndex(0);
+    setQuizTotalQuestions(10);
+    setQuizPendingNext(null);
+    setQuizLoadingNext(false);
     setCorrectCount(0);
     setQuizSummary(null);
     setQuizSetId(null);
@@ -495,6 +669,44 @@ export function App() {
     setQuizMode('none');
   };
 
+  const handleRetakeQuiz = async (quiz: SavedQuiz) => {
+    if (!quizUser) return;
+    
+    try {
+      if (quiz.quiz_type === 'generative') {
+        // Retake generative quiz set
+        setQuizMode('generative');
+        await handleQuizStart(quiz.chapter_name, quiz.id);
+      } else if (quiz.quiz_type === 'freetext') {
+        // Retake free text quiz
+        setQuizMode('freetext');
+        setFreeTextSessionId(quiz.id);
+        setFreeTextIsRetake(true);
+        setFreeTextScreen('question');
+        // Load the first question
+        const nextRes = await freeTextService.getNextQuestion(quiz.id, quizUser);
+        setFreeTextQuestion(nextRes.current_question);
+        setFreeTextQuestionIndex(nextRes.question_index);
+        setFreeTextTotalQuestions(nextRes.total_questions);
+        setFreeTextChapter(quiz.chapter_name);
+      } else if (quiz.quiz_type === 'adaptive') {
+        // For adaptive, we might need to start a new session
+        setQuizMode('adaptive');
+        await handleAdaptiveStart(quiz.chapter_name);
+      } else if (quiz.quiz_type === 'past_paper') {
+        // For past paper, start a new quiz
+        setQuizMode('pastpaper');
+        await handleQuizStart(quiz.chapter_name);
+      } else if (quiz.quiz_type === 'timed') {
+        setQuizMode('timed');
+        await handleTimedQuizRetake(quiz.id);
+      }
+    } catch (err) {
+      console.error('Failed to retake quiz', err);
+      alert('Failed to retake quiz. Please try again.');
+    }
+  };
+
   // =========================
   // Adaptive Quiz Handlers
   // =========================
@@ -512,6 +724,59 @@ export function App() {
   const handleSelectPastPaper = () => {
     setQuizMode('pastpaper');
     setQuizScreen('start');
+  };
+
+  const handleSelectTimed = () => {
+    resetTimedQuiz();
+    setQuizMode('timed');
+    setQuizScreen('start');
+  };
+
+  const handleTimedQuizStart = async () => {
+    if (!quizUser) return;
+    setQuizGenerating(true);
+    setCurrentGenerationMode('timed');
+    setCurrentGenerationTopic('Mixed chapters');
+    try {
+      timedFinalizingRef.current = false;
+      const res = await timedQuizService.start(quizUser);
+      applyTimedQuizSession(res);
+    } catch (err) {
+      console.error('Failed to start timed quiz', err);
+      alert('Failed to start timed quiz. Ensure the question dataset is available and try again.');
+    } finally {
+      setQuizGenerating(false);
+    }
+  };
+
+  /** Normalizes timed start + retake API responses onto quiz state */
+  function applyTimedQuizSession(res: TimedQuizStartResponse) {
+    setTimedSessionId(res.session_id);
+    setTimedQuestions(res.questions);
+    setTimedQuestionIndex(0);
+    setTimedAnswers({});
+    timedAnswersRef.current = {};
+    setTimedSecondsLeft(res.duration_seconds);
+    setTimedSummary(null);
+    setTimedTimerOn(true);
+    setQuizScreen('question');
+  }
+
+  const handleTimedQuizRetake = async (templateSessionId: string) => {
+    if (!quizUser) return;
+    setQuizGenerating(true);
+    setCurrentGenerationMode('timed');
+    setCurrentGenerationTopic('Mixed chapters');
+    try {
+      timedFinalizingRef.current = false;
+      const res = await timedQuizService.retake(quizUser, templateSessionId);
+      applyTimedQuizSession(res);
+    } catch (err) {
+      console.error('Failed to retake timed quiz', err);
+      alert('Failed to start this saved timed quiz. It may no longer exist.');
+    } finally {
+      setQuizGenerating(false);
+    }
   };
 
   const handlePastPaperBack = () => {
@@ -846,6 +1111,26 @@ export function App() {
     }
   };
 
+  const formatTimedClock = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
+  const timedQuizQuestionView = useMemo(() => {
+    const row = timedQuestions[timedQuestionIndex];
+    if (!row) return null;
+    return {
+      payload: {
+        question: row.question,
+        correct_answer: '',
+        key_phrase: '',
+        options: row.options,
+      },
+      identityKey: row.item_id,
+    };
+  }, [timedQuestions, timedQuestionIndex]);
+
   const { announce } = useTTS();
 
   return (
@@ -886,7 +1171,7 @@ export function App() {
     {quizUser == null ? (
       <UserAuth onAuthSuccess={handleQuizAuthSuccess} />
     ) : quizScreen === 'profile' ? (
-      <UserProfilePage username={quizUser} onBack={handleProfileBack} />
+      <UserProfilePage username={quizUser} onBack={handleProfileBack} onRetakeQuiz={handleRetakeQuiz} />
     ) : quizGenerating ? (
       <QuizLoading 
         mode={currentGenerationMode}
@@ -899,6 +1184,7 @@ export function App() {
         onSelectFreeText={handleSelectFreeText}
         onSelectAdaptive={handleSelectAdaptive}
         onSelectPastPaper={handleSelectPastPaper}
+        onSelectTimed={handleSelectTimed}
         onViewProfile={handleViewProfile}
         onLogout={() => { if (window.confirm('Are you sure you want to logout?')) setQuizUser(null); }}
         username={quizUser}
@@ -953,6 +1239,65 @@ export function App() {
           />
         )}
       </>
+    ) : quizMode === 'timed' ? (
+      <>
+        {quizGenerating && (
+          <QuizLoading
+            mode="timed"
+            topic="Mixed chapters"
+            onCancel={handleCancelGeneration}
+          />
+        )}
+        {!quizGenerating && quizScreen === 'start' && (
+          <TimedQuizStart
+            username={quizUser}
+            onStart={handleTimedQuizStart}
+            onBack={() => {
+              resetTimedQuiz();
+              setQuizMode('none');
+              setQuizScreen('start');
+            }}
+          />
+        )}
+        {!quizGenerating && quizScreen === 'question' && timedQuizQuestionView && (
+          <>
+            <div className="mx-auto max-w-3xl px-4 pt-4" role="status" aria-live="polite">
+              <div className="flex justify-between items-center rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 dark:bg-amber-950 dark:border-amber-800">
+                <span className="font-medium text-amber-900 dark:text-amber-100">Timed quiz</span>
+                <span className="tabular-nums font-semibold text-amber-900 dark:text-amber-100">
+                  Time left{' '}
+                  {timedSecondsLeft !== null ? formatTimedClock(timedSecondsLeft) : '—'}
+                </span>
+              </div>
+            </div>
+            <QuizQuestion
+              question={timedQuizQuestionView.payload}
+              questionIdentityKey={timedQuizQuestionView.identityKey}
+              timedQuiz
+              ttsRate={1.22}
+              questionNumber={timedQuestionIndex + 1}
+              totalQuestions={timedQuestions.length}
+              onSubmit={(a) => void handleQuizSubmit(a)}
+              onSkip={() => void handleQuizSkip()}
+              onBack={() => {
+                resetTimedQuiz();
+                setQuizMode('none');
+                setQuizScreen('start');
+              }}
+            />
+          </>
+        )}
+        {!quizGenerating && quizScreen === 'summary' && timedSummary && (
+          <TimedQuizSummary
+            summary={timedSummary}
+            onHome={() => {
+              resetTimedQuiz();
+              setQuizMode('none');
+              setQuizScreen('start');
+            }}
+          />
+        )}
+      </>
     ) : quizMode === 'generative' ? (
       <>
         {quizScreen === 'start' && (
@@ -975,7 +1320,7 @@ export function App() {
           <QuizQuestion
             question={currentQuestion}
             questionNumber={questionNumber}
-            totalQuestions={quizQuestions.length || 10}
+            totalQuestions={quizTotalQuestions || 10}
             onSubmit={handleQuizSubmit}
             onSkip={handleQuizSkip}
             onBack={handleQuizHome}
@@ -991,7 +1336,8 @@ export function App() {
             onNext={handleQuizNext}
             onGoHome={handleQuizHome}
             onBack={handleQuizHome}
-            isLastQuestion={questionNumber === quizQuestions.length}
+            isLastQuestion={questionNumber === quizTotalQuestions}
+            isLoadingNext={quizLoadingNext}
           />
         )}
 
@@ -999,7 +1345,7 @@ export function App() {
           <QuizSummary
             summary={quizSummary}
             correctCount={correctCount}
-            totalQuestions={quizQuestions.length}
+            totalQuestions={quizTotalQuestions}
             onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
             onGoHome={handleQuizHome}
             onStartNew={() => setQuizScreen('start')}
@@ -1045,6 +1391,7 @@ export function App() {
             summary={quizSummary}
             correctCount={correctCount}
             totalQuestions={pastPaperQuestions.length}
+            reviewItems={pastPaperQuizReviewItems}
             onRetake={() => quizSetId && handleRetakeSet(quizSetId, selectedTopic)}
             onGoHome={handleQuizHome}
             onStartNew={() => setQuizScreen('start')}

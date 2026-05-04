@@ -457,9 +457,9 @@ export const DocumentSummary = ({
                       {article.column && article.column !== 'full' && (
                         <p>Column: {article.column}</p>
                       )}
-                      {article.word_count != null && article.word_count > 0 && (
+                      {/* {article.word_count != null && article.word_count > 0 && (
                         <p>{article.word_count} words</p>
-                      )}
+                      )} */}
                     </div>
                   </div>
                 </button>
