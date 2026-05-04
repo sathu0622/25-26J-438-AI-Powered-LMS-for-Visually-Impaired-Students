@@ -63,10 +63,6 @@ def retrieve_context(query: str, top_k: int = 3):
 
     return context
 
-
-# =========================
-# TOPIC RETRIEVAL
-# =========================
 def retrieve_topic_info(query: str):
     """
     Returns the chapter and grade/topic of the most relevant document

@@ -213,10 +213,7 @@ def find_3_subrows(subrow_centers, dot_set, v_sp):
     c3 = float(np.mean(r3)) if r3 else y_min + 2 * v_sp
     return [c1, c2, c3]
 
-
-# ---------------------------------------------------------------------------
 # Core page decoder
-# ---------------------------------------------------------------------------
 
 def pil_image_to_english(pil_img):
     img = cv2.cvtColor(np.array(pil_img), cv2.COLOR_RGB2GRAY)
@@ -227,7 +224,7 @@ def pil_image_to_english(pil_img):
         s = 3000 / w
         img = cv2.resize(img, (int(w * s), int(h * s)))
 
-    # FIX 1: Improved preprocessing — larger blur + blockSize + C + kernel
+    #Improved preprocessing — larger blur + blockSize + C + kernel
     blur = cv2.GaussianBlur(img, (9, 9), 0)
     binary = cv2.adaptiveThreshold(
         blur, 255,
@@ -306,7 +303,7 @@ def pil_image_to_english(pil_img):
     rad = intra * 0.55
     WORD_GAP = intra * 3.5
 
-    # Tight clustering to find individual dot sub-rows (~v_sp apart)
+    # Tight clustering to find individual dot sub-rows (v_sp apart)
     subrow_clusters = cluster_1d_members([p[1] for p in dots], gap=v_sp * 0.4)
 
     # Discard sub-row clusters with too few dots — they are scanner noise
@@ -321,9 +318,6 @@ def pil_image_to_english(pil_img):
 
     text_row_groups = cluster_1d_members(valid_subrow_ys, gap=v_sp * 2.5)
 
-    # -------------------------------------------------------------------
-    # FIX 4: Recover 3 sub-row positions per text row
-    # -------------------------------------------------------------------
     text_rows = []
     for center, subrow_list in text_row_groups:
         row_ys = find_3_subrows(subrow_list, dot_set, v_sp)
