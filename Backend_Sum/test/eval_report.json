@@ -1,0 +1,626 @@
+{
+  "dataset": "sample_summarization_eval.json",
+  "total_samples": 30,
+  "overall": {
+    "token_precision": 0.3986801546452656,
+    "token_recall": 0.6535777277394287,
+    "token_f1": 0.4901627330235828,
+    "rouge_l_f1": 0.3952211721104288,
+    "length_ratio_pred_to_ref": 1.699819696368844,
+    "compression_ratio_input_to_pred": 1.2215036883809973,
+    "pred_words": 71.96666666666667,
+    "ref_words": 42.4,
+    "pred_sentence_count": 3.4,
+    "ref_sentence_count": 2.2333333333333334
+  },
+  "by_resource_type": {
+    "newspapers": {
+      "token_precision": 0.4769710540487163,
+      "token_recall": 0.6660200509148277,
+      "token_f1": 0.5528940564395319,
+      "rouge_l_f1": 0.4685556237879293,
+      "length_ratio_pred_to_ref": 1.3970505383449097,
+      "compression_ratio_input_to_pred": 1.284060660100788,
+      "pred_words": 46.9,
+      "ref_words": 33.6,
+      "pred_sentence_count": 2.6,
+      "ref_sentence_count": 2.3
+    },
+    "magazine": {
+      "token_precision": 0.3181474487260442,
+      "token_recall": 0.6600233907521786,
+      "token_f1": 0.4287929516037906,
+      "rouge_l_f1": 0.3537295047839351,
+      "length_ratio_pred_to_ref": 2.0820770244773446,
+      "compression_ratio_input_to_pred": 1.0868255842340113,
+      "pred_words": 81.4,
+      "ref_words": 39.2,
+      "pred_sentence_count": 3.7,
+      "ref_sentence_count": 2.0
+    },
+    "books": {
+      "token_precision": 0.4009219611610363,
+      "token_recall": 0.6346897415512798,
+      "token_f1": 0.48880119102742603,
+      "rouge_l_f1": 0.3633783877594219,
+      "length_ratio_pred_to_ref": 1.6203315262842775,
+      "compression_ratio_input_to_pred": 1.2936248208081926,
+      "pred_words": 87.6,
+      "ref_words": 54.4,
+      "pred_sentence_count": 3.9,
+      "ref_sentence_count": 2.4
+    }
+  },
+  "detailed_results": [
+    {
+      "id": "news_001",
+      "resource_type": "newspapers",
+      "prediction": "Sri Lanka Railways Department announced plans to restore the historic Colombo–Badulla night mail train service, which was suspended during the economic crisis in 2022. Three new diesel locomotives have been procured from India under a concessional loan agreement. The service is expected to resume by August, reducing travel time for passengers in the Uva and Central provinces.",
+      "expected_summary": "Sri Lanka Railways plans to restore the Colombo–Badulla night mail train suspended in 2022. Three new diesel locomotives were procured from India under a loan deal, with the service resuming by August.",
+      "metrics": {
+        "token_precision": 0.5,
+        "token_recall": 0.8787878787878788,
+        "token_f1": 0.6373626373626373,
+        "rouge_l_f1": 0.6373626373626373,
+        "pred_words": 58.0,
+        "ref_words": 33.0,
+        "input_words": 62.0,
+        "length_ratio_pred_to_ref": 1.7575757575757576,
+        "compression_ratio_input_to_pred": 1.0689655172413792,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "news_002",
+      "resource_type": "newspapers",
+      "prediction": "Heavy rainfall triggered landslides in the Ratnapura and Kegalle districts this week, affecting more than 4,000 families. The National Disaster Management Authority deployed rescue teams and opened 18 temporary shelters, warning residents of high-risk zones to evacuate immediately.",
+      "expected_summary": "Landslides in Ratnapura and Kegalle affected over 4,000 families. Rescue teams and 18 shelters were deployed, but blocked roads slowed relief efforts as residents were urged to evacuate.",
+      "metrics": {
+        "token_precision": 0.425,
+        "token_recall": 0.5862068965517241,
+        "token_f1": 0.4927536231884058,
+        "rouge_l_f1": 0.463768115942029,
+        "pred_words": 40.0,
+        "ref_words": 29.0,
+        "input_words": 51.0,
+        "length_ratio_pred_to_ref": 1.3793103448275863,
+        "compression_ratio_input_to_pred": 1.275,
+        "pred_sentence_count": 2.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "news_003",
+      "resource_type": "newspapers",
+      "prediction": "Sri Lanka's central bank kept key policy rates unchanged at its latest monetary policy meeting, citing gradual easing of inflation and improved foreign exchange reserves. Governor Nandalal Weerasinghe said the economy is on a recovery path following the 2022 debt default, but cautioned global oil price volatility remains a risk.",
+      "expected_summary": "Sri Lanka's Central Bank held policy rates steady, citing falling inflation and improved reserves. The governor noted economic recovery progress while warning of global oil price risks, as inflation fell to 4.2 percent from a 70 percent peak.",
+      "metrics": {
+        "token_precision": 0.39215686274509803,
+        "token_recall": 0.5,
+        "token_f1": 0.4395604395604396,
+        "rouge_l_f1": 0.39560439560439564,
+        "pred_words": 51.0,
+        "ref_words": 40.0,
+        "input_words": 76.0,
+        "length_ratio_pred_to_ref": 1.275,
+        "compression_ratio_input_to_pred": 1.4901960784313726,
+        "pred_sentence_count": 2.0,
+        "ref_sentence_count": 3.0
+      }
+    },
+    {
+      "id": "news_004",
+      "resource_type": "newspapers",
+      "prediction": "Sri Lanka's tourism authorities reported a 28 percent increase in foreign tourist arrivals in the first quarter of 2025, with India, China, and Germany among the top source markets. The Ministry is targeting two million visitors by the end of the year, banking on cultural festivals and wildlife safaris as key attractions.",
+      "expected_summary": "Foreign tourist arrivals in Sri Lanka rose 28 percent in early 2025, led by visitors from India, China, and Germany. The government aims for two million visitors by year-end, focusing on cultural and wildlife tourism.",
+      "metrics": {
+        "token_precision": 0.49056603773584906,
+        "token_recall": 0.7222222222222222,
+        "token_f1": 0.5842696629213483,
+        "rouge_l_f1": 0.449438202247191,
+        "pred_words": 53.0,
+        "ref_words": 36.0,
+        "input_words": 58.0,
+        "length_ratio_pred_to_ref": 1.4722222222222223,
+        "compression_ratio_input_to_pred": 1.0943396226415094,
+        "pred_sentence_count": 2.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "news_005",
+      "resource_type": "newspapers",
+      "prediction": "Colombo Municipal Council launched a new plastic-free initiative targeting the Pettah market area, one of the country's busiest commercial zones. Under the scheme, vendors will be fined for distributing single-use plastic bags starting next month.",
+      "expected_summary": "Colombo's municipal council launched a plastic-free drive in Pettah market, with fines for single-use plastic bags starting next month. Fifty thousand reusable bags were given to traders to support the transition.",
+      "metrics": {
+        "token_precision": 0.5,
+        "token_recall": 0.5588235294117647,
+        "token_f1": 0.5277777777777778,
+        "rouge_l_f1": 0.4722222222222222,
+        "pred_words": 38.0,
+        "ref_words": 34.0,
+        "input_words": 55.0,
+        "length_ratio_pred_to_ref": 1.1176470588235294,
+        "compression_ratio_input_to_pred": 1.4473684210526316,
+        "pred_sentence_count": 2.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "news_006",
+      "resource_type": "newspapers",
+      "prediction": "Sri Lanka's national cricket team defeated Australia by six wickets in a thrilling ODI at the R. Premadasa Stadium in Colombo. Charith Asalanka led the chase with an unbeaten 87 runs, while Wanindu Hasaranga picked up three wickets in Australia's innings. The win gives Sri Lanka a 2–1 lead in the five-match series.",
+      "expected_summary": "Sri Lanka beat Australia by six wickets in an ODI in Colombo, with Asalanka scoring 87 not out and Hasaranga taking three wickets. The win gives Sri Lanka a 2–1 series lead.",
+      "metrics": {
+        "token_precision": 0.47368421052631576,
+        "token_recall": 0.8181818181818182,
+        "token_f1": 0.6,
+        "rouge_l_f1": 0.5333333333333333,
+        "pred_words": 57.0,
+        "ref_words": 33.0,
+        "input_words": 60.0,
+        "length_ratio_pred_to_ref": 1.7272727272727273,
+        "compression_ratio_input_to_pred": 1.0526315789473684,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "news_007",
+      "resource_type": "newspapers",
+      "prediction": "Authorities in Jaffna have arrested three persons in connection with the illegal smuggling of goods from India via small fishing boats along the northern coast. The navy seized electronics, cigarettes, and textiles worth approximately Rs. 8 million.",
+      "expected_summary": "Three people were arrested in Jaffna for smuggling goods from India, with seized items worth Rs. 8 million. Officials attributed the rise in northern coast smuggling to the weaker Sri Lankan rupee.",
+      "metrics": {
+        "token_precision": 0.5135135135135135,
+        "token_recall": 0.59375,
+        "token_f1": 0.5507246376811593,
+        "rouge_l_f1": 0.3188405797101449,
+        "pred_words": 37.0,
+        "ref_words": 32.0,
+        "input_words": 58.0,
+        "length_ratio_pred_to_ref": 1.15625,
+        "compression_ratio_input_to_pred": 1.5675675675675675,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 3.0
+      }
+    },
+    {
+      "id": "news_008",
+      "resource_type": "newspapers",
+      "prediction": "The University of Moratuwa has signed a memorandum of understanding with a Japanese technology firm to establish a robotics research lab on its campus. The facility will support postgraduate research and industry collaborations, with an initial investment of USD 1.2 million.",
+      "expected_summary": "Moratuwa University partnered with a Japanese firm to set up a robotics lab worth USD 1.2 million. The collaboration aims to boost postgraduate research and connect Sri Lankan engineers with global innovation.",
+      "metrics": {
+        "token_precision": 0.4523809523809524,
+        "token_recall": 0.5757575757575758,
+        "token_f1": 0.5066666666666667,
+        "rouge_l_f1": 0.3733333333333333,
+        "pred_words": 42.0,
+        "ref_words": 33.0,
+        "input_words": 56.0,
+        "length_ratio_pred_to_ref": 1.2727272727272727,
+        "compression_ratio_input_to_pred": 1.3333333333333333,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 3.0
+      }
+    },
+    {
+      "id": "news_009",
+      "resource_type": "newspapers",
+      "prediction": "Minneriya National Park's elephant population has grown 12 percent over the past five years, attributed to improved anti-poaching patrols and reduced human-elephant conflict in buffer zones. The park is one of Asia's top destinations for wild elephant gatherings.",
+      "expected_summary": "Minneriya National Park's elephant population grew 12 percent to around 320 over five years. Better anti-poaching measures and reduced human-elephant conflict in buffer zones were credited for the increase.",
+      "metrics": {
+        "token_precision": 0.5714285714285714,
+        "token_recall": 0.75,
+        "token_f1": 0.6486486486486486,
+        "rouge_l_f1": 0.5945945945945946,
+        "pred_words": 42.0,
+        "ref_words": 32.0,
+        "input_words": 61.0,
+        "length_ratio_pred_to_ref": 1.3125,
+        "compression_ratio_input_to_pred": 1.4523809523809523,
+        "pred_sentence_count": 2.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "news_010",
+      "resource_type": "newspapers",
+      "prediction": "Sri Lanka's Electricity Board announced a 14-hour daily power cut schedule for the Northern Province following a breakdown in the transmission line connecting Vavuniya to Kilinochchi. Repair crews are working to restore the line within 72 hours. Residents and businesses were urged to use backup generators and conserve energy.",
+      "expected_summary": "The Northern Province faces 14-hour daily power cuts after a transmission line failure between Vavuniya and Kilinochchi. Repairs are expected within 72 hours and residents were asked to use generators and save power.",
+      "metrics": {
+        "token_precision": 0.45098039215686275,
+        "token_recall": 0.6764705882352942,
+        "token_f1": 0.5411764705882354,
+        "rouge_l_f1": 0.4470588235294118,
+        "pred_words": 51.0,
+        "ref_words": 34.0,
+        "input_words": 54.0,
+        "length_ratio_pred_to_ref": 1.5,
+        "compression_ratio_input_to_pred": 1.0588235294117647,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_001",
+      "resource_type": "magazine",
+      "prediction": "Sri Lanka's handloom weaving tradition, particularly the intricate patterns of Dumbara mats from Kandy, has survived centuries of changing fashion and colonial disruption. Today, a new generation of designers is working with traditional weavers to bring these textiles into contemporary home décor and global fashion markets. Collectively, cooperatives in the hill country have begun exporting directly to boutiques in Europe and Japan, bypassing traditional intermediaries. Artisans report higher incomes, however, while finding young apprentices willing to learn the week-long craft remains a challenge.",
+      "expected_summary": "Sri Lanka's Dumbara weaving tradition from Kandy is being revived by a new generation of designers collaborating with artisans to enter global markets. Hill country cooperatives now export directly to Europe and Japan, boosting incomes, though recruiting young apprentices remains difficult.",
+      "metrics": {
+        "token_precision": 0.36046511627906974,
+        "token_recall": 0.7380952380952381,
+        "token_f1": 0.484375,
+        "rouge_l_f1": 0.421875,
+        "pred_words": 86.0,
+        "ref_words": 42.0,
+        "input_words": 88.0,
+        "length_ratio_pred_to_ref": 2.0476190476190474,
+        "compression_ratio_input_to_pred": 1.0232558139534884,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_002",
+      "resource_type": "magazine",
+      "prediction": "Galle Fort, a UNESCO World Heritage Site on Sri Lanka's southern coast, has transformed from a quiet historic enclave into a boutique tourism hub. Old Dutch colonial buildings now house cafés, art galleries, and boutique hotels, attracting a new class of cultural travelers. Local heritage advocates contend rising property values are displacing traditional residents and threatening the authenticity of the fort's living heritage. City planners are under pressure to balance commercial development with the preservation of its original community.",
+      "expected_summary": "Galle Fort has evolved into a boutique tourism hub, with colonial buildings repurposed as cafés and hotels. However, rising property prices are pushing out long-term residents, prompting debate over preserving the site's living heritage alongside commercial growth.",
+      "metrics": {
+        "token_precision": 0.3048780487804878,
+        "token_recall": 0.625,
+        "token_f1": 0.4098360655737705,
+        "rouge_l_f1": 0.3770491803278689,
+        "pred_words": 82.0,
+        "ref_words": 40.0,
+        "input_words": 89.0,
+        "length_ratio_pred_to_ref": 2.05,
+        "compression_ratio_input_to_pred": 1.0853658536585367,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_003",
+      "resource_type": "magazine",
+      "prediction": "Sri Lanka's spice trade, once the island's most coveted colonial asset, is experiencing a modern revival through organic certification and direct-to-consumer online sales. Small farmers in Matale and Kegalle are cultivating cinnamon, pepper, and cardamom using sustainable methods and marketing them as premium products to health conscious consumers in North America and Europe. However, climate volatility has disrupted harvests, with unpredictable rainfall disrupting harvests.",
+      "expected_summary": "Sri Lanka's spice farmers are reviving the trade through organic certification and online exports to Western health markets. True cinnamon from Sri Lanka earns premium prices, but irregular rainfall poses an increasing threat to harvests.",
+      "metrics": {
+        "token_precision": 0.29411764705882354,
+        "token_recall": 0.5555555555555556,
+        "token_f1": 0.3846153846153846,
+        "rouge_l_f1": 0.2692307692307692,
+        "pred_words": 68.0,
+        "ref_words": 36.0,
+        "input_words": 89.0,
+        "length_ratio_pred_to_ref": 1.8888888888888888,
+        "compression_ratio_input_to_pred": 1.3088235294117647,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_004",
+      "resource_type": "magazine",
+      "prediction": "Sri Lanka's vibrant startup ecosystem, driven by post-crisis necessity and a growing pool of tech-trained graduates, is reshaping Colombo's startup ecosystem. Colombo 3 and 7 have filled co-working spaces with fintech, agritech, and health-tech ventures seeking funding from regional investors. Startups have attracted seed rounds from Singapore and India-based venture capital firms, often citing regulatory complexity and limited local venture capital as their biggest growth barriers.",
+      "expected_summary": "Young entrepreneurs are driving a startup boom in Colombo, particularly in fintech and agritech, with funding from Singapore and Indian investors. However, complex regulations and limited local venture capital continue to hold back growth.",
+      "metrics": {
+        "token_precision": 0.2465753424657534,
+        "token_recall": 0.5294117647058824,
+        "token_f1": 0.3364485981308411,
+        "rouge_l_f1": 0.2803738317757009,
+        "pred_words": 73.0,
+        "ref_words": 34.0,
+        "input_words": 82.0,
+        "length_ratio_pred_to_ref": 2.1470588235294117,
+        "compression_ratio_input_to_pred": 1.1232876712328768,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_005",
+      "resource_type": "magazine",
+      "prediction": "Polonnaruwa, Sri Lanka's medieval capital, is increasingly drawing scholars and tourists interested in hydraulic engineering. The Parakrama Samudra, a vast irrigation reservoir constructed in the 12th century by King Parakramabahu I, still supplies water to local farmers today. Archaeologists recently mapped a network of canals that fed water across hundreds of kilometres, revealing a sophisticated understanding of topography and water management. UNESCO has recognized the site as outstanding universal value for both its architecture and engineering heritage.",
+      "expected_summary": "Polonnaruwa's 12th-century irrigation system, built by King Parakramabahu I, still functions today and is attracting scholarly interest for its engineering complexity. Archaeologists have mapped hundreds of kilometres of canals, leading UNESCO to recognise the site's outstanding heritage value.",
+      "metrics": {
+        "token_precision": 0.38461538461538464,
+        "token_recall": 0.7317073170731707,
+        "token_f1": 0.5042016806722689,
+        "rouge_l_f1": 0.35294117647058826,
+        "pred_words": 78.0,
+        "ref_words": 41.0,
+        "input_words": 83.0,
+        "length_ratio_pred_to_ref": 1.9024390243902438,
+        "compression_ratio_input_to_pred": 1.064102564102564,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_006",
+      "resource_type": "magazine",
+      "prediction": "Sri Lanka's surf scene has grown from a niche pursuit of backpackers into a structured industry, with Arugam Bay on the east coast becoming Asia's top surfing destination. International competitions now attract professional surfers from Australia, Brazil, and South Africa, while local surf schools have trained hundreds of young Sri Lankans as instructors and guides. However, this seasonal tourism boom has strained local infrastructure and water resources in a small fishing village. Community leaders and tourism operators are working to develop a management plan to sustain growth.",
+      "expected_summary": "Arugam Bay has grown into one of Asia's top surf destinations, hosting international competitions and training local surf instructors. The tourism boom has strained infrastructure in the former fishing village, prompting efforts to develop a sustainable growth plan.",
+      "metrics": {
+        "token_precision": 0.33707865168539325,
+        "token_recall": 0.7692307692307693,
+        "token_f1": 0.46875,
+        "rouge_l_f1": 0.37499999999999994,
+        "pred_words": 89.0,
+        "ref_words": 39.0,
+        "input_words": 96.0,
+        "length_ratio_pred_to_ref": 2.282051282051282,
+        "compression_ratio_input_to_pred": 1.0786516853932584,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_007",
+      "resource_type": "magazine",
+      "prediction": "Sri Lanka's tea industry, long dominated by large plantation companies, is seeing the rise of single-estate and specialty teas as small growers push for higher margins and direct market access. Estates in Nuwara Eliya and Dimbula are producing oolong, white, and silver-tip teas that appeal to Japanese, Taiwan, and the United Kingdom. Industry bodies note climate change altering growing conditions at high elevations, affecting Ceylon tea's iconic flavour profiles. Blending tradition with innovation, some estates offer 'tea tourism' experiences combining factory visits and tasting sessions.",
+      "expected_summary": "Sri Lanka's tea sector is diversifying beyond traditional exports as small estates in Nuwara Eliya and Dimbula produce specialty teas for global niche markets. Climate change is threatening high-elevation growing conditions, while some estates are expanding into tea tourism to sustain revenue.",
+      "metrics": {
+        "token_precision": 0.30337078651685395,
+        "token_recall": 0.6136363636363636,
+        "token_f1": 0.406015037593985,
+        "rouge_l_f1": 0.33082706766917297,
+        "pred_words": 89.0,
+        "ref_words": 44.0,
+        "input_words": 99.0,
+        "length_ratio_pred_to_ref": 2.022727272727273,
+        "compression_ratio_input_to_pred": 1.1123595505617978,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_008",
+      "resource_type": "magazine",
+      "prediction": "Sri Lanka's mental health awareness has gained significant momentum since the 2022 economic crisis, triggering widespread anxiety, depression, and loss among urban and rural populations alike. Non-governmental organizations have trained community health workers to identify and support distressed individuals, particularly in low-income areas where access to psychiatrists is limited. Social media campaigns in Sinhala and Tamil have helped reduce stigma, while mental health professionals say the public health system still lacks sufficient therapists and inpatient facilities. Advocates are calling for mental health to be integrated into the national primary healthcare framework.",
+      "expected_summary": "Mental health awareness in Sri Lanka grew following the 2022 economic crisis, with NGOs training community workers and social media campaigns reducing stigma. Mental health professionals argue the public system still needs more therapists and facilities, and call for integration into primary care.",
+      "metrics": {
+        "token_precision": 0.32978723404255317,
+        "token_recall": 0.7209302325581395,
+        "token_f1": 0.4525547445255474,
+        "rouge_l_f1": 0.39416058394160586,
+        "pred_words": 94.0,
+        "ref_words": 43.0,
+        "input_words": 96.0,
+        "length_ratio_pred_to_ref": 2.186046511627907,
+        "compression_ratio_input_to_pred": 1.0212765957446808,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_009",
+      "resource_type": "magazine",
+      "prediction": "Sri Lanka's Yala National Park, one of the world's highest-density leopard habitats, is drawing global attention for its unique leopard population. Wildlife photographers and researchers have documented individual leopards using camera traps, building detailed profiles of their behaviour, territory, and family groups. This success has driven conservationists to study how buffer zones and wildlife corridors can protect leopards beyond the reserve boundaries. Poaching, though reduced, and increasing visitor pressure remain ongoing management concerns.",
+      "expected_summary": "Yala National Park is recognised as one of the world's densest leopard habitats, with camera trap research building detailed behavioural profiles of individual animals. Conservationists are studying buffer zones to extend protection, while poaching and tourism pressure remain concerns.",
+      "metrics": {
+        "token_precision": 0.34210526315789475,
+        "token_recall": 0.65,
+        "token_f1": 0.4482758620689655,
+        "rouge_l_f1": 0.396551724137931,
+        "pred_words": 76.0,
+        "ref_words": 40.0,
+        "input_words": 77.0,
+        "length_ratio_pred_to_ref": 1.9,
+        "compression_ratio_input_to_pred": 1.013157894736842,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "mag_010",
+      "resource_type": "magazine",
+      "prediction": "Sri Lanka's ancient Ayurvedic medical tradition, rooted in texts more than two thousand years old, is experiencing renewed interest domestically and internationally as wellness tourism grows and consumers seek alternatives to pharmaceutical treatments. Traditional physicians, known as veda mahathayas, practice herbal medicine from skin disease to digestive disorders, with government-registered hospitals now operating alongside Western medical facilities in many districts. Critics, however, argue that regulation of herbal products and practitioners remains inconsistent, raising quality and safety concerns.",
+      "expected_summary": "Sri Lanka's Ayurvedic tradition is gaining renewed attention through wellness tourism and demand for herbal alternatives. Government Ayurveda hospitals complement mainstream care, but inconsistent regulation of practitioners and products raises safety concerns.",
+      "metrics": {
+        "token_precision": 0.27848101265822783,
+        "token_recall": 0.6666666666666666,
+        "token_f1": 0.3928571428571428,
+        "rouge_l_f1": 0.3392857142857143,
+        "pred_words": 79.0,
+        "ref_words": 33.0,
+        "input_words": 82.0,
+        "length_ratio_pred_to_ref": 2.393939393939394,
+        "compression_ratio_input_to_pred": 1.0379746835443038,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "book_001",
+      "resource_type": "books",
+      "prediction": "Sri Lanka's independent judiciary developed between 1948 and 1978, tracing its evolution from a colonial court system inherited from British rule to a constitutional framework that sought to protect fundamental rights. The author argues that while the first three decades saw genuine judicial independence, political pressures in the 1970s began to erode institutional boundaries. Key cases such as land reform, press freedom, and citizenship rights illustrate how courts navigated tensions between parliamentary supremacy and individual liberties. The 1978 Constitution's executive presidential system posed new challenges to judicial impartiality that would shape the legal landscape for decades.",
+      "expected_summary": "This chapter traces Sri Lanka's judicial development from 1948 to 1978, arguing that genuine early independence gave way to growing political pressure by the 1970s. Through key cases on land, press, and citizenship rights, it shows how courts balanced parliamentary power and individual rights. The 1978 executive presidential constitution is identified as a lasting threat to judicial impartiality.",
+      "metrics": {
+        "token_precision": 0.3877551020408163,
+        "token_recall": 0.6440677966101694,
+        "token_f1": 0.4840764331210191,
+        "rouge_l_f1": 0.3821656050955414,
+        "pred_words": 98.0,
+        "ref_words": 59.0,
+        "input_words": 109.0,
+        "length_ratio_pred_to_ref": 1.6610169491525424,
+        "compression_ratio_input_to_pred": 1.1122448979591837,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 3.0
+      }
+    },
+    {
+      "id": "book_002",
+      "resource_type": "books",
+      "prediction": "The author explores the social and economic dimensions of the Ceylon tea plantation system, established by British colonizers in the mid-nineteenth century. It relied on Tamil labourers from South India under indentured conditions, creating a distinct ethnic and class structure that persists today. The author examines how plantation Tamils occupied a legally ambiguous position for decades after independence, as Sri Lanka and India disputed their citizenship. Line rooms—barrack-style housing built for workers—are detailed, including limited access to education, healthcare, and land rights. These historical inequities form the root of contemporary social disparities on tea estates.",
+      "expected_summary": "This section analyses the British-era tea plantation economy built on South Indian Tamil labour under indentured conditions. After independence, plantation Tamils faced statelessness and poor living conditions in estate housing with limited access to services. The author links these historical inequities directly to the persistent social disadvantages facing estate communities today.",
+      "metrics": {
+        "token_precision": 0.29292929292929293,
+        "token_recall": 0.5576923076923077,
+        "token_f1": 0.3841059602649007,
+        "rouge_l_f1": 0.2649006622516556,
+        "pred_words": 99.0,
+        "ref_words": 52.0,
+        "input_words": 114.0,
+        "length_ratio_pred_to_ref": 1.9038461538461537,
+        "compression_ratio_input_to_pred": 1.1515151515151516,
+        "pred_sentence_count": 5.0,
+        "ref_sentence_count": 3.0
+      }
+    },
+    {
+      "id": "book_003",
+      "resource_type": "books",
+      "prediction": "Sri Lanka's 2004 Indian Ocean tsunami ravaged southern and eastern Sri Lanka, devastating fishing villages, tourist resorts, and railway lines within minutes of each other. The author critically analysed the lack of a national early warning system, contributing to the death toll of over 35,000 people, while community resilience and improvised rescue networks saved thousands more. Post-disaster reconstruction was critically analysed, with international aid, though substantial, often displaced affected communities rather than restoring them. This chapter draws lessons from disaster preparedness, local governance, and the politics of humanitarian aid in developing countries.",
+      "expected_summary": "This chapter examines the 2004 tsunami's devastating impact on Sri Lanka, where waves up to nine metres killed over 35,000 people and destroyed coastal communities. The lack of an early warning system worsened the toll, while post-disaster reconstruction funds were unevenly distributed. The chapter draws lessons on preparedness, governance, and the complexities of humanitarian aid.",
+      "metrics": {
+        "token_precision": 0.3894736842105263,
+        "token_recall": 0.6379310344827587,
+        "token_f1": 0.4836601307189542,
+        "rouge_l_f1": 0.35294117647058826,
+        "pred_words": 95.0,
+        "ref_words": 58.0,
+        "input_words": 123.0,
+        "length_ratio_pred_to_ref": 1.6379310344827587,
+        "compression_ratio_input_to_pred": 1.2947368421052632,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 3.0
+      }
+    },
+    {
+      "id": "book_004",
+      "resource_type": "books",
+      "prediction": "This chapter explores the origins and escalation of Sri Lanka's ethnic conflict, tracing its roots to colonial policies and post-independence political decisions. The author examines the 1956 Official Language Act, which made Sinhala the sole official language, as a turning point that deepened Tamil grievances and fuelled demands for regional autonomy. Subsequent chapters will address the rise of Tamil militant groups, but the focus remains on structural and political causes that transformed peaceful political competition into armed conflict.",
+      "expected_summary": "This chapter traces the origins of Sri Lanka's ethnic conflict to colonial policies and post-independence decisions, focusing on the 1956 Sinhala-only language act as a critical turning point. Drawing on parliamentary records and oral testimonies, the author shows how structural political exclusion transformed Tamil political grievances into the conditions for armed conflict.",
+      "metrics": {
+        "token_precision": 0.5125,
+        "token_recall": 0.7454545454545455,
+        "token_f1": 0.6074074074074074,
+        "rouge_l_f1": 0.5037037037037037,
+        "pred_words": 80.0,
+        "ref_words": 55.0,
+        "input_words": 110.0,
+        "length_ratio_pred_to_ref": 1.4545454545454546,
+        "compression_ratio_input_to_pred": 1.375,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "book_005",
+      "resource_type": "books",
+      "prediction": "The Mahaweli Development Programme, Sri Lanka's largest ever irrigation and hydropower project, dramatically reshaped the country's agrarian economy and population geography from the 1970s onward. It diverted water from the Mahaweli River to dry zone districts, opening new land for settlement and rice cultivation. While increasing agricultural output and generating hydroelectric power, it also displaced indigenous Veddha communities and altered fragile dry-zone ecosystems. This chapter also explores ethnic politics, as settlement patterns were contested between Sinhala and Tamil communities in North Central and Eastern provinces.",
+      "expected_summary": "The Mahaweli Development Programme transformed Sri Lanka's dry zone through irrigation and hydroelectric development, boosting rice production and resettling large populations. The chapter documents its ecological costs and the displacement of Veddha communities, while also analysing how settlement patterns became a source of ethnic political tension.",
+      "metrics": {
+        "token_precision": 0.2840909090909091,
+        "token_recall": 0.5319148936170213,
+        "token_f1": 0.37037037037037035,
+        "rouge_l_f1": 0.2518518518518519,
+        "pred_words": 88.0,
+        "ref_words": 47.0,
+        "input_words": 105.0,
+        "length_ratio_pred_to_ref": 1.872340425531915,
+        "compression_ratio_input_to_pred": 1.1931818181818181,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "book_006",
+      "resource_type": "books",
+      "prediction": "Colombo is a postcolonial city in transition, drawing on architectural history, urban planning records, and ethnographic observation. Its built environment reflects layers of Portuguese, Dutch, and British colonial influence, followed by rapid post-independence expansion that blurred the boundaries between planned and informal settlements. The Port City Colombo project, a large-scale reclamation initiative backed by Chinese investment, underscores Sri Lanka's contemporary development aspirations and dependencies.",
+      "expected_summary": "This chapter analyses Colombo as a postcolonial city whose built environment reflects Portuguese, Dutch, and British layers followed by unplanned post-independence expansion. The Port City Colombo reclamation project, funded by China, is examined as a symbol of the country's development ambitions and foreign dependencies, with inequality and displacement as recurring themes.",
+      "metrics": {
+        "token_precision": 0.4925373134328358,
+        "token_recall": 0.6226415094339622,
+        "token_f1": 0.55,
+        "rouge_l_f1": 0.4333333333333333,
+        "pred_words": 67.0,
+        "ref_words": 53.0,
+        "input_words": 106.0,
+        "length_ratio_pred_to_ref": 1.2641509433962264,
+        "compression_ratio_input_to_pred": 1.5820895522388059,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "book_007",
+      "resource_type": "books",
+      "prediction": "The chapter explores Buddhism's foundational role in Sri Lankan national identity, tracing the relationship between the Theravada sangha and the state from ancient kingdoms to contemporary times. It argues that the concept of Sri Lanka as a dhamma-dipa (sacred land) has been repeatedly mobilized by political actors to legitimise state power and justify religious minorities' exclusion. This chapter engages with scholars like Stanley Tambiah and H.L. Seneviratne to position Sri Lanka within broader debates about Buddhist nationalism in South and Southeast Asia.",
+      "expected_summary": "This section explores how Theravada Buddhism has shaped Sri Lankan national identity and state legitimacy from ancient kingdoms to the present. The author analyses how the concept of the island as a sacred Buddhist land has been used to justify political power and minority exclusion, with attention to monks' roles in electoral politics and scholarship on Buddhist nationalism.",
+      "metrics": {
+        "token_precision": 0.4470588235294118,
+        "token_recall": 0.6551724137931034,
+        "token_f1": 0.5314685314685316,
+        "rouge_l_f1": 0.4055944055944056,
+        "pred_words": 85.0,
+        "ref_words": 58.0,
+        "input_words": 114.0,
+        "length_ratio_pred_to_ref": 1.4655172413793103,
+        "compression_ratio_input_to_pred": 1.3411764705882352,
+        "pred_sentence_count": 5.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "book_008",
+      "resource_type": "books",
+      "prediction": "The chapter explores the experience of Sri Lankan diaspora communities in the United Kingdom, Canada, and Australia, focusing on first and second generation Tamil and Sinhala migrants. Interview data examines how migrants negotiate dual identities shaped by the homeland conflict and host country's multicultural policies. These networks are examined for their role in fundraising for the LTTE during the civil war and lobbying for international accountability after its end. Younger generations also construct identities less anchored in the original homeland conflict, suggesting a gradual but incomplete process of diasporic identity transformation.",
+      "expected_summary": "This chapter examines Sri Lankan Tamil and Sinhala diaspora communities in the UK, Canada, and Australia, exploring how migrants navigate dual identities shaped by homeland conflict. Tamil networks' wartime role in LTTE fundraising and post-war accountability lobbying is analysed, while younger diaspora generations show a gradual shift toward identities less defined by the original conflict.",
+      "metrics": {
+        "token_precision": 0.43478260869565216,
+        "token_recall": 0.7142857142857143,
+        "token_f1": 0.5405405405405405,
+        "rouge_l_f1": 0.41891891891891897,
+        "pred_words": 92.0,
+        "ref_words": 56.0,
+        "input_words": 107.0,
+        "length_ratio_pred_to_ref": 1.6428571428571428,
+        "compression_ratio_input_to_pred": 1.1630434782608696,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "book_009",
+      "resource_type": "books",
+      "prediction": "Sri Lanka's pearl fishery in the Gulf of Mannar traces its history from ancient to the twentieth century, documenting its role as one of the island's most prized natural resources and a driver of intercontinental trade. Arab, Portuguese, Dutch, and British interests successively exploited the fishery, uncovering detailed administrative records that reconstruct diving practices, labour conditions, and market linkages. This chapter also examines the ecological decline of pearl oyster beds and the social consequences for coastal communities dependent on seasonal diving. Environmental degradation and over-exploitation are identified as the primary causes of the fishery's collapse.",
+      "expected_summary": "This chapter documents Sri Lanka's Gulf of Mannar pearl fishery across centuries of Arab, Portuguese, Dutch, and British exploitation. Using colonial records, the author reconstructs diving labour and trade networks, while tracing the environmental over-exploitation that ultimately caused the oyster bed collapse and devastated dependent coastal communities.",
+      "metrics": {
+        "token_precision": 0.3434343434343434,
+        "token_recall": 0.6938775510204082,
+        "token_f1": 0.4594594594594595,
+        "rouge_l_f1": 0.2972972972972973,
+        "pred_words": 99.0,
+        "ref_words": 49.0,
+        "input_words": 115.0,
+        "length_ratio_pred_to_ref": 2.020408163265306,
+        "compression_ratio_input_to_pred": 1.1616161616161615,
+        "pred_sentence_count": 4.0,
+        "ref_sentence_count": 2.0
+      }
+    },
+    {
+      "id": "book_010",
+      "resource_type": "books",
+      "prediction": "Sri Lanka's 2022 economic collapse was not a sudden crisis, but the culmination of decades of fiscal mismanagement, reliance on short-term sovereign borrowing, and structural weaknesses in export diversification. The final chapter critically examines government decisions to finance populist spending through external debt rather than tax reform, examining IMF bailouts, civil society responses, and the Aragalaya protest movement. It concludes with reflections on whether structural reforms can prevent a future recurrence.",
+      "expected_summary": "The concluding chapter argues that Sri Lanka's 2022 economic crisis resulted from decades of debt-financed populist spending and export stagnation rather than a sudden shock. The IMF bailout's fiscal conditions are assessed alongside the Aragalaya protest movement that ousted the president. The chapter questions whether current structural reforms are sufficient to prevent another crisis.",
+      "metrics": {
+        "token_precision": 0.4246575342465753,
+        "token_recall": 0.543859649122807,
+        "token_f1": 0.4769230769230769,
+        "rouge_l_f1": 0.3230769230769231,
+        "pred_words": 73.0,
+        "ref_words": 57.0,
+        "input_words": 114.0,
+        "length_ratio_pred_to_ref": 1.280701754385965,
+        "compression_ratio_input_to_pred": 1.5616438356164384,
+        "pred_sentence_count": 3.0,
+        "ref_sentence_count": 3.0
+      }
+    }
+  ]
+}
