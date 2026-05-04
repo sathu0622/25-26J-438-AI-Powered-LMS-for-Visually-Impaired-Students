@@ -152,10 +152,6 @@ def calculate_final_score(correct, student, sbert_model):
         round(jaccard_weighted, 2)
     )
 
-
-# =========================
-# FEEDBACK GENERATION
-# =========================
 def generate_feedback(score, correct_answer, student_answer, question, sbert_model):
 
     missing_points = find_missing_points(correct_answer, student_answer, sbert_model)
