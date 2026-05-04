@@ -1,8 +1,23 @@
 # summarizer.py
+import re
 import torch
 from typing import List, Dict, Any
 from datetime import datetime
 from models import DEVICE
+
+
+def _trim_to_last_sentence(text: str) -> str:
+    """Trim text to end at the last complete sentence."""
+    text = text.strip()
+    # Find the last sentence-ending punctuation (., !, ?)
+    match = re.search(r'[.!?][^.!?]*$', text)
+    if match:
+        # Cut off everything after the last sentence-ender
+        end = match.start() + 1
+        return text[:end].strip()
+    # No sentence boundary found — return as-is
+    return text
+
 
 def get_prefix(type_name: str) -> str:
     """Get summarization prefix based on type, aligned with training prompt."""
@@ -36,20 +51,6 @@ def summarize_text(text: str, source_type: str, summ_tokenizer, summ_model) -> s
         ).to(DEVICE)
 
         with torch.no_grad():
-            
-            # output_ids = summ_model.generate(
-            #     input_ids=inputs['input_ids'],
-            #     attention_mask=inputs['attention_mask'],
-            #     max_length=300 if source_type != "book" else 600,  # Longer for books
-            #     num_beams=5,
-            #     no_repeat_ngram_size=3,     # 🔥 prevents phrase repetition
-            #     repetition_penalty=2.0,     # 🔥 penalizes repeated tokens
-
-            #     early_stopping=True,
-            #     length_penalty=1.2,         # encourages proper length
-
-            #     do_sample=False             # keep deterministic (important)
-            # )
             output_ids = summ_model.generate(
                 input_ids=inputs['input_ids'],
                 attention_mask=inputs['attention_mask'],
@@ -66,7 +67,9 @@ def summarize_text(text: str, source_type: str, summ_tokenizer, summ_model) -> s
                 top_p=0.9,               # 🔥 nucleus sampling
                 temperature=0.7          # 🔥 reduces weird repetition
             )
-        return summ_tokenizer.decode(output_ids[0], skip_special_tokens=True)
+
+        summary = summ_tokenizer.decode(output_ids[0], skip_special_tokens=True)
+        return _trim_to_last_sentence(summary)  # ✅ ensure clean sentence ending
 
     except Exception as e:
         print(f"Summarization error: {e}")
