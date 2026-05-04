@@ -474,7 +474,7 @@ class SyllabusMatcher:
         best_row   = self.rows[top_indices[0]]
         
         # ── Return empty result if confidence < 0.5 ────────────────────
-        if best_score < 0.5:
+        if best_score < 0.4:
             return {
                 "in_syllabus": False,
                 "confidence": round(best_score, 4),
