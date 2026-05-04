@@ -214,7 +214,7 @@ export const DocumentUpload = ({
 
   useEffect(() => {
     announce(
-      'Document home. Use the Upload file or Saved favorites tabs, or press U for upload and F for favorites. On the favorites tab, article titles are read aloud when you open the tab or change pages. Press R to hear titles again. Press 1 through 9 to open an item on the current page. If you have more than nine favorites, use Page Up and Page Down, bracket keys, or the previous and next buttons to change pages. Upload a PDF or image from the upload tab.'
+      'Document summarization. Use the Upload File tab or the Saved Favorites tab. Press F to open Favorites. Upload a PDF or image from the Upload tab.'
     );
     return () => cancel();
   }, [announce, cancel]);
@@ -364,8 +364,7 @@ export const DocumentUpload = ({
           Upload a new file or open something you saved earlier
         </p>
         <p className="text-xs text-muted-foreground" aria-hidden="true">
-          Shortcuts: U upload · F favorites and hear titles · R hear titles again on favorites
-          · 1–9 open · Page Up / Down or [ / ] pages
+          Shortcuts: F favorites and hear titles
         </p>
       </div>
 

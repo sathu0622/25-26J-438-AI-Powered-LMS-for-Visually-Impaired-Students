@@ -43,7 +43,7 @@ export const HomePage = ({ onNavigate }: HomePageProps) => {
 
   useEffect(() => {
     announce(
-      'Home. EduVoice AI, a voice-first educational platform. Choose a module: Document AI for PDFs and images with summaries; Braille Evaluation for Braille answer sheets; Voice Quiz with voice support; or History Lessons for audio lessons. Press F1 for voice commands or H for help. Use Alt+1 for Document AI, Alt+2 for Braille, Alt+3 for Quiz, and Alt+4 for History. Alt+0 returns to Home from other screens.'
+      'Home. Edu Vision AI, a voice-first educational platform. Choose a module: Document AI for PDFs and images with summaries; Braille Evaluation for Braille answer sheets; Voice Quiz with voice support; or History Lessons for audio lessons. Press F1 for voice commands or H for help. Use Alt+1 for Document AI, Alt+2 for Braille, Alt+3 for Quiz, and Alt+4 for History. Alt+0 returns to Home from other screens.'
     );
     return () => cancel();
   }, [announce, cancel]);
